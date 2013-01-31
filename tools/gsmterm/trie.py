@@ -1,10 +1,5 @@
 """ Pure Python trie implementation for strings """
 
-class Leaf(object):
-    def __init__(self, string, value):
-        self.string = string
-        self.value = value
-
 class Trie(object):
         
     def __init__(self, key=None, value=None):
@@ -73,7 +68,7 @@ class Trie(object):
         elif key == self.key:
             return self.value
         else:
-            raise KeyError(key)    
+            raise KeyError(key)
 
     def __contains__(self, key):
         try:
@@ -94,12 +89,39 @@ class Trie(object):
         except KeyError:
             return default
 
-    def keys(self, prefix=''):
+    def _allKeys(self, prefix):
+        """ Private implementation method. Use keys() instead. """
         result = [prefix + self.key] if self.key != None else []
         for key, trie in self.slots.iteritems():        
-            result.extend(trie.keys(prefix + key))        
+            result.extend(trie._allKeys(prefix + key))        
         return result
-            
+
+    def keys(self, prefix=None):
+        """ Return all or possible keys in this trie 
+        
+        If prefix is None, return all keys.
+        If prefix is a string, return all keys that start with this string
+        """
+        if prefix == None:
+            return self._allKeys('')
+        else:
+            return self._filteredKeys(prefix, '')
+    
+    def _filteredKeys(self, key, prefix):
+        if len(key) == 0:
+            result = [prefix + self.key] if self.key != None else []
+            for c, trie in self.slots.iteritems():
+                result.extend(trie._allKeys(prefix + c))
+        else:        
+            c = key[0]
+            if c in self.slots.iterkeys():
+                result = []
+                trie = self.slots[c]
+                result.extend(trie._filteredKeys(key[1:], prefix+c))
+            else:
+                result = [prefix + self.key] if self.key != None and self.key.startswith(c) else []
+        return result
+
     def __iter__(self):
         for k in self.keys():
             yield k

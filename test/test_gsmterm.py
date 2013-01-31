@@ -12,10 +12,11 @@ class TestTrie(unittest.TestCase):
     def setUp(self):        
         self.trie = gsmterm.trie.Trie()
         self.keyValuePairs = (('abc', 'def'),
-                         #('hallo', 'daar'),
-                         #('hoe gaan', 'dit met jou'),
-                         #('sbzd', '123'),
-                         ('abcde', '234627sdg'))
+                         ('hallo', 'daar'),
+                         ('hoe gaan', 'dit met jou'),
+                         ('sbzd', '123'),
+                         ('abcde', '234627sdg'),
+                         ('ab', 'asdk;jgdjsagkl'))
     
     def test_storeSingle(self):
         """ Tests single key/value pair storage """        
@@ -51,7 +52,42 @@ class TestTrie(unittest.TestCase):
         trieKeys = self.trie.keys()
         self.assertEquals(len(trieKeys), len(localKeys))
         for key in localKeys:
-            self.assertTrue(key in trieKeys)        
-
+            self.assertTrue(key in trieKeys)
+    
+    def test_overWrite(self):
+        # Fill up trie with some values
+        for key, value in self.keyValuePairs:            
+            self.trie[key] = value
+        key, oldValue = self.keyValuePairs[0]
+        length = len(self.keyValuePairs)
+        self.assertEqual(self.trie[key], oldValue)
+        self.assertEqual(len(self.trie), length)
+        # Overwrite value
+        newValue = oldValue + '12345'
+        self.assertNotEqual(oldValue, newValue)
+        self.trie[key] = newValue
+        # Read it back
+        self.assertEqual(self.trie[key], newValue)
+        # Check trie length is unchanged
+        self.assertEqual(len(self.trie), length)
+    
+    def test_filteredKeys(self):
+        """ Test the "matching keys" functionality of the trie """
+        keys = ('a', 'ab', 'abc', 'abcd0000', 'abcd1111', 'abcd2222', 'abcd3333', 'b000', 'b1111', 'zzz123', 'zzzz1234', 'xyz123')
+        prefixMatches = (('abc', [key for key in keys if key.startswith('abc')]),
+                         ('b', [key for key in keys if key.startswith('b')]),
+                         ('bc', [key for key in keys if key.startswith('bc')]),
+                         ('zzz', [key for key in keys if key.startswith('zzz')]),
+                         ('x', [key for key in keys if key.startswith('x')]),
+                         ('xy', [key for key in keys if key.startswith('xy')]),
+                         ('qwerty', [keys for key in keys if key.startswith('qwerty')]))        
+        for key in keys:
+            self.trie[key] = 1
+        for prefix, matchingKeys in prefixMatches:
+            trieKeys = self.trie.keys(prefix)
+            self.assertEqual(len(trieKeys), len(matchingKeys), 'Filtered keys length failed. Prefix: {}, expected len: {}, items: {}, got len {}, items: {}'.format(prefix, len(matchingKeys), matchingKeys, len(trieKeys), trieKeys))
+            for key in matchingKeys:
+                self.assertTrue(key in trieKeys, 'Key not in trie keys: {0}. Trie keys: {1}'.format(key, trieKeys))
+       
 if __name__ == "__main__":
     unittest.main()
