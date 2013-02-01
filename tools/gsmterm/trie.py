@@ -119,9 +119,39 @@ class Trie(object):
                 trie = self.slots[c]
                 result.extend(trie._filteredKeys(key[1:], prefix+c))
             else:
-                result = [prefix + self.key] if self.key != None and self.key.startswith(c) else []
+                result = [prefix + self.key] if self.key != None and self.key.startswith(key) else []
         return result
 
+    def longestCommonPrefix(self, prefix=''):
+        """ Return the longest common prefix shared by all keys that start with prefix
+        (note: the return value will always start with the specified prefix)
+        """
+        return self._longestCommonPrefix(prefix, '')
+    
+    
+    def _longestCommonPrefix(self, key, prefix):
+        if len(key) == 0:
+            if self.key != None:
+                return self.key
+            else:
+                slotKeys = self.slots.keys()
+                if len(slotKeys) == 1:
+                    c = slotKeys[0]
+                    return self.slots[c]._longestCommonPrefix('', prefix + c)
+                else:
+                    return prefix
+        elif self.key != None:
+            if self.key.startswith(key):
+                return self.key
+            else:
+                return prefix
+        else:
+            c = key[0]
+            if c in self.slots:
+                return self.slots[c]._longestCommonPrefix(key[1:], prefix + c)
+            else:
+                return prefix 
+    
     def __iter__(self):
         for k in self.keys():
             yield k

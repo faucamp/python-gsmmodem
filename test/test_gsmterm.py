@@ -73,14 +73,16 @@ class TestTrie(unittest.TestCase):
     
     def test_filteredKeys(self):
         """ Test the "matching keys" functionality of the trie """
-        keys = ('a', 'ab', 'abc', 'abcd0000', 'abcd1111', 'abcd2222', 'abcd3333', 'b000', 'b1111', 'zzz123', 'zzzz1234', 'xyz123')
+        keys = ('a', 'ab', 'abc', 'abcd0000', 'abcd1111', 'abcd2222', 'abcd3333', 'b000', 'b1111', 'zzz123', 'zzzz1234', 'xyz123', 'AT+CSCS')
         prefixMatches = (('abc', [key for key in keys if key.startswith('abc')]),
                          ('b', [key for key in keys if key.startswith('b')]),
                          ('bc', [key for key in keys if key.startswith('bc')]),
                          ('zzz', [key for key in keys if key.startswith('zzz')]),
                          ('x', [key for key in keys if key.startswith('x')]),
                          ('xy', [key for key in keys if key.startswith('xy')]),
-                         ('qwerty', [keys for key in keys if key.startswith('qwerty')]))        
+                         ('qwerty', [key for key in keys if key.startswith('qwerty')]),
+                         ('AT+CSCS=', [key for key in keys if key.startswith('AT+CSCS=')]))
+
         for key in keys:
             self.trie[key] = 1
         for prefix, matchingKeys in prefixMatches:
@@ -88,6 +90,22 @@ class TestTrie(unittest.TestCase):
             self.assertEqual(len(trieKeys), len(matchingKeys), 'Filtered keys length failed. Prefix: {}, expected len: {}, items: {}, got len {}, items: {}'.format(prefix, len(matchingKeys), matchingKeys, len(trieKeys), trieKeys))
             for key in matchingKeys:
                 self.assertTrue(key in trieKeys, 'Key not in trie keys: {0}. Trie keys: {1}'.format(key, trieKeys))
+    
+    def test_longestCommonPrefix(self):
+        """ Test the "get longest common prefix" functionality of the trie """
+        keys = ('abcDEF', 'abc123', 'abcASFDDSFDSF', 'abc@#$@#$', 'abcDxxx')        
+        for key in keys:
+            self.trie[key] = 1        
+        self.assertEqual(self.trie.longestCommonPrefix(), 'abc')
+        self.assertEqual(self.trie.longestCommonPrefix('a'), 'abc')
+        self.assertEqual(self.trie.longestCommonPrefix('ab'), 'abc')
+        self.assertEqual(self.trie.longestCommonPrefix('abc'), 'abc')
+        self.assertEqual(self.trie.longestCommonPrefix('abcD'), 'abcD')
+        
+        
+        
+        
+        
        
 if __name__ == "__main__":
     unittest.main()
