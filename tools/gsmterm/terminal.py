@@ -438,10 +438,10 @@ class GsmTerm(RawTerm):
         """ Command-completion method """        
         prefix =  ''.join(self.inputBuffer).strip().upper()
         matches = self.completion.keys(prefix)
-        matchLen = len(matches)
-        if matches == 0 and prefix[-1] == '=':
-            try:
-                command = self.completion[prefix[:-1]]
+        matchLen = len(matches)        
+        if matchLen == 0 and prefix[-1] == '=':
+            try:                
+                command = prefix[:-1]
             except KeyError:
                 pass                        
             else:
@@ -463,7 +463,7 @@ class GsmTerm(RawTerm):
                 self.cursorPos = len(self.inputBuffer)
                 if matchLen > 20:
                     matches = matches[:20]
-                    matches.append('...')
+                    matches.append('... ({0} more)'.format(matchLen - 20))
             sys.stdout.write('\n')
             for match in matches:
                 sys.stdout.write(' {0} '.format(match))
