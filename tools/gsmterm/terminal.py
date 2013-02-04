@@ -218,7 +218,7 @@ class GsmTerm(RawTerm):
     def _handleModemNotification(self, line):
         # Clear any input prompt
         self._removeInputPrompt()
-        if line == 'ERROR':
+        if 'ERROR' in line:
             print(self._color(self.COLOR_RED, line))
         else:
             print(self._color(self.COLOR_CYAN, line))
@@ -240,64 +240,33 @@ class GsmTerm(RawTerm):
     
     def _inputLoop(self):
         """ Loop and copy console->serial until EXIT_CHARCTER character is found. """
+        
+        # Switch statement for handling "special" characters
+        actionChars = {self.EXIT_CHARACTER: self._exit,
+                       self.EXIT_CHARACTER_2: self._exit,
+                        
+                       console.CURSOR_LEFT: self._cursorLeft,
+                       console.CURSOR_RIGHT: self._cursorRight,
+                       console.CURSOR_UP: self._cursorUp,
+                       console.CURSOR_DOWN: self._cursorDown,
+                        
+                       '\n': self._doConfirmInput,
+                       '\t': self._doCommandCompletion,
+                       
+                       self.BACKSPACE_CHARACTER: self._handleBackspace,
+                       console.DELETE: self._handleDelete,
+                       console.HOME: self._handleHome,
+                       console.END: self._handleEnd}
+
         try:
             while self.alive:
                 try:
                     c = console.getkey()
                 except KeyboardInterrupt:
                     c = serial.to_bytes([3])
-                if c == self.EXIT_CHARACTER or c == self.EXIT_CHARACTER_2:
-                    self._removeInputPrompt()
-                    print(self._color(self.COLOR_YELLOW, 'CLOSING TERMINAL...')) 
-                    self.stop()                
-                elif c == console.CURSOR_LEFT:
-                    if self.cursorPos > 0:
-                        self.cursorPos -= 1
-                        sys.stdout.write(c)
-                        sys.stdout.flush()
-                elif c == console.CURSOR_RIGHT:
-                    if self.cursorPos < len(self.inputBuffer):
-                        self.cursorPos += 1
-                        sys.stdout.write(c)
-                        sys.stdout.flush()
-                elif c == console.CURSOR_UP:
-                    if self.historyPos > 0:
-                        self.historyPos -= 1
-                        clearLen = len(self.inputBuffer)
-                        self.inputBuffer = list(self.history[self.historyPos])
-                        self.cursorPos = len(self.inputBuffer)
-                        self._refreshInputPrompt(clearLen)
-                elif c == console.CURSOR_DOWN:
-                    if self.historyPos < len(self.history)-1:
-                        clearLen = len(self.inputBuffer)
-                        self.historyPos += 1
-                        self.inputBuffer = list(self.history[self.historyPos])                        
-                        self.cursorPos = len(self.inputBuffer)
-                        self._refreshInputPrompt(clearLen)
-                elif c == '\n':
-                    self._doConfirmInput()
-                elif c == '\t':
-                    # Command completion
-                    self._doCommandCompletion()
-                elif c == self.BACKSPACE_CHARACTER:
-                    if self.cursorPos > 0:
-                        #print( 'cp:',self.cursorPos,'was:', self.inputBuffer)
-                        self.inputBuffer = self.inputBuffer[0:self.cursorPos-1] + self.inputBuffer[self.cursorPos:]
-                        self.cursorPos -= 1
-                        #print ('cp:', self.cursorPos,'is:', self.inputBuffer)                        
-                        self._refreshInputPrompt(len(self.inputBuffer)+1)
-                elif c == console.DELETE:
-                    if self.cursorPos < len(self.inputBuffer):
-                        #print( 'cp:',self.cursorPos,'was:', self.inputBuffer)
-                        self.inputBuffer = self.inputBuffer[0:self.cursorPos] + self.inputBuffer[self.cursorPos+1:]                        
-                        #print ('cp:', self.cursorPos,'is:', self.inputBuffer)
-                        self._refreshInputPrompt(len(self.inputBuffer)+1)
-                elif c == console.HOME:
-                    self.cursorPos = 0
-                    self._refreshInputPrompt(len(self.inputBuffer))
-                elif c == console.END:
-                    self.cursorPos = len(self.inputBuffer)
-                    self._refreshInputPrompt(len(self.inputBuffer))
+                if c in actionChars:
+                    # Handle character directly                    
+                    actionChars[c]()
                 elif len(c) == 1 and self._isPrintable(c):
                     self.inputBuffer.insert(self.cursorPos, c)
                     self.cursorPos += 1
@@ -309,6 +278,69 @@ class GsmTerm(RawTerm):
             self.alive = False
             raise
         
+    def _exit(self):
+        """ Shuts down the terminal (and app) """
+        self._removeInputPrompt()
+        print(self._color(self.COLOR_YELLOW, 'CLOSING TERMINAL...')) 
+        self.stop()
+        
+    def _cursorLeft(self):
+        """ Handles "cursor left" events """
+        if self.cursorPos > 0:
+            self.cursorPos -= 1
+            sys.stdout.write(console.CURSOR_LEFT)
+            sys.stdout.flush()
+    
+    def _cursorRight(self):
+        """ Handles "cursor right" events """
+        if self.cursorPos < len(self.inputBuffer):
+            self.cursorPos += 1
+            sys.stdout.write(console.CURSOR_RIGHT)
+            sys.stdout.flush()
+   
+    def _cursorUp(self):
+        """ Handles "cursor up" events """
+        if self.historyPos > 0:
+            self.historyPos -= 1
+            clearLen = len(self.inputBuffer)
+            self.inputBuffer = list(self.history[self.historyPos])
+            self.cursorPos = len(self.inputBuffer)
+            self._refreshInputPrompt(clearLen)
+            
+    def _cursorDown(self):
+        """ Handles "cursor down" events """
+        if self.historyPos < len(self.history)-1:
+            clearLen = len(self.inputBuffer)
+            self.historyPos += 1
+            self.inputBuffer = list(self.history[self.historyPos])                        
+            self.cursorPos = len(self.inputBuffer)
+            self._refreshInputPrompt(clearLen)
+    
+    def _handleBackspace(self):
+        """ Handles backspace characters """
+        if self.cursorPos > 0:
+            #print( 'cp:',self.cursorPos,'was:', self.inputBuffer)
+            self.inputBuffer = self.inputBuffer[0:self.cursorPos-1] + self.inputBuffer[self.cursorPos:]
+            self.cursorPos -= 1
+            #print ('cp:', self.cursorPos,'is:', self.inputBuffer)                        
+            self._refreshInputPrompt(len(self.inputBuffer)+1)
+    
+    def _handleDelete(self):
+        """ Handles "delete" characters """
+        if self.cursorPos < len(self.inputBuffer):
+            self.inputBuffer = self.inputBuffer[0:self.cursorPos] + self.inputBuffer[self.cursorPos+1:]                        
+            self._refreshInputPrompt(len(self.inputBuffer)+1)
+    
+    def _handleHome(self):
+        """ Handles "home" character """
+        self.cursorPos = 0
+        self._refreshInputPrompt(len(self.inputBuffer))
+        
+    def _handleEnd(self):
+        """ Handles "end" character """
+        self.cursorPos = len(self.inputBuffer)
+        self._refreshInputPrompt(len(self.inputBuffer))
+    
     def _doConfirmInput(self):
         # Convert newline input into \r\n        
         if len(self.inputBuffer) > 0:
@@ -356,34 +388,55 @@ class GsmTerm(RawTerm):
             return
         try:
             command = command.strip()
-            commandHelp = self.completion[command]
+            commandHelp = self.completion[command.upper()]
         except KeyError:
             noHelp = True
         else:
             noHelp = commandHelp == None
         if noHelp:
             sys.stdout.write('\r No help available for: {0}\n'.format(self._color(self.COLOR_WHITE, command)))
-        else:
+        else:            
             sys.stdout.write('\n\n{0} ({1})\n\n'.format(self._color(self.COLOR_WHITE, commandHelp[1]), command))
+            sys.stdout.write('{0} {1}\n'.format(self._color(self.COLOR_YELLOW, 'Category:'), commandHelp[0]))
+            if len(commandHelp) == 2:
+                sys.stdout.write('\nNo detailed help available for this command.\n\n')
+                self._refreshInputPrompt(len(self.inputBuffer))
+                return
             sys.stdout.write('{0} {1}\n'.format(self._color(self.COLOR_YELLOW, 'Description:'), commandHelp[4]))
-            sys.stdout.write('{0} '.format(self._color(self.COLOR_YELLOW, 'Values:')))
+            
+            valuesIsEnum = len(commandHelp) >= 6            
+            if valuesIsEnum: # "Values" is an enum of allowed values (not multiple variables); use custom label
+                sys.stdout.write('{0} '.format(self._color(self.COLOR_YELLOW, commandHelp[5])))
+            else:
+                sys.stdout.write('{0} '.format(self._color(self.COLOR_YELLOW, 'Values:')))
             commandValues = commandHelp[2]
             syntax = [self._color(self.COLOR_WHITE, command)]
             if commandValues != None:
-                syntax.append(self._color(self.COLOR_WHITE, '='))
+                if '+' in command or command.upper() in ['ATS0']:
+                    syntax.append(self._color(self.COLOR_WHITE, '='))
                 sys.stdout.write('\n')
+                first = True
                 for value, valueDesc in commandValues:
-                    syntax.append(self._color(self.COLOR_MAGENTA, value))
-                    syntax.append(' ')
+                    if first:                        
+                        first = False
+                    else:
+                        syntax.append(',' if not valuesIsEnum else '|')
+                    syntax.append(self._color(self.COLOR_MAGENTA, value))                    
                     sys.stdout.write(' {0} {1}\n'.format(self._color(self.COLOR_MAGENTA, value), valueDesc.replace('\n', '\n' + ' ' * (len(value) + 2)) if valueDesc != None else ''))
             else:
                 sys.stdout.write('No parameters.\n')
+            returnValues = commandHelp[3]
+            if returnValues != None:
+                sys.stdout.write('{0} '.format(self._color(self.COLOR_YELLOW, 'Response Values:')))
+                sys.stdout.write('\n')
+                for value, valueDesc in returnValues:
+                    sys.stdout.write(' {0} {1}\n'.format(self._color(self.COLOR_CYAN, value), valueDesc.replace('\n', '\n' + ' ' * (len(value) + 2)) if valueDesc != None else ''))
             sys.stdout.write('{0}\n {1}\n\n'.format(self._color(self.COLOR_YELLOW, 'Command Syntax:'), ''.join(syntax)))
         self._refreshInputPrompt(len(self.inputBuffer))
     
     def _doCommandCompletion(self):
         """ Command-completion method """        
-        prefix =  ''.join(self.inputBuffer).strip()
+        prefix =  ''.join(self.inputBuffer).strip().upper()
         matches = self.completion.keys(prefix)
         matchLen = len(matches)
         if matches == 0 and prefix[-1] == '=':
@@ -421,15 +474,15 @@ class GsmTerm(RawTerm):
     def __printCommandSyntax(self, command):
         """ Command-completion helper method: print command syntax """
         commandHelp = self.completion[command]
-        if commandHelp != None:
+        if commandHelp != None and len(commandHelp) > 2:
             commandValues = commandHelp[2]
             #commandDefault = commandHelp[3]
             displayHelp = [self._color(self.COLOR_WHITE, command)]
             if commandValues != None:
-                displayHelp.append(self._color(self.COLOR_WHITE, '='))
-                for value in commandValues:
-                    displayHelp.append(self._color(self.COLOR_MAGENTA, value[0]))
-                    displayHelp.append(' ')
+                valuesIsEnum = len(commandHelp) >= 6
+                if '+' in command or command.upper() in ['ATS0']:
+                    displayHelp.append(self._color(self.COLOR_WHITE, '='))
+                displayHelp.append(('|' if valuesIsEnum else ',').join([value[0] for value in commandValues]))
             sys.stdout.write('\r Syntax: {0}\n'.format(self._color(self.COLOR_WHITE, ''.join(displayHelp))))
             sys.stdout.flush()
             self._refreshInputPrompt(len(self.inputBuffer))

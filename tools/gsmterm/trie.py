@@ -150,7 +150,7 @@ class Trie(object):
             if c in self.slots:
                 return self.slots[c]._longestCommonPrefix(key[1:], prefix + c)
             else:
-                return prefix 
+                return prefix
     
     def __iter__(self):
         for k in self.keys():
