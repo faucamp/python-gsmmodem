@@ -101,8 +101,13 @@ class TestTrie(unittest.TestCase):
         self.assertEqual(self.trie.longestCommonPrefix('ab'), 'abc')
         self.assertEqual(self.trie.longestCommonPrefix('abc'), 'abc')
         self.assertEqual(self.trie.longestCommonPrefix('abcD'), 'abcD')
-        
-        
+        keys = ('ATD', 'ATDL')
+        for key in keys:
+            self.trie[key] = 1
+        self.assertEqual(self.trie.longestCommonPrefix(), '')
+        self.assertEqual(self.trie.longestCommonPrefix('A'), 'ATD')
+        self.assertEqual(self.trie.longestCommonPrefix('AT'), 'ATD')
+        self.assertEqual(self.trie.longestCommonPrefix('ATD'), 'ATD')
         
         
         

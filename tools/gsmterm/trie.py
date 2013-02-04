@@ -132,7 +132,7 @@ class Trie(object):
     def _longestCommonPrefix(self, key, prefix):
         if len(key) == 0:
             if self.key != None:
-                return self.key
+                return prefix + self.key
             else:
                 slotKeys = self.slots.keys()
                 if len(slotKeys) == 1:
