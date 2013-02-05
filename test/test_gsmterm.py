@@ -113,8 +113,8 @@ class TestTrie(unittest.TestCase):
 class TestAtCommands(unittest.TestCase):
     """ Test suite for the AT Commands data structure """
     
-    def test_load(self):
-        """ Check that the commands can be loaded correctly, and they are correctly formatted """
+    def test_loadAtCommands(self):
+        """ Check that the AT commands can be loaded correctly, and they are correctly formatted """
         from gsmterm.atcommands import ATCOMMANDS, CATEGORIES
         for command, help in ATCOMMANDS:
             self.assertNotEqual(command, None)
@@ -127,8 +127,14 @@ class TestAtCommands(unittest.TestCase):
             if len(help) > 2:
                 if help[2] != None:
                     self.assertIsInstance(help[2], tuple)
+                    self.assertGreater(len(help[2]), 0)
+                    for item in help[2]:
+                        self.assertEqual(len(item), 2, 'Input value item tuple length should be 2, got {}. Command: {}, item: {}'.format(len(item), command, item))
                 if help[3] != None:
                     self.assertIsInstance(help[3], tuple)
+                    self.assertGreater(len(help[3]), 0)
+                    for item in help[3]:
+                        self.assertEqual(len(item), 2, 'Output value item tuple length should be 2, got {}. Command: {}, item: {}'.format(len(item), command, item))
                 self.assertIsInstance(help[4], str)
        
 if __name__ == "__main__":

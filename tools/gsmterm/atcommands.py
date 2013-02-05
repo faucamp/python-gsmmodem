@@ -170,7 +170,7 @@ This command is not allowed for "EN", "LD", "MC", "RC", "MT", and "SN" phonebook
 ('AT+CSVM', (c[4], 'Set Voice Mail Number')),
 # Short Messages (SMS)
 ('AT+CSMS', (c[5], 'Select Message Service', (('<service>', '0: SMS AT commands are compatible with GSM 07.05 Phase 2 version 4.7.0.\n\
-1: SMS AT commands are compatible with GSM 07.05 Phase 2 + version')), None, 'The supported services include originated (SMS-MO) and terminated short messages (SMS-MT) as well as Cell Broadcast Message (SMS-CB) services.')),
+1: SMS AT commands are compatible with GSM 07.05 Phase 2 + version'),), None, 'The supported services include originated (SMS-MO) and terminated short messages (SMS-MT) as well as Cell Broadcast Message (SMS-CB) services.')),
 ('AT+CNMA', (c[5], 'New Message Acknowledgment', (('<n>', '0: send RP-ACK without PDU (same as TEXT mode)\n\
 1: send RP-ACK with optional PDU message\n2: send RP-ERROR with optional PDU message'),
                                                   ('<length>', 'Lenght of the PDU message')), None, 'This command allows reception of a new message routed directly to the TE to be acknowledged.\n\
@@ -251,7 +251,7 @@ telematic device. For example, 0x22 is for group 3 telefax, 0x24 is for voice te
 ('AT+CCWA', (c[6], 'Call Waiting')),
 ('AT+CLIR', (c[6], 'Calling Line Identification Restriction', (('<n>', 'Sets the line ID restriction for outgoing calls. Values:\n\
 0: Presentation indicator is used according to the subscription of the CLIR service\n\
-1: CLIR invocation\n2: CLIR suppression')), (('<m>', 'Shows the subscriber CLIR status in the network. Values:\n\
+1: CLIR invocation\n2: CLIR suppression'),), (('<m>', 'Shows the subscriber CLIR status in the network. Values:\n\
 0: CLIR not provisioned\n1: CLIR provisioned in permanent mode\n2: Unknown (no network...)\n3: CLIR temporary mode presentation restricted\n4: CLIR temporary mode presentation allowed'),),
              'This command controls the Calling Line Identification restriction supplementary service.')),
 ('AT+CLIP', (c[6], 'Calling Line Identification Presentation',
@@ -352,5 +352,6 @@ These extended indications are:\n\
 6: 7 Data 1 Stop\n\
    <parity> parameter is ignored'),
                                                  ('<parity', '0: Odd\n1: Even\n2: Mark\n3: Space\n4: None')), None, 'This command determines the local serial port start-stop (asynchronous) character framing that the DCE uses.')),
-
+('AT+IFC', (c[10], 'DTE-DCE Flow Control')),
+('AT&C', (c[10], 'Set DCD Signal', (('<n>', '0: DCD always on\n1: DCD matches the state of the remote modem\'s data carrier'),), None, 'This commands controls the Data Carrier Detect (DCD) signal.')),
 )
