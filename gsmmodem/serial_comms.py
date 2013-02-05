@@ -16,7 +16,7 @@ class SerialComms(object):
     # End-of-line read terminator
     EOL_SEQ = '\r\n'
     # End-of-response terminator
-    RESPONSE_TERM = re.compile(r'^(OK|ERROR)$')
+    RESPONSE_TERM = re.compile(r'^OK|ERROR|(\+(CM[ES]) ERROR: (\d+))$')
     # Default timeout for serial port reads (in seconds)
     timeout = 1
         
@@ -90,8 +90,7 @@ class SerialComms(object):
                 #' <RX timeout>'
         except serial.SerialException, e:
             self.alive = False
-            raise
-        print 'read loop exiting'
+            raise        
         
     def write(self, data, waitForResponse=True, timeout=5):
         with self._txLock:

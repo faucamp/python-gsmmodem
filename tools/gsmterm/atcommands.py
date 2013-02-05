@@ -354,4 +354,23 @@ These extended indications are:\n\
                                                  ('<parity', '0: Odd\n1: Even\n2: Mark\n3: Space\n4: None')), None, 'This command determines the local serial port start-stop (asynchronous) character framing that the DCE uses.')),
 ('AT+IFC', (c[10], 'DTE-DCE Flow Control')),
 ('AT&C', (c[10], 'Set DCD Signal', (('<n>', '0: DCD always on\n1: DCD matches the state of the remote modem\'s data carrier'),), None, 'This commands controls the Data Carrier Detect (DCD) signal.')),
+('AT&D', (c[10], 'Set DTR Signal', (('<n>', '0: The DTR signal is ignored\n1: Modem switches from data to command mode when DTR switches from ON to OFF\n2: Upon DTR switch from ON to OFF, the call is released'),), None, 'This commands controls the Data Terminal Ready (DTR) signal.')),
+('AT&S', (c[10], 'Set DSR Signal', (('<n>', '0: DSR always on\n1: DSR off in command mode. DSR on in data mode.'),), None, 'This commands controls the Data Set Ready (DSR) signal.')),
+('ATO', (c[10], 'Back to Online Mode', None, None, 'If a connection has been established and the ME is in command mode, this command allows you to return to online data mode.')),
+('ATQ', (c[10], 'Result Code Suppression', (('<n>', '0: DCE transmit result codes\n1: Result codes are suppressed and not transmitted'),), None, 'This command determines whether the mobile equipment sends result codes or not.')),
+('ATV', (c[10], 'DCE Response Format', (('<n>', '0: DCE transmits limited headers and trailers and numeric result codes\n1: DCE transmits full headers and trailers and verbose response text'),), None, 'This command determines the DCE response format, with or without header characters <CR><LF>. Result codes are provided as numeric or verbose.')),
+('ATZ', (c[10], 'Default Configuration', None, None, 'This command restores the configuration profile. Any call is released')),
+('AT&W', (c[10], 'Save Configuration', None, None, 'This command writes the active configuration to a non-volatile memory (EEPROM).')),
+('AT&T', (c[10], 'Auto-Tests')),
+('ATE', (c[10], 'Echo', (('<n>', '0: Characters are not echoed\n1: Characters are echoed'),), None, 'This command is used to determine whether the modem echoes characters received by an external application (DTE).')),
+('AT&F', (c[10], 'Restore Factory Settings', (('<n>', '0: Restore factory settings'),), None, 'This command is used to restore the factory settings from EEPROM.')),
+('AT&V', (c[10], 'Display Configuration', (('<n>', '0 Displays the modem configuration in RAM. Default value if no parameter provided.\n\
+1: Displays the modem configuration in EEPROM.\n\
+2: Displays the modem factory configuration.'),), None, 'This command is used to display the modem configuration.')),
+('ATI', (c[10], 'Request Identification Information', (('<n>', '0: Displays manufacturer followed by model identification. Equivalent to +CGMI and +CGMM.\n\
+3: Displays revision identification. Equivalent to +CGMR.\n\
+4: Displays modem configuration in RAM. Equivalent to &V0.\n\
+5: Displays modem configuration in EEPROM. Equivalent to &V1.\n\
+6: Displays modem data features. Lists the supported data rates, data modes, and fax classes.\n\
+7: Displays modem voice features.'),), None, 'This command causes the product to transmit one or more lines of specific information text.')),
 )
