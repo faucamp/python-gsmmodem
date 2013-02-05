@@ -1,7 +1,7 @@
 
-_CATEGORY = ('General', 'Call Control', 'Network Service', 'Security', 'Phonebook', 'SMS')
+CATEGORIES = ('General', 'Call Control', 'Network Service', 'Security', 'Phonebook', 'SMS', 'Supplementary Services', 'Data', 'Fax', 'Fax Class 2', 'V24-V25')
 
-c = _CATEGORY
+c = CATEGORIES
 
 # Format: (COMMAND, (CATEGORY, NAME, VALUES, DEFAULT, DESCRIPTION))
 ATCOMMANDS = (
@@ -137,7 +137,7 @@ length is 8 digits only.')),
                                                            ('<k1>', 'attempts left for PUK1 (0 = blocked, 10 max)'),
                                                            ('<k2>', 'attempts left for PUK2 (0 = blocked, 10 max)')),
               'This command gets the number of valid attempts for PIN1 (CHV1), PIN2 (CHV2), PUK1 (UNBLOCK CHV1) and PUK2 (UNBLOCK CHV2) identifiers.')),
-('AT+CLCK', (c[3], 'Facility Lock')),
+('AT+CLCK', (c[3], 'Call Barring')),
 ('AT+CPWD', (c[3], 'Change Password')),
 # Phonebook
 ('AT+CPBS', (c[4], 'Select Phonebook Memory Storage', (('"SM"', 'ADN (SIM phonebook)'),
@@ -220,4 +220,137 @@ is entered (OK response shall be given before flushing the codes)\n\
              None, 'This command selects the procedure for message reception from the network.')),
 ('AT+CMGR', (c[5], 'Read Message', (('<index>', 'Location of message to read'),), None, 'This command allows the application to read stored messages. The messages are read from the memory selected by the +CPMS command.')),
 ('AT+CMGL', (c[5], 'List Message', (('<stat>', 'Status of messages in memory to list'),), None, 'This command allows the application to read stored messages, by indicating the type of the message to read. The messages are read from the memory selected by the +CPMS command.')),
+('AT+CMGS', (c[5], 'Send Message', (('<da>', 'Destination Address (text mode) - message destination phone number'),), None, 'The <address> field is the address of the terminal to which the message is sent. To send the message, \
+simply type, <ctrl-Z> character (ASCII 26). The text can contain all existing characters except <ctrl-Z> and \
+<ESC> (ASCII 27). This command can be aborted using the <ESC> character when entering text. In PDU \
+mode, only hexadecimal characters are used (\'0\'...\'9\',\'A\'...\'F\').')),
+('AT+CMGW', (c[5], 'Write Message to Memory')),
+('AT+CMSS', (c[5], 'Send Message from Storage', (('<index>', 'location of stored message'),
+                                                 ('<da>', 'destination address'),
+                                                 ('<toda>', 'type of destination address')),
+                                                (('<mr>', 'message reference'),), 'This command sends a message stored at location value <index>.')),
+('AT+CSMP', (c[5], 'Set Text Mode Parameters', (('<fo>', 'byte comprising 6 fields, RP, UDHI, SRR, VPFG, RD and MTI'),
+                                                ('<vp>', 'validity period'),
+                                                ('<pid>', 'used to indicate the higher layer protocol being used or indicates interworking with a certain type of \
+telematic device. For example, 0x22 is for group 3 telefax, 0x24 is for voice telephone, 0x25 is for ERMES.'),
+                                                ('<dcs>', 'used to determine the way the information is encoded.')), None, 'This command selects a value for <vp>, <pid>, and <dcs>.')),
+('AT+CMGD', (c[5], 'Delete Message', (('<index>', 'Integer type values in the range of location numbers of SIM Message memory when the preferred message storage is "SM or "SR".'),
+                                      ('<DelFlag>', '0: Delete message at location <index>.\n\
+1: Delete All READ messages\n\
+2: Delete All READ and SENT messages\n\
+3: Delete All READ, SENT and UNSENT messages\n\
+4: Delete All messages.')), None, 'This command deletes one or several messages from preferred message storage.')),
+('AT+CSCA', (c[5], 'Service Center Address', (('<sca>', 'service center address'),), None, 'This command sets (or queries) the service center to which SMS messages must be sent.')),
+('AT+CSCB', (c[5], 'Select Cell Broadcast Message Types', (('<mode>', '0 - CBM reception activated\n1 - CBM reception deactivated'), ('<mids>', 'message identifiers - indicates the type of message idenitfiers for which the ME should listen'), ('<dcss>', 'Supported Languages')), None, 'This command selects which types of CBMs are to be received by the ME.')),
+('AT+WCBM', (c[5], 'Cell Broadcast Message Identifiers')),
+('AT+WMSC', (c[5], 'Message Status Modification')),
+('AT+WMGO', (c[5], 'Message Overwriting')),
+('AT+WUSS', (c[5], 'Unchange SMS Status')),
+# Supplementary Services
+('AT+CCFC', (c[6], 'Call Forwarding')),
+('AT+CCWA', (c[6], 'Call Waiting')),
+('AT+CLIR', (c[6], 'Calling Line Identification Restriction', (('<n>', 'Sets the line ID restriction for outgoing calls. Values:\n\
+0: Presentation indicator is used according to the subscription of the CLIR service\n\
+1: CLIR invocation\n2: CLIR suppression')), (('<m>', 'Shows the subscriber CLIR status in the network. Values:\n\
+0: CLIR not provisioned\n1: CLIR provisioned in permanent mode\n2: Unknown (no network...)\n3: CLIR temporary mode presentation restricted\n4: CLIR temporary mode presentation allowed'),),
+             'This command controls the Calling Line Identification restriction supplementary service.')),
+('AT+CLIP', (c[6], 'Calling Line Identification Presentation',
+             (('<n>', 'Parameter sets/shows the result code presentation in the TA. Values:\n0: Disable\n1: Enable'),),
+             (('<m>', 'Parameter shows the subscriber CLIP service status in the network. Values:\n0: CLIP not provisioned\n1: CLIP provisioned\n2: Unknown (no network...)'),),
+             'This command controls the calling line identification presentation supplementary service. When presentation \
+of the CLI (Calling Line Identification) is enabled (and calling subscriber allows), +CLIP response is returned \
+after every RING (or +CRING) result code.')),
+('AT+COLP', (c[6], 'Connected Line Identification Presentation')),
+('AT+CAOC', (c[6], 'Advice Of Charge')),
+('AT+CAMM', (c[6], 'Accumulated Call Meter Maximum')),
+('AT+CPUC', (c[6], 'Price Per Unit and Currency Table')),
+('AT+CHLD', (c[6], 'Call Related Supplementary Services')),
+('AT+CHLD', (c[6], 'Call Related Supplementary Services')),
+('AT+CLCC', (c[6], 'List Current Calls', None, (('<idx>', 'integer type, call identification as described in GSM 02.30'),
+                                                ('<dir>', '0: mobile originated (MO) call\n2: mobile terminated (MT) call'),
+                                                ('<stat>', '0: active\n\
+1: held\n\
+2: dialing (MO call)\n\
+3: alerting (MO call)\n\
+4: incoming (MT call)\n\
+5: waiting (MT call)'),
+                                                ('<mode>', '0: voice\n\
+1: data\n\
+2: fax\n\
+9: unknown'),
+                                                ('<mpty>', '0: call is not one of multiparty (conference) call parties\n\
+1: call is one of multiparty (conference) call parties'),
+                                                ('<number>', 'string type phone number in format specified by <type>'),
+                                                ('<type>', 'type of address byte in integer format'),
+                                                ('<alpha>', 'optional string type alphanumeric representation of <number> corresponding to the entry found in phonebook')),
+             'This command returns a list of current calls.')),
+('AT+CSSN', (c[6], 'Supplementary Service Notifications')),
+('AT+CUSD', (c[6], 'Unstructured Supplementary Service Data', (('<n>', '0: Disable the result code presentation\n\
+1: Enable the result code presentation\n\
+2: Cancel session (not applicable to read command response)'),
+                                                               ('<str>', 'network string, converted in the selected character set'),
+                                                               ('<dcs>', 'the data coding scheme received (TSM TS 03.38)')),
+             (('<m>', '0: no further user action required (network initiated USSD-Notify, or no further information needed after mobile initiated operation)\n\
+1: further user action required (network initiated USSD-Request, or further information needed after mobile initiated operation)\n\
+2: USSD terminated by network\n\
+4: Operation not supported'),),
+             'The USSD supplementary service is described in GSM 02.90. It is based on sequences of digits which may \
+be entered by a mobile user with a handset. A sequence entered is sent to the network which replies with an \
+alphanumerical string, for display only, or for display plus request for the next sequence.\n\
+This command is used to:\n\
+- Enable or disable the CUSD indication sent to the application by the product when an incoming USSD is received\n\
+- Send and receive USSD strings')),
+('AT+CCUG', (c[6], 'Closed User Group')),
+# Data
+('AT+CBST', (c[7], 'Bearer Type Selection')),
+('AT+FCLASS', (c[7], 'Select Mode', (('<n>', '0: Data\n1: Fax class 1\n2: Fax class 2'),), None, 'This command puts the modem into a particular operating mode (data or fax).')),
+('AT+CR', (c[7], 'Service Reporting Control')),
+('AT+CRC', (c[7], 'Cellular Result Dodes', (('<mode>', '0: Disable extended reports\n1: Enable extended reports'),), None, 'This command shows more detailed ring information for an incoming call (voice or data). Instead of the string \
+"RING", an extended string is used to indicate which type of call is ringing (e.g. +CRING: VOICE).\n\
+These extended indications are:\n\
++CRING: ASYNC     for asynchronous transparent\n\
++CRING: REL ASYNC for asynchronous non-transparent\n\
++CRING: VOICE     for normal speech.\n\
++CRING: FAX       for fax calls')),
+('AT+ILRR', (c[7], 'DTE-DCE Local Rate Reporting')),
+('AT+CRLP', (c[7], 'Radio Link Protocol Parameters')),
+('AT+DOPT', (c[7], 'Radio Link Protocol Parameters')),
+# Fax
+('AT+FTM', (c[8], 'Transmit Speed')),
+('AT+FRM', (c[8], 'Receive Speed')),
+('AT+FTH', (c[8], 'HDLC Transmit Speed')),
+('AT+FRH', (c[8], 'HDLC Receive Speed')),
+('AT+FTS', (c[8], 'Stop Transmission and Wait')),
+('AT+FRS', (c[8], 'Receive Silence')),
+# Fax Class 2
+('AT+FDT', (c[9], 'Transmit Data')),
+('AT+FDR', (c[9], 'Receive Data')),
+('AT+FET', (c[9], 'Transmit Page Punctuation')),
+('AT+FPTS', (c[9], 'Page Transfer Status Parameters')),
+('AT+FK', (c[9], 'Terminate Session')),
+('AT+FBOR', (c[9], 'Page Transfer Bit Order')),
+('AT+FBUF', (c[9], 'Buffer Size Report')),
+('AT+FCQ', (c[9], 'Copy Quality Checking')),
+('AT+FCR', (c[9], 'Capability to Receive')),
+('AT+FDIS', (c[9], 'Current Session Parameters')),
+('AT+FDCC', (c[9], 'DCE Capabilities Parameters')),
+('AT+FLID', (c[9], 'Local ID String')),
+('AT+FPHCTO', (c[9], 'Page Transfer Timeout Parameter')),
+# V24-V25
+('AT+IPR', (c[10], 'Fixed DTE Rate', (('<value>', 'Baud rates that can be used by the DCE.\n0 enables autobauding on some modems.'),), None, 'This commands specifies the data rate at which the DCE will accept commands.')),
+('AT+ICF', (c[10], 'DTE-DCE Character Framing', (('<format>', '0: Autodetect\n\
+1: 8 Data 2 Stop\n\
+   <parity> parameter is ignored\n\
+2: 8 Data 1 Parity 1 Stop\n\
+   If no <parity> provided, 3 is used by default as <parity> value\n\
+3: 8 Data 1 Stop\n\
+   <parity> parameter is ignored\n\
+4: 7 Data 2 Stop\n\
+   <parity> parameter is ignored\n\
+5: 7 Data 1 Parity 1 Stop\n\
+   If no <parity> provided, 3 is used by default as <parity> value\n\
+6: 7 Data 1 Stop\n\
+   <parity> parameter is ignored'),
+                                                 ('<parity', '0: Odd\n1: Even\n2: Mark\n3: Space\n4: None')), None, 'This command determines the local serial port start-stop (asynchronous) character framing that the DCE uses.')),
+
 )

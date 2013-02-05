@@ -109,8 +109,27 @@ class TestTrie(unittest.TestCase):
         self.assertEqual(self.trie.longestCommonPrefix('AT'), 'ATD')
         self.assertEqual(self.trie.longestCommonPrefix('ATD'), 'ATD')
         
-        
-        
+
+class TestAtCommands(unittest.TestCase):
+    """ Test suite for the AT Commands data structure """
+    
+    def test_load(self):
+        """ Check that the commands can be loaded correctly, and they are correctly formatted """
+        from gsmterm.atcommands import ATCOMMANDS, CATEGORIES
+        for command, help in ATCOMMANDS:
+            self.assertNotEqual(command, None)
+            self.assertGreater(len(command), 0)
+            self.assertEqual(command.strip(), command, 'Command has leading and/or trailing spaces: {}'.format(command))
+            
+            self.assertNotEqual(help, None, 'Command\'s help tuple is None: {}'.format(command))
+            self.assertGreaterEqual(len(help), 2)
+            self.assertTrue(help[0] in CATEGORIES)
+            if len(help) > 2:
+                if help[2] != None:
+                    self.assertIsInstance(help[2], tuple)
+                if help[3] != None:
+                    self.assertIsInstance(help[3], tuple)
+                self.assertIsInstance(help[4], str)
        
 if __name__ == "__main__":
     unittest.main()

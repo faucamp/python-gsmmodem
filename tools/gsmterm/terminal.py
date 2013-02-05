@@ -364,7 +364,33 @@ class GsmTerm(RawTerm):
             if inputStr.lower().startswith('help'): # help COMMAND
                 # Alternative help invocation
                 self._printCommandHelp(inputStr[5:])
-                return            
+                return
+            elif inputStr.lower().startswith('ls'):
+                istr = inputStr.lower()
+                if istr == 'lscat':
+                    sys.stdout.write('\n')         
+                    for category in self.completion.categories:
+                        sys.stdout.write('{0}\n'.format(category))
+                    self._refreshInputPrompt(len(self.inputBuffer))
+                    return
+                elif istr == 'ls':
+                    sys.stdout.write('\n')
+                    for command in self.completion:
+                        sys.stdout.write('{0:<8} - {1}\n'.format(command, self.completion[command][1]))
+                    self._refreshInputPrompt(len(self.inputBuffer))
+                    return
+                else:
+                    ls = istr.split(' ', 1)                    
+                    if len(ls) == 2:
+                        category = ls[1].lower()
+                        if category in [cat.lower() for cat in self.completion.categories]:
+                            sys.stdout.write('\n')
+                            for command in self.completion:
+                                commandHelp = self.completion[command]
+                                if category == commandHelp[0].lower():
+                                    sys.stdout.write('{0:<8} - {1}\n'.format(command, commandHelp[1]))
+                            self._refreshInputPrompt(len(self.inputBuffer))
+                            return
             if len(inputStr) > 0:
                 self.serial.write(inputStr)
                 self.serial.write(self.EOL_SEQ)
@@ -378,6 +404,7 @@ class GsmTerm(RawTerm):
         sys.stdout.write('{0} Press the up & down arrow keys to move backwards or forwards through your command history.\n\n'.format(self._color(self.COLOR_YELLOW, 'Command History:')))
         sys.stdout.write('{0} Press the TAB key to provide command completion suggestions. Press the TAB key after a command is fully typed (with or without a "=" character) to quickly see its syntax.\n\n'.format(self._color(self.COLOR_YELLOW, 'Command Completion:')))
         sys.stdout.write('{0} Type a command, followed with two quesetion marks to access its documentation, e.g. "<COMMAND>??". Alternatively, precede the command with a question mark ("?<COMMAND>"), or type "help <COMMAND>".\n\n'.format(self._color(self.COLOR_YELLOW, 'Command Documentation:')))
+        sys.stdout.write('{0} Type "ls [category]" to list the available AT commands known to GSMTerm for the given category (or all commands if no category is specified).\nType "lscat" to see a list of categories.\n\n'.format(self._color(self.COLOR_YELLOW, 'List Available Commands:')))
         sys.stdout.write('To exit GSMTerm, press CTRL+] or CTRL+D.\n\n')
         self._refreshInputPrompt(len(self.inputBuffer))
     
@@ -500,10 +527,11 @@ class GsmTerm(RawTerm):
     
     def _initAtCommandsTrie(self):
         self.completion = Trie()
-        from .atcommands import ATCOMMANDS
+        from .atcommands import ATCOMMANDS, CATEGORIES
         for command, help in ATCOMMANDS:
             if help != None:
                 self.completion[command] = help
             else:
                 self.completion[command] = None
+        self.completion.categories = CATEGORIES
 
