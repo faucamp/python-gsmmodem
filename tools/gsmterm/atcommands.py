@@ -1,5 +1,5 @@
 
-CATEGORIES = ('General', 'Call Control', 'Network Service', 'Security', 'Phonebook', 'SMS', 'Supplementary Services', 'Data', 'Fax', 'Fax Class 2', 'V24-V25')
+CATEGORIES = ('General', 'Call Control', 'Network Service', 'Security', 'Phonebook', 'SMS', 'Supplementary Services', 'Data', 'Fax', 'Fax Class 2', 'V24-V25', 'Specific')
 
 c = CATEGORIES
 
@@ -52,7 +52,8 @@ where <pas> is:
  4 call in progress
  5 asleep (low functionality)""")),
 ('AT+CMEE', (c[0], 'Report Mobile Equipment Errors', (('<error reporting flag>', """0: Disable ME error reports; use only ERROR
-1: Enable +CME ERROR: <xxx> or +CMS ERROR: <xxx>"""),), None,  'Disables or enables the use of the "+CME ERROR: <xxx>" or "+CMS ERROR:<xxx>" result code instead of simply "ERROR".')),
+1: Enable +CME ERROR: <xxx> or +CMS ERROR: <xxx>
+2: Enable error result codes with verbose (string) values"""),), None,  'Disables or enables the use of the "+CME ERROR: <xxx>" or "+CMS ERROR:<xxx>" result code instead of simply "ERROR".')),
 ('AT+CKPD', (c[0], 'Keypad Control', (('<keys>', 'Keyboard sequence; string of the following characters (0-9, *, #)'),), None,  'Emulates the ME keypad by sending each keystroke as a character in a <keys> string.\n\
 If emulation fails, a +CME ERROR: <err> is returned. If emulation succeeds, the result \
 depends on the GSM sequence activated.')),
@@ -106,6 +107,10 @@ Range of values is 0 to 255'),), None,  'This S0 parameter determines and contro
 ('AT+VGR', (c[1], 'Gain Control - Reception', (('<Rgain>', 'reception gain'),), None,  'This command is used by the application to tune the receive gain of the speaker.')),
 ('AT+VGT', (c[1], 'Gain Control - Transmission', (('<Tgain>', 'transmission gain'),), None,  'This command is used by the application to tune the transmit gain of the microphone.')),
 ('AT+CMUT', (c[1], 'Microphone Mute Control', (('<mode>', '0: microphone mute off (default)\n1: microphone mute on'),), None, 'This command mutes the microphone input on the device. This command is only allowed during a call.')),
+('AT+CVHU', (c[1], 'Voice Hangup Control', (('<mode>', '0: "Drop DTR" ignored but OK response given. ATH disconnects.\n\
+1: "Drop DTR" and ATH ignored but OK response given.\n\
+2: "Drop DTR" behavior according to &D setting. ATH disconnects.'),), None, 'This command selects whether ATH or "drop DTR" causes a voice connection to be disconnected or not. Voice connection also includes alternating mode calls that are currently in voice mode.\n\
+When <mode>=2, this command must be viewed in conjunction with the V.25ter command &D, or &D will be ignored')),
 # Network Service
 ('AT+CSQ', (c[2], 'Signal Quality', None, (('<rssi>', '0: -113 dBm or less\n1: -111 dBm\n2 to 30: -109 to -53 dBm\n31: -51dBm or greater\n99: not known or not detectable'),
                                            ('<ber>', '0...7: as RXQUAL values in the table GSM 05.08')),
@@ -173,7 +178,7 @@ This command is not allowed for "EN", "LD", "MC", "RC", "MT", and "SN" phonebook
 1: SMS AT commands are compatible with GSM 07.05 Phase 2 + version'),), None, 'The supported services include originated (SMS-MO) and terminated short messages (SMS-MT) as well as Cell Broadcast Message (SMS-CB) services.')),
 ('AT+CNMA', (c[5], 'New Message Acknowledgment', (('<n>', '0: send RP-ACK without PDU (same as TEXT mode)\n\
 1: send RP-ACK with optional PDU message\n2: send RP-ERROR with optional PDU message'),
-                                                  ('<length>', 'Lenght of the PDU message')), None, 'This command allows reception of a new message routed directly to the TE to be acknowledged.\n\
+                                                  ('<length>', 'Length of the PDU message')), None, 'This command allows reception of a new message routed directly to the TE to be acknowledged.\n\
 In TEXT mode, only positive acknowledgement to the network (RP-ACK) is possible.\n\
 In PDU mode, either positive (RP-ACK) or negative (RP-ERROR) acknowledgement to the network is possible.\n\
 Acknowledgement with +CNMA is possible only if the +CSMS parameter is set to 1 (+CSMS=1) when a \
@@ -188,7 +193,7 @@ and <ds> parameters of the +CNMI command are then reset to zero (do not show new
                                                  ('<mem2>', 'Memory to be used to write and send messages\n "SM": SMS message storage in SIM (default)')),
              (('<used1>', 'Used memory 1'),('total1', 'Total memory 1'),('<used2>', 'Used memory 2'),('total2', 'Total memory 2')),
              'This command allows the message storage area to be selected (for reading, writing, etc).')),
-('AT+CGMF', (c[5], 'Preferred Message Format', (('<mode>', '0: PDU mode\n1: Text mode'),), None, 'The message formats supported are text mode and PDU mode.')),
+('AT+CMGF', (c[5], 'Preferred Message Format', (('<mode>', '0: PDU mode\n1: Text mode'),), None, 'The message formats supported are text mode and PDU mode.')),
 ('AT+CSAS', (c[5], 'Save Settings')),
 ('AT+CRES', (c[5], 'Restore Settings')),
 ('AT+CNMI', (c[5], 'New Message Indication', (('<mode>', 'Controls the processing of unsolicited result codes. Values:\n\
@@ -373,4 +378,25 @@ These extended indications are:\n\
 5: Displays modem configuration in EEPROM. Equivalent to &V1.\n\
 6: Displays modem data features. Lists the supported data rates, data modes, and fax classes.\n\
 7: Displays modem voice features.'),), None, 'This command causes the product to transmit one or more lines of specific information text.')),
+('AT+WMUX', (c[10], 'Multiplexing Mode')),
+# Specific AT Commands
+('AT+CCED', (c[11], 'Cell Environment Description')),
+('AT+WIND', (c[11], 'General Indications')),
+('AT+ADC', (c[11], 'Analog Digital Converter Measurements')),
+('AT+CMER', (c[11], 'Mobile Equipment Event Reporting')),
+('AT+CIND', (c[11], 'Indicator Control')),
+('AT+CMEC', (c[11], 'Mobile Equipment Control Mode')),
+('AT+WLPR', (c[11], 'Read Language Preference')),
+('AT+WLPW', (c[11], 'Write Language Preference')),
+('AT+WIOR', (c[11], 'Read GPIO Value')),
+('AT+WIOW', (c[11], 'Write GPIO Value')),
+('AT+WIOM', (c[11], 'Input/Output Management')),
+('AT+WAC', (c[11], 'Abort Command')),
+('AT+WTONE', (c[11], 'Play Tone')),
+('AT+WDTMF', (c[11], 'Play DTMF Tone')),
+('AT+WDWL', (c[11], 'Downloading')),
+('AT+WVR', (c[11], 'Voice Rate')),
+('AT+WDR', (c[11], 'Data Rate')),
+('AT+WSVG', (c[11], 'Select Voice Gain')),
+('AT+WSTR', (c[11], 'Status Request')),
 )

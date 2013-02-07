@@ -9,7 +9,7 @@ Note: The "Console" object was copied from pySerial's miniterm.py code
 """
 
 from __future__ import print_function
-import os, sys, threading
+import os, sys, threading, time
 import serial
 
 from gsmmodem.serial_comms import SerialComms
@@ -215,23 +215,25 @@ class GsmTerm(RawTerm):
         """ Converts a message to be printed to the user's terminal in bold """
         return self._color(self.BOLD_SEQ, msg)
         
-    def _handleModemNotification(self, line):
+    def _handleModemNotification(self, lines):
         # Clear any input prompt
         self._removeInputPrompt()
-        if 'ERROR' in line:
-            print(self._color(self.COLOR_RED, line))
+        if lines[-1] == 'ERROR':
+            print(self._color(self.COLOR_RED, '\n'.join(lines)))
         else:
-            print(self._color(self.COLOR_CYAN, line))
+            print(self._color(self.COLOR_CYAN, '\n'.join(lines)))
         self._refreshInputPrompt()
         
     def _handleResponse(self, lines):
         # Clear any input prompt
         self._removeInputPrompt()
         if lines[-1] == 'ERROR':
-            lines(self._color(self.COLOR_RED, lines))
+            print(self._color(self.COLOR_RED, '\n'.join(lines)))
         else:
-            print(self._color(self.COLOR_CYAN, lines))
+            print(self._color(self.COLOR_CYAN, '\n'.join(lines)))
         self._refreshInputPrompt()
+        
+    
     
     def _addToHistory(self, command):
         self.history.append(command)
@@ -347,7 +349,7 @@ class GsmTerm(RawTerm):
             inputStr = ''.join(self.inputBuffer).strip()
             self.inputBuffer = []
             self.cursorPos = 0
-            inputStrLen = len(inputStr)
+            inputStrLen = len(inputStr)            
             if len(inputStr) > 0:
                 self._addToHistory(inputStr)
                 self.historyPos = len(self.history)
@@ -361,26 +363,26 @@ class GsmTerm(RawTerm):
                     cmd = inputStr[:-3 if inputStr[-3] == '=' else -2]                
                     self._printCommandHelp(cmd)
                     return
-            if inputStr.lower().startswith('help'): # help COMMAND
+            inputStrLower = inputStr.lower()
+            if inputStrLower.startswith('help'): # help COMMAND
                 # Alternative help invocation
                 self._printCommandHelp(inputStr[5:])
                 return
-            elif inputStr.lower().startswith('ls'):
-                istr = inputStr.lower()
-                if istr == 'lscat':
+            elif inputStrLower.startswith('ls'):                
+                if inputStrLower == 'lscat':
                     sys.stdout.write('\n')         
                     for category in self.completion.categories:
                         sys.stdout.write('{0}\n'.format(category))
                     self._refreshInputPrompt(len(self.inputBuffer))
                     return
-                elif istr == 'ls':
+                elif inputStrLower == 'ls':
                     sys.stdout.write('\n')
                     for command in self.completion:
                         sys.stdout.write('{0:<8} - {1}\n'.format(command, self.completion[command][1]))
                     self._refreshInputPrompt(len(self.inputBuffer))
-                    return
+                    return                
                 else:
-                    ls = istr.split(' ', 1)                    
+                    ls = inputStrLower.split(' ', 1)                    
                     if len(ls) == 2:
                         category = ls[1].lower()
                         if category in [cat.lower() for cat in self.completion.categories]:
@@ -391,6 +393,28 @@ class GsmTerm(RawTerm):
                                     sys.stdout.write('{0:<8} - {1}\n'.format(command, commandHelp[1]))
                             self._refreshInputPrompt(len(self.inputBuffer))
                             return
+            elif inputStrLower.startswith('load'):
+                # Load a file containing AT commands to issue
+                load = inputStr.split(' ', 1)                
+                if len(load) == 2:                    
+                    filename = load[1].strip()
+                    try:
+                        f = open(filename, 'r')
+                    except IOError:
+                        sys.stdout.write('\n{}\n'.format(self._color(self.COLOR_RED, 'File not found: "{}"'.format(filename))))
+                        self._refreshInputPrompt(len(self.inputBuffer))                        
+                    else:
+                        atCommands = f.readlines()
+                        f.close()                    
+                        sys.stdout.write('\n')
+                        for atCommand in atCommands: 
+                            atCommand = atCommand.strip()
+                            if len(atCommand) > 0:
+                                self.inputBuffer = list(atCommand.strip())
+                                self._refreshInputPrompt(len(self.inputBuffer))
+                                self._doConfirmInput()
+                                time.sleep(0.1)
+                    return                    
             if len(inputStr) > 0:
                 self.serial.write(inputStr)
                 self.serial.write(self.EOL_SEQ)
@@ -405,6 +429,7 @@ class GsmTerm(RawTerm):
         sys.stdout.write('{0} Press the TAB key to provide command completion suggestions. Press the TAB key after a command is fully typed (with or without a "=" character) to quickly see its syntax.\n\n'.format(self._color(self.COLOR_YELLOW, 'Command Completion:')))
         sys.stdout.write('{0} Type a command, followed with two quesetion marks to access its documentation, e.g. "<COMMAND>??". Alternatively, precede the command with a question mark ("?<COMMAND>"), or type "help <COMMAND>".\n\n'.format(self._color(self.COLOR_YELLOW, 'Command Documentation:')))
         sys.stdout.write('{0} Type "ls [category]" to list the available AT commands known to GSMTerm for the given category (or all commands if no category is specified).\nType "lscat" to see a list of categories.\n\n'.format(self._color(self.COLOR_YELLOW, 'List Available Commands:')))
+        sys.stdout.write('{0} Type "load <filename>" to load and execute a file containing AT commands, separated by newlines, e.g. "load ./myscript.txt".\n\n'.format(self._color(self.COLOR_YELLOW, 'Load Script:')))
         sys.stdout.write('To exit GSMTerm, press CTRL+] or CTRL+D.\n\n')
         self._refreshInputPrompt(len(self.inputBuffer))
     
