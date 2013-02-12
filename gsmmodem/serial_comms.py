@@ -14,9 +14,9 @@ class SerialComms(object):
     """
     
     # End-of-line read terminator
-    EOL_SEQ = '\r\n'
+    RX_EOL_SEQ = '\r\n'
     # End-of-response terminator
-    RESPONSE_TERM = re.compile(r'^OK|ERROR|(\+(CM[ES]) ERROR: (\d+))$')
+    RESPONSE_TERM = re.compile(r'^OK|ERROR|(\+CM[ES] ERROR: \d+)$')
     # Default timeout for serial port reads (in seconds)
     timeout = 1
         
@@ -25,8 +25,10 @@ class SerialComms(object):
         self.port = port
         self.baudrate = 9600
         
-        self._responseEvent = None#threading.Event()
+        self._responseEvent = None # threading.Event()
+        self._expectResponseTermSeq = None # expected response terminator sequence
         self._response = None # Buffer containing response to a written command
+        self._notification = [] # Buffer containing lines from an unsolicited notification from the modem
         # Reentrant lock for managing concurrent write access to the underlying serial port
         self._txLock = threading.RLock()
         
@@ -47,18 +49,22 @@ class SerialComms(object):
         self.rxThread.join()
         self.serial.close()
         
-    def _handleLineRead(self, line):
+    def _handleLineRead(self, line, checkForResponseTerm=True):
+        #print 'sc.hlineread:',line
         if self._responseEvent and not self._responseEvent.is_set():
             # A response event has been set up (another thread is waiting for this response)
             #print ' sc: response to event: "{0}", length: {1}'.format(line, len(line))
             self._response.append(line)
-            if self.RESPONSE_TERM.match(line):
+            if not checkForResponseTerm or self.RESPONSE_TERM.match(line):
                 # End of response reached; notify waiting thread
                 self._responseEvent.set()
         else:
             # Nothing was waiting for this - treat it as a notificaiton
-            #print ' sc: unsolicited notification: "{0}", length: {1}'.format(line, len(line))
-            self.notifyCallback(line)
+            self._notification.append(line)
+            if self.serial.inWaiting() == 0:
+                # No more chars on the way for this notification - notify highler-level callback
+                self.notifyCallback(self._notification)
+                self._notification = []            
 
     def _placeholderCallback(self, *args, **kwargs):
         """ Placeholder callback function (does nothing) """
@@ -69,37 +75,46 @@ class SerialComms(object):
         Reads lines from the connected device
         """
         try:
-            readTermSeq = list(self.EOL_SEQ)
+            readTermSeq = list(self.RX_EOL_SEQ)
             readTermLen = len(readTermSeq)
             rxBuffer = []
             while self.alive:
                 #print '...going to read'         
                 data = self.serial.read(1)                
                 if data != '': # check for timeout
-                    #print ' RX:',data
+                    #print ' RX:',data,'({})'.format(ord(data))
                     rxBuffer.append(data)
-                    if rxBuffer[-readTermLen:] == readTermSeq:
+                    if rxBuffer[-readTermLen:] == readTermSeq:                        
                         # A line (or other logical segment) has been read
                         line = ''.join(rxBuffer[:-readTermLen])
                         rxBuffer = []
                         if len(line) > 0:                          
                             #print 'calling handler'                      
                             self._handleLineRead(line)
-                        
+                    elif self._expectResponseTermSeq:
+                        if rxBuffer[-len(self._expectResponseTermSeq):] == self._expectResponseTermSeq:
+                            line = ''.join(rxBuffer) 
+                            rxBuffer = []
+                            self._handleLineRead(line, checkForResponseTerm=False)                                                
             #else:
                 #' <RX timeout>'
         except serial.SerialException, e:
             self.alive = False
             raise        
         
-    def write(self, data, waitForResponse=True, timeout=5):
+    def write(self, data, waitForResponse=True, timeout=5, expectedResponseTermSeq=None):
         with self._txLock:
             self.serial.write(data)
             if waitForResponse:
+                if expectedResponseTermSeq:
+                    self._expectResponseTermSeq = list(expectedResponseTermSeq) 
                 self._response = []
                 self._responseEvent = threading.Event()
                 if self._responseEvent.wait(timeout):
-                    self._responseEvent = None                
+                    self._responseEvent = None
+                    self._expectResponseTermSeq = False
                     return self._response
                 else: # Response timed out
+                    self._responseEvent = None
+                    self._expectResponseTermSeq = False
                     raise TimeoutException()
