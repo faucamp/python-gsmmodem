@@ -30,9 +30,9 @@ class GsmModem(SerialComms):
         # Flag indicating whether incoming call notifications have extended information
         self._extendedIncomingCallIndication = False
         # Dict containing current active calls (ringing and/or answered)
-        self.activeCalls = weakref.WeakValueDictionary()
+        self.activeCalls = {}#weakref.WeakValueDictionary()
         # Dict containing sent SMS messages (to track their delivery status)
-        self.sentSms = weakref.WeakValueDictionary()
+        self.sentSms = {}#weakref.WeakValueDictionary()
         
     def connect(self, runInit=True):
         self.log.debug('Connecting to modem on port {} at {}bps'.format(self.port, self.baudrate))
@@ -138,7 +138,7 @@ class GsmModem(SerialComms):
             # If this is reached, the timer task has triggered
             raise TimeoutException()
         
-    def sendSms(self, destination, text):
+    def sendSms(self, destination, text, waitForDeliveryReport=False, deliveryTimeout=15):
         """ Send an SMS text message
         
         @param destination: The recipient's phone number
@@ -185,6 +185,7 @@ class GsmModem(SerialComms):
             clipMatch = self.CLIP_REGEX.match(clipLine)
             if clipMatch:
                 callerNumber = clipMatch.group(1)
+                ton = clipMatch.group(2)
                 callerName = clipMatch.group(3)
                 if callerName != None and len(callerName) == 0:
                     callerName = None
@@ -193,12 +194,12 @@ class GsmModem(SerialComms):
         else:
             callerNumber = ton = callerName = None
             
-        if callerNumber in self._activeCalls:
-            call = self._activeCalls[callerNumber]
+        if callerNumber in self.activeCalls:
+            call = self.activeCalls[callerNumber]
             call.ringCount += 1
         else:        
             call = IncomingCall(self, callerNumber, ton, callerName, callType)
-            self._activeCalls[callerNumber] = call        
+            self.activeCalls[callerNumber] = call        
         self.incomingCallCallback(call)
         
     def _handleSmsReceived(self, notificationLine):
@@ -279,12 +280,12 @@ class IncomingCall(object):
             self._gsmModem.write(cmd)
         else:
             raise InvalidStateException('Call is not active (it has not yet been answered, or it has ended).')
-    
+
     def hangup(self):
         """ End the phone call.        
         @return: self (for chaining method calls)
         """
-        self.write('ATH')
+        self._gsmModem.write('ATH')
         self.ringing = False
         self.answered = False
         if self.number in self._gsmModem.activeCalls:
