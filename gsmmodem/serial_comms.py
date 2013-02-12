@@ -43,7 +43,7 @@ class SerialComms(object):
         self.rxThread.daemon = True
         self.rxThread.start()
 
-    def close(self, join=False):
+    def close(self):
         """ Stops the read thread, waits for it to exit cleanly, then closes the underlying serial port """        
         self.alive = False
         self.rxThread.join()
@@ -79,10 +79,9 @@ class SerialComms(object):
             readTermLen = len(readTermSeq)
             rxBuffer = []
             while self.alive:
-                #print '...going to read'         
                 data = self.serial.read(1)                
                 if data != '': # check for timeout
-                    #print ' RX:',data,'({})'.format(ord(data))
+                    #print(' RX:', data,'({})'.format(ord(data)))
                     rxBuffer.append(data)
                     if rxBuffer[-readTermLen:] == readTermSeq:                        
                         # A line (or other logical segment) has been read

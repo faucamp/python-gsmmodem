@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import re, logging, weakref, time, threading
+import re, logging, weakref, time, threading, abc
 
 from .serial_comms import SerialComms
 from .exceptions import CommandError, InvalidStateException
@@ -30,7 +30,9 @@ class GsmModem(SerialComms):
         # Flag indicating whether incoming call notifications have extended information
         self._extendedIncomingCallIndication = False
         # Dict containing current active calls (ringing and/or answered)
-        self.activeCalls = weakref.WeakValueDictionary()        
+        self.activeCalls = weakref.WeakValueDictionary()
+        # Dict containing sent SMS messages (to track their delivery status)
+        self.sentSms = weakref.WeakValueDictionary()
         
     def connect(self, runInit=True):
         self.log.debug('Connecting to modem on port {} at {}bps'.format(self.port, self.baudrate))
@@ -68,7 +70,7 @@ class GsmModem(SerialComms):
         # Call control setup
         self.write('AT+CVHU=0') # Enable call hang-up with ATH command
 
-    def write(self, data, waitForResponse=True, timeout=5, parseError=True, writeTerm='\r'):
+    def write(self, data, waitForResponse=True, timeout=5, parseError=True, writeTerm='\r', expectedResponseTermSeq=None):
         """ Write data to the modem
         
         This method adds the '\r\n' end-of-line sequence to the data parameter, and
@@ -84,7 +86,7 @@ class GsmModem(SerialComms):
         
         @return: A list containing the response lines from the modem, or None if waitForResponse is False
         """
-        responseLines = SerialComms.write(self, data + writeTerm, waitForResponse=waitForResponse, timeout=timeout)
+        responseLines = SerialComms.write(self, data + writeTerm, waitForResponse=waitForResponse, timeout=timeout, expectedResponseTermSeq=expectedResponseTermSeq)
         if waitForResponse:
             cmdStatusLine = responseLines[-1]
             if parseError and 'ERROR' in cmdStatusLine:
@@ -142,9 +144,11 @@ class GsmModem(SerialComms):
         @param destination: The recipient's phone number
         @param text: The message text
         """
-        self.write('AT+CMGS="{0}"\r{1}'.format(destination, text), timeout=15, writeTerm=chr(26))
-        
-        
+        sms = SentSms(destination, text)            
+        self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq='> ')    
+        self.write(text, timeout=15, writeTerm=chr(26))
+        return sms
+
     def _handleModemNotification(self, lines):
         """ Handler for unsolicited notifications from the modem
         
@@ -160,7 +164,6 @@ class GsmModem(SerialComms):
         
         @param lines The lines that were read
         """
-        print 'modem notification:', lines
         firstLine = lines[0]
         if 'RING' in firstLine:
             # Incoming call (or existing call is ringing)
@@ -200,22 +203,15 @@ class GsmModem(SerialComms):
         
     def _handleSmsReceived(self, notificationLine):
         """ Handler for "new SMS" unsolicited notification line """
-        print '_handleSmsReceived called'
         cmtiMatch = self.CMTI_REGEX.match(notificationLine)
         if cmtiMatch:
             msgIndex = cmtiMatch.group(2)
-            print 'message index:', msgIndex
             sms = self._readStoredSmsMessage(msgIndex)
-            print 'deleting msg'
             self._deleteStoredMessage(msgIndex)
-            print 'invoking callback'
-            self.smsReceivedCallback(sms)
-            print 'done'
+            self.smsReceivedCallback(sms)            
     
     def _readStoredSmsMessage(self, msgIndex):
-        print '_readStoredSmsMessage called'
         msgData = self.write('AT+CMGR={}'.format(msgIndex))
-        print 'msgData:', msgData
         # Parse meta information
         cmgrMatch = self.CMGR_SM_DELIVER_REGEX.match(msgData[0])
         if not cmgrMatch:
@@ -223,8 +219,7 @@ class GsmModem(SerialComms):
             raise CommandError()
         msgStatus, number, msgTime = cmgrMatch.groups()
         msgText = '\n'.join(msgData[1:-1])
-        print 'msg text: "{}"'.format(msgText)
-        return ReceivedSms(msgStatus, number, msgTime, msgText)
+        return ReceivedSms(self, msgStatus, number, msgTime, msgText)
             
     def _deleteStoredMessage(self, msgIndex):
         self.write('AT+CMGD={}'.format(msgIndex))
@@ -232,7 +227,7 @@ class GsmModem(SerialComms):
     def _placeHolderCallback(self, *args):
         """ Does nothing """
         self.log.debug('called with args: {}'.format(args))
-        print 'PHC: args:',args            
+
 
 class IncomingCall(object):
     """ Represents an incoming call, conveniently allowing access to call meta information and -control """     
@@ -294,21 +289,40 @@ class IncomingCall(object):
         self.answered = False
         if self.number in self._gsmModem.activeCalls:
             del self._gsmModem.activeCalls[self.number]
-            
+
+
 class Sms(object):
-    """ An SMS message that can be sent (MO) """
+    """ Abstract SMS message base class """
+    __metaclass__ = abc.ABCMeta
     
     def __init__(self, number, text):
         self.number = number
         self.text = text
-        
+
 
 class ReceivedSms(Sms):
     """ An SMS message that has been received (MT) """
     
-    def __init__(self, status, number, time, text):
+    def __init__(self, gsmModem, status, number, time, text):
         super(ReceivedSms, self).__init__(number, text)
+        self._gsmModem = weakref.proxy(gsmModem)
         self.status = status
-        self.time = time        
+        self.time = time
+        
+    def reply(self, message):
+        """ Convenience method that sends a reply SMS to the sender of this message """
+        return self._gsmModem.sendSms(self.number, message)
+
+
+class SentSms(Sms):
+    """ An SMS message that has been sent (MO) """
+        
+    ENROUTE = 0 # Status indicating message is still enroute to destination
+    RECEIVED = 1 # Status indicating message has been received by destination handset
+    
+    def __init__(self, number, text):
+        super(SentSms, self).__init__(number, text)
+        self.status = SentSms.ENROUTE
+    
         
     
