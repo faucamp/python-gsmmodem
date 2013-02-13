@@ -10,8 +10,7 @@ from .exceptions import TimeoutException
 
 
 class SerialComms(object):
-    """ Wraps all low-level serial communications (actual read/write operations)     
-    """
+    """ Wraps all low-level serial communications (actual read/write operations) """
     
     # End-of-line read terminator
     RX_EOL_SEQ = '\r\n'

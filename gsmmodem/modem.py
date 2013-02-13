@@ -7,6 +7,7 @@ from .exceptions import CommandError, InvalidStateException
 from gsmmodem.exceptions import TimeoutException
 
 class GsmModem(SerialComms):
+    """ Main class for interacting with an attached GSM modem """
     
     log = logging.getLogger('gsmmodem.modem.GsmModem')
     
@@ -35,6 +36,7 @@ class GsmModem(SerialComms):
         self.sentSms = {}#weakref.WeakValueDictionary()
         
     def connect(self, runInit=True):
+        """ Opens the port and initializes the modem """
         self.log.debug('Connecting to modem on port {} at {}bps'.format(self.port, self.baudrate))
         super(GsmModem, self).connect()                
         # Send some initialization commands to the modem
