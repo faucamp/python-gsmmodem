@@ -9,8 +9,7 @@ Its features include:
 - simple methods for sending SMS messages, checking signal level, etc
 - handling incoming phone calls and received SMS messages via callback methods
 - wraps AT command errors into Python exceptions by default 
-- modular design; you easily issue your own AT commands to the modem with error
-  (with error checking), or read/write directly from/to the modem if you prefer
+- modular design; you easily issue your own AT commands to the modem (with error checking), or read/write directly from/to the modem if you prefer
 
 Bundled utilities:
 - GSMTerm: an easy-to-use serial terminal for communicating with an attached GSM
