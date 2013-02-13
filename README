@@ -29,23 +29,18 @@ Requirements
 How to install this package
 ===========================
 
-python-gssmmodem uses setuptools (http://peak.telecommunity.com/DevCenter/setuptools)
-
-To install Entangled, do:
+To install, do:
 
 $ python setup.py install
 
-
-To build the Entangled API documentation (this requires Epydoc
-- http://epydoc.sourceforge.net):
-
-$ python setup.py build_apidocs
+Note that python-gsmmodem relies on pyserial for 
+serial communications: http://pyserial.sourceforge.net
 
 
 License information
 ===================
 
-Copyright (C) 2007-2008 Francois Aucamp, Meraka Institute, CSIR
+Copyright (C) 2013 Francois Aucamp
 See AUTHORS for all authors and contact information. 
 
 License: GNU Lesser General Public License, version 3 or later; see COPYING
