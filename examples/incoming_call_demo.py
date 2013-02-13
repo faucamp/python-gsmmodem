@@ -26,8 +26,8 @@ def handleIncomingCall(call):
 def main():
     modem = GsmModem(PORT, BAUDRATE, incomingCallCallbackFunc=handleIncomingCall)
     modem.connect()
-    print('Waiting for incoming calls...')
-    modem.rxThread.join() # This will block forever
+    print('Waiting for incoming calls...')    
+    modem.rxThread.join(2**31) # Specify a (huge) timeout so that it essentially blocks indefinitely, but still receives CTRL+C interrupt signal
 
 if __name__ == '__main__':
     main()
