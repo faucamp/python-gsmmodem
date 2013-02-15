@@ -2,7 +2,13 @@
 
 """ python-gsmmodem installation script """
 
-from distutils.core import setup
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils.core import setup
+
+with open('requires.txt') as f:
+    requires = f.readlines() 
 
 setup(name='python-gsmmodem',
       version='0.1',
@@ -51,4 +57,5 @@ Bundled utilities:
       
       packages=['gsmmodem', 'gsmterm'],      
       package_dir = {'gsmterm': 'tools/gsmterm'},
-      scripts=['tools/gsmterm.py', 'tools/sendsms.py'])
+      scripts=['tools/gsmterm.py', 'tools/sendsms.py'],      
+      install_requires=requires)
