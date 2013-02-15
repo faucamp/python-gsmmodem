@@ -2,3 +2,4 @@ include AUTHORS
 include ChangeLog
 include COPYING
 include requirements.txt
+include examples/*.py
