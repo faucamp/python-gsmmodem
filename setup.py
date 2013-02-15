@@ -7,7 +7,7 @@ try:
 except ImportError:
     from distutils.core import setup
 
-with open('requires.txt') as f:
+with open('requirements.txt') as f:
     requires = f.readlines() 
 
 setup(name='python-gsmmodem',
