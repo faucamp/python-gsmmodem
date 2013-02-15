@@ -1,0 +1,18 @@
+# Simple script for GSMTerm to initialize the modem with a few common settings
+# Load this from within GSMTerm by typing: load /path/to/at_cmd_init_modem.txt
+ATZ
+ATE0
+AT+CFUN=1
+AT+CMEE=1
+AT+WIND=0
+
+# Setup incoming calls
+AT+CLIP=1
+AT+CRC=1
+AT+CVHU=0
+
+# Setup SMS
+AT+CMGF=1
+AT+CSMP=49,167
+AT+CPMS="SM","SM","SR"
+AT+CNMI=2,1,0,2
