@@ -12,8 +12,7 @@ setup(name='python-gsmmodem',
       author_email='francois.aucamp@gmail.com',
       
       url='https://github.com/faucamp/python-gsmmodem',
-      download_url='https://github.com/faucamp/python-gsmmodem/archive/master.zip',
-      
+ 
       long_description="""\
 python-gsmmodem is a module that allows easy control of a GSM modem attached
 to the system. It also includes a couple of useful commandline utilities for
