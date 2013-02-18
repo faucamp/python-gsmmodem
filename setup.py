@@ -10,15 +10,17 @@ except ImportError:
 with open('requirements.txt') as f:
     requires = f.readlines() 
 
+VERSION = 0.2
+
 setup(name='python-gsmmodem',
-      version='0.2',
+      version='{}'.format(VERSION),
       description='Control an attached GSM modem: send/receive SMS messages, handle calls, etc',      
       license='LGPLv3+',
       author='Francois Aucamp',
       author_email='francois.aucamp@gmail.com',
       
       url='https://github.com/faucamp/python-gsmmodem',
-      download_url='https://github.com/faucamp/python-gsmmodem/archive/0.1.tar.gz',
+      download_url='https://github.com/faucamp/python-gsmmodem/archive/{}.tar.gz'.format(VERSION),
  
       long_description="""\
 python-gsmmodem is a module that allows easy control of a GSM modem attached
