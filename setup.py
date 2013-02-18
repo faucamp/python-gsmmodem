@@ -38,7 +38,7 @@ Bundled utilities:
 - GSMTerm: an easy-to-use serial terminal for communicating with an attached GSM
   modem. It features command completion, built-in help for many AT commands,
   history, context-aware prompt, etc.
-- sensms.py: a simple command line script to send SMS messages
+- sendsms.py: a simple command line script to send SMS messages
 """,
 
       classifiers=['Development Status :: 4 - Beta',
