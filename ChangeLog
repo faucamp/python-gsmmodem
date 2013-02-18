@@ -1,3 +1,7 @@
+* Mon Feb 18 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.2
+- Renamed "gsmterm" module to "gsmtermlib" to avoid conflict between startup
+script and module
+
 * Wed Feb 13 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.1
 - Initial 0.1 release to github
 - GsmModem class functionality more-or-less where I need it: handles incoming

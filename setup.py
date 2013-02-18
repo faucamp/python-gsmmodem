@@ -11,7 +11,7 @@ with open('requirements.txt') as f:
     requires = f.readlines() 
 
 setup(name='python-gsmmodem',
-      version='0.1',
+      version='0.2',
       description='Control an attached GSM modem: send/receive SMS messages, handle calls, etc',      
       license='LGPLv3+',
       author='Francois Aucamp',
@@ -55,7 +55,7 @@ Bundled utilities:
                    'Topic :: Utilities'],
       keywords = ['gsm', 'sms', 'modem', 'mobile', 'phone', 'usb', 'serial'],
       
-      packages=['gsmmodem', 'gsmterm'],      
-      package_dir = {'gsmterm': 'tools/gsmterm'},
+      packages=['gsmmodem', 'gsmtermlib'],
+      package_dir = {'gsmtermlib': 'tools/gsmtermlib'},
       scripts=['tools/gsmterm.py', 'tools/sendsms.py'],      
       install_requires=requires)

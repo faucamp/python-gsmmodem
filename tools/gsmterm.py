@@ -8,7 +8,7 @@ Launch script for GSMTerm
 from __future__ import print_function
 import argparse
 
-from gsmterm.terminal import GsmTerm, RawTerm
+from gsmtermlib.terminal import GsmTerm, RawTerm
 
 
 def main():
