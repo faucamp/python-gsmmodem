@@ -4,7 +4,7 @@
 
 import unittest
 
-import gsmterm.trie
+import gsmtermlib.trie
 
 class TestTrie(unittest.TestCase):
     """ Tests the trie implementation used by GsmTerm """    

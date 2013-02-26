@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+""" Low-level serial communications handling """
+
 import sys, threading
 from Queue import Queue
 
@@ -52,18 +54,17 @@ class SerialComms(object):
         #print 'sc.hlineread:',line
         if self._responseEvent and not self._responseEvent.is_set():
             # A response event has been set up (another thread is waiting for this response)
-            #print ' sc: response to event: "{0}", length: {1}'.format(line, len(line))
             self._response.append(line)
             if not checkForResponseTerm or self.RESPONSE_TERM.match(line):
                 # End of response reached; notify waiting thread
                 self._responseEvent.set()
         else:
-            # Nothing was waiting for this - treat it as a notificaiton
+            # Nothing was waiting for this - treat it as a notification
             self._notification.append(line)
             if self.serial.inWaiting() == 0:
-                # No more chars on the way for this notification - notify highler-level callback
+                # No more chars on the way for this notification - notify higher-level callback
                 self.notifyCallback(self._notification)
-                self._notification = []            
+                self._notification = []
 
     def _placeholderCallback(self, *args, **kwargs):
         """ Placeholder callback function (does nothing) """
@@ -78,7 +79,7 @@ class SerialComms(object):
             readTermLen = len(readTermSeq)
             rxBuffer = []
             while self.alive:
-                data = self.serial.read(1)                
+                data = self.serial.read(1)
                 if data != '': # check for timeout
                     #print(' RX:', data,'({})'.format(ord(data)))
                     rxBuffer.append(data)

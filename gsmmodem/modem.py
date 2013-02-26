@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+""" High-level API classes for an attached GSM modem """
+
 import re, logging, weakref, time, threading, abc
 
 from .serial_comms import SerialComms
@@ -10,7 +12,7 @@ class GsmModem(SerialComms):
     """ Main class for interacting with an attached GSM modem """
     
     log = logging.getLogger('gsmmodem.modem.GsmModem')
-    
+
     # Used for parsing AT command errors
     CM_ERROR_REGEX = re.compile(r'^\+(CM[ES]) ERROR: (\d+)$')
     # Used for parsing signal strength query responses
@@ -21,6 +23,10 @@ class GsmModem(SerialComms):
     CMTI_REGEX = re.compile(r'^\+CMTI:\s*([^,]+),(\d+)$')
     # Used for parsing SMS message reads
     CMGR_SM_DELIVER_REGEX = re.compile(r'^\+CMGR:\s*"([^"]+)","([^"]+)",[^,]*,"([^"]+)"$')
+    # Used for parsing USSD event notifications
+    CUSD_REGEX = re.compile(r'^\+CUSD:\s*(\d),"(.*)",(\d+)$')
+    
+    
     
     def __init__(self, port, baudrate=9600, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None):
         super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification)
@@ -33,7 +39,9 @@ class GsmModem(SerialComms):
         # Dict containing current active calls (ringing and/or answered)
         self.activeCalls = {}#weakref.WeakValueDictionary()
         # Dict containing sent SMS messages (to track their delivery status)
-        self.sentSms = {}#weakref.WeakValueDictionary()
+        self.sentSms = {}
+        self._ussdSessionEvent = None # threading.Event
+        self._ussdResponse = None # gsmmodem.modem.Ussd
         
     def connect(self, runInit=True):
         """ Opens the port and initializes the modem """
@@ -99,7 +107,7 @@ class GsmModem(SerialComms):
                 else:
                     raise CommandError()
             return responseLines
-    
+
     @property
     def signalStrength(self):
         """ @return The network signal strength as an integer between 0 and 99, or -1 if it is unknown """
@@ -109,7 +117,7 @@ class GsmModem(SerialComms):
             return ss if ss != 99 else -1
         else:
             raise CommandError()
-    
+
     def waitForNetworkCoverage(self, timeout=None):
         """ Block until the modem has GSM network coverage.
         
@@ -150,6 +158,28 @@ class GsmModem(SerialComms):
         self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq='> ')    
         self.write(text, timeout=15, writeTerm=chr(26))
         return sms
+    
+    def sendUssd(self, ussdString, responseTimeout=15):
+        """ Starts a USSD session by dialing the the specified USSD string, or \
+        sends the specified string in the existing USSD session (if any)
+                
+        @param ussdString: The USSD access number to dial
+        @param timeout: Maximum time to wait a response, in seconds
+        
+        @raise TimeoutException: if no response is received in time
+        
+        @return: The USSD response message/session (as a Ussd object)
+        @rtype: gsmmodem.modem.Ussd
+        """
+        self.write('AT+CUSD=1,"{0}",15'.format(ussdString)) # responds with "OK"
+        # Wait for the +CUSD notification message
+        self._ussdSessionEvent = threading.Event()
+        if self._ussdSessionEvent.wait(responseTimeout):
+            self._ussdSessionEvent = None
+            return self._ussdResponse
+        else: # Response timed out
+            self._ussdSessionEvent = None            
+            raise TimeoutException()        
 
     def _handleModemNotification(self, lines):
         """ Handler for unsolicited notifications from the modem
@@ -173,6 +203,9 @@ class GsmModem(SerialComms):
         elif firstLine.startswith('+CMTI'):
             # New SMS message indication
             self._handleSmsReceived(firstLine)
+        elif firstLine.startswith('+CUSD'):
+            # USSD notification - either a response or a MT-USSD ("push USSD") message
+            self._handleUssd(firstLine) 
         else:
             self.log.debug('Unhandled unsolicited modem notification:', lines)
     
@@ -226,6 +259,16 @@ class GsmModem(SerialComms):
             
     def _deleteStoredMessage(self, msgIndex):
         self.write('AT+CMGD={}'.format(msgIndex))
+    
+    def _handleUssd(self, notificationLine):
+        """ Handler for USSD event notification line """
+        if self._ussdSessionEvent:
+            # A sendUssd() call is waiting for this response - parse it
+            cusdMatch = self.CUSD_REGEX.match(notificationLine)
+            if cusdMatch:
+                self._ussdResponse = Ussd(self, (cusdMatch.group(1) == '1'), cusdMatch.group(2))
+            # Notify waiting thread
+            self._ussdSessionEvent.set()
     
     def _placeHolderCallback(self, *args):
         """ Does nothing """
@@ -326,6 +369,36 @@ class SentSms(Sms):
     def __init__(self, number, text):
         super(SentSms, self).__init__(number, text)
         self.status = SentSms.ENROUTE
+
+class Ussd(object):
+    """ Unstructured Supplementary Service Data (USSD) message.
     
+    This class contains convenient methods for replying to a USSD prompt
+    and to cancel the USSD session
+    """
+    
+    def __init__(self, gsmModem, sessionActive, message):
+        self._gsmModem = weakref.proxy(gsmModem)
+        # Indicates if the session is active (True) or has been closed (False)
+        self.sessionActive = sessionActive
+        self.message = message
+    
+    def reply(self, message):
+        """ Sends a reply to this USSD message in the same USSD session 
         
-    
+        @raise InvalidStateException: if the USSD session is not active (i.e. it has ended)
+        
+        @return: The USSD response message/session (as a Ussd object)
+        """
+        if self.sessionActive:
+            return self._gsmModem.sendUssd(message)
+        else:
+            raise InvalidStateException('USSD session is inactive')
+                
+    def cancel(self):
+        """ Terminates/cancels the USSD session (without sending a reply)
+        
+        Does nothing if the USSD session is inactive.
+        """
+        if self.sessionActive:
+            self.write('AT+CUSD=2')
