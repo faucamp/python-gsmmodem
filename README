@@ -7,6 +7,7 @@ interacting with a GSM modem.
 
 Its features include:
 - simple methods for sending SMS messages, checking signal level, etc
+- easy-to-use API for starting and responding to USSD sessions
 - handling incoming phone calls and received SMS messages via callback methods
 - wraps AT command errors into Python exceptions by default 
 - modular design; you easily issue your own AT commands to the modem (with error checking), or read/write directly from/to the modem if you prefer
