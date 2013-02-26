@@ -1,3 +1,9 @@
+* Tue Feb 26 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.3
+- USSD functionality added
+- GsmModem class now exposed in main gsmmodem package
+- GsmModem test cases added for USSD functionality
+- Some fixes to GSMTerm tests
+
 * Mon Feb 18 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.2
 - Renamed "gsmterm" module to "gsmtermlib" to avoid conflict between startup
 script and module
