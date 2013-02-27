@@ -10,7 +10,7 @@ class TestTrie(unittest.TestCase):
     """ Tests the trie implementation used by GsmTerm """    
     
     def setUp(self):        
-        self.trie = gsmterm.trie.Trie()
+        self.trie = gsmtermlib.trie.Trie()
         self.keyValuePairs = (('abc', 'def'),
                          ('hallo', 'daar'),
                          ('hoe gaan', 'dit met jou'),
@@ -115,7 +115,7 @@ class TestAtCommands(unittest.TestCase):
     
     def test_loadAtCommands(self):
         """ Check that the AT commands can be loaded correctly, and they are correctly formatted """
-        from gsmterm.atcommands import ATCOMMANDS, CATEGORIES
+        from gsmtermlib.atcommands import ATCOMMANDS, CATEGORIES
         for command, help in ATCOMMANDS:
             self.assertNotEqual(command, None)
             self.assertGreater(len(command), 0)
