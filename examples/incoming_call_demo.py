@@ -3,8 +3,9 @@
 """\
 Demo: handle incoming calls
 
-Simple demo app that listens for incoming calls, displays the caller ID
-and hangs up the call without answering after 3 ring notifications.
+Simple demo app that listens for incoming calls, displays the caller ID,
+optionally answers the call and plays sone DTMF tones (if supported by modem), 
+and hangs up the call.
 """
 
 from __future__ import print_function
@@ -17,8 +18,15 @@ from gsmmodem.modem import GsmModem
 def handleIncomingCall(call):
     if call.ringCount == 1:
         print('Incoming call from:', call.number)
-    elif call.ringCount >= 3:
-        print('Hanging up call from:', call.number)
+    elif call.ringCount >= 2:
+        if call.dtmfSupport:
+            print('Answering call and playing some DTMF tones...')
+            call.answer()
+            call.sendDtmfTone('9515999955951')
+            print('Hanging up call.')
+            call.hangup()
+        else:            
+            print('Modem has no DTMF support - hanging up call.')
         call.hangup()
     else:
         print(' Call from {} is still ringing...'.format(call.number))

@@ -36,8 +36,8 @@ class GsmModem(SerialComms):
         self._callingLineIdentification = False
         # Flag indicating whether incoming call notifications have extended information
         self._extendedIncomingCallIndication = False
-        # Dict containing current active calls (ringing and/or answered)
-        self.activeCalls = {}#weakref.WeakValueDictionary()
+        # Current active call (ringing and/or answered)
+        self.activeCall = {}
         # Dict containing sent SMS messages (to track their delivery status)
         self.sentSms = {}
         self._ussdSessionEvent = None # threading.Event
@@ -52,8 +52,25 @@ class GsmModem(SerialComms):
         self.write('ATE0') # echo off
         self.write('AT+CFUN=1') # enable full modem functionality
         self.write('AT+CMEE=1') # enable detailed error messages
+        
+        # Get list of supported commands from modem
+        commands = self.supportedCommands
+        
         # disable misc notifications (we will enable what we need in a bit) - not all modems support this command; doesn't matter
         self.write('AT+WIND=0', parseError=False)        
+        
+        # General meta-information setup
+        self.write('AT+COPS=0,0', parseError=False) # Automatic network selection, use long alphanumeric name format
+        
+        # Device-specific settings
+        if '^CVOICE' in commands:
+            self.write('AT^CVOICE=0', parseError=False) # Enable voice calls
+        if '+VTS' in commands: # Check for DTMF sending support
+            Call.dtmfSupport = True
+        elif '^DTMF' in commands:
+            # Huawei modems use ^DTMF to send DTMF tones; use that instead
+            Call.DTMF_COMMAND_BASE = '^DTMF=1,'
+            Call.dtmfSupport = True
         
         # SMS setup
         self.write('AT+CMGF=1') # Switch to text mode for SMS messages
@@ -79,6 +96,7 @@ class GsmModem(SerialComms):
 
         # Call control setup
         self.write('AT+CVHU=0') # Enable call hang-up with ATH command
+        
 
     def write(self, data, waitForResponse=True, timeout=5, parseError=True, writeTerm='\r', expectedResponseTermSeq=None):
         """ Write data to the modem
@@ -110,13 +128,51 @@ class GsmModem(SerialComms):
 
     @property
     def signalStrength(self):
-        """ @return The network signal strength as an integer between 0 and 99, or -1 if it is unknown """
+        """ @return: The network signal strength as an integer between 0 and 99, or -1 if it is unknown """
         csq = self.CSQ_REGEX.match(self.write('AT+CSQ')[0])
         if csq:
             ss = int(csq.group(1))
             return ss if ss != 99 else -1
         else:
             raise CommandError()
+
+    @property
+    def manufacturer(self):
+        """ @return: The modem's manufacturer's name """
+        return self.write('AT+CGMI')[0]
+    
+    @property
+    def model(self):
+        """ @return: The modem's model name """
+        return self.write('AT+CGMM')[0]
+    
+    @property
+    def revision(self):
+        """ @return: The modem's software revision """
+        return self.write('AT+CGMR')[0]
+    
+    @property
+    def imei(self):
+        """ @return: The modem's serial number (IMEI number) """
+        return self.write('AT+CGSN')[0]
+    
+    @property
+    def imsi(self):
+        """ @return: The IMSI (International Mobile Subscriber Identity) of the SIM card. The PIN may need to be entered before reading the IMSI """
+        return self.write('AT+CIMI')[0]
+    
+    @property
+    def networkName(self):
+        """ @return: the name of the GSM Network Operator to which the modem is connected """
+        response = self.write('AT+COPS?') # response format: +COPS: mode,format,"operator_name",x
+        copsMatch = re.match(r'^\+COPS: (\d),(\d),"(.+)",\d$', response)
+        if copsMatch:
+            return copsMatch.group(3)
+
+    @property
+    def supportedCommands(self):
+        """ @return: list of AT commands supported by this modem (without the AT prefix) """
+        return self.write('AT+CLAC')[0][6:].split(',') # remove the +CLAC: prefix before splitting
 
     def waitForNetworkCoverage(self, timeout=None):
         """ Block until the modem has GSM network coverage.
@@ -179,7 +235,20 @@ class GsmModem(SerialComms):
             return self._ussdResponse
         else: # Response timed out
             self._ussdSessionEvent = None            
-            raise TimeoutException()        
+            raise TimeoutException()
+    
+    def dial(self, number):
+        """ Calls the specified phone number using a voice phone call
+        
+        @param number: The phone number to dial
+        """
+        if self.activeCall != None:
+            self.write('ATD{};'.format(number))
+            call = Call(self, number)
+            self.activeCall = call
+            return call
+        else:
+            raise InvalidStateException('Another call is currently active')
 
     def _handleModemNotification(self, lines):
         """ Handler for unsolicited notifications from the modem
@@ -205,7 +274,9 @@ class GsmModem(SerialComms):
             self._handleSmsReceived(firstLine)
         elif firstLine.startswith('+CUSD'):
             # USSD notification - either a response or a MT-USSD ("push USSD") message
-            self._handleUssd(firstLine) 
+            self._handleUssd(firstLine)
+        elif firstLine.startswith('^CONN:'): # Call connection established
+            self._handleCallAnswered(firstLine)
         else:
             self.log.debug('Unhandled unsolicited modem notification:', lines)
     
@@ -228,15 +299,20 @@ class GsmModem(SerialComms):
                 callerNumber = ton = callerName = None
         else:
             callerNumber = ton = callerName = None
-            
-        if callerNumber in self.activeCalls:
-            call = self.activeCalls[callerNumber]
+        
+        if self.activeCall != None and callerNumber == self.activeCall.number:
+            call = self.activeCall
             call.ringCount += 1
         else:        
             call = IncomingCall(self, callerNumber, ton, callerName, callType)
-            self.activeCalls[callerNumber] = call        
+            self.activeCall = call
         self.incomingCallCallback(call)
-        
+    
+    def _handleCallAnswered(self, notificationLine):
+        """ Handler for "outgoing call answered" event notification line """
+        if self.activeCall != None:
+            self.activeCall.answered = True
+    
     def _handleSmsReceived(self, notificationLine):
         """ Handler for "new SMS" unsolicited notification line """
         cmtiMatch = self.CMTI_REGEX.match(notificationLine)
@@ -275,7 +351,50 @@ class GsmModem(SerialComms):
         self.log.debug('called with args: {}'.format(args))
 
 
-class IncomingCall(object):
+class Call(object):
+    """ A voice call """
+    
+    DTMF_COMMAND_BASE = '+VTS='    
+    dtmfSupport = False # Indicates whether or not DTMF tones can be sent in calls
+    
+    def __init__(self, gsmModem, number):
+        """
+        @param gsmModem: GsmModem instance that created this object
+        @param number: The number that is being called        
+        """
+        self._gsmModem = weakref.proxy(gsmModem)
+        # The number that is dialling
+        self.number = number                
+        # Flag indicating whether the call has been answered or not
+        self.answered = False
+    
+    def sendDtmfTone(self, tones):
+        """ Send a DTMF tone to the remote party (only allowed for an answered call) 
+        
+        Note: this is highly device-dependent, and might not work
+        
+        @param digits: A str containining one or more DTMF tones to play, e.g. "3" or "*123#"
+
+        @raise CommandError: if the command failed/is not supported
+        """        
+        if self.answered:
+            if len(tones) > 1:
+                cmd = ('AT{0}{1};{0}' + ';{0}'.join(tones[1:])).format(self.DTMF_COMMAND_BASE, tones[0])                
+            else:
+                cmd = 'AT+VTS={}'.format(tones)            
+            self._gsmModem.write(cmd)
+        else:
+            raise InvalidStateException('Call is not active (it has not yet been answered, or it has ended).')
+    
+    def hangup(self):
+        """ End the phone call. """
+        self._gsmModem.write('ATH')
+        self.answered = False
+        if self._gsmModem.activeCall != None and self.number == self._gsmModem.activeCall.number:
+            self._gsmModem.activeCall = None
+
+
+class IncomingCall(Call):
     """ Represents an incoming call, conveniently allowing access to call meta information and -control """     
     def __init__(self, gsmModem, number, ton, callerName, callType):
         """
@@ -284,17 +403,13 @@ class IncomingCall(object):
         @param ton: TON (type of number/address) in integer format
         @param callType: Type of the incoming call (VOICE, FAX, DATA, etc)
         """
-        self._gsmModem = weakref.proxy(gsmModem)
-        # The number that is dialling
-        self.number = number
+        super(IncomingCall, self).__init__(gsmModem, number)        
         # Type attribute of the incoming call
         self.ton = ton
         self.callerName = callerName
         self.type = callType
         # Flag indicating whether the call is ringing or not
-        self.ringing = True
-        # Flag indicating whether the call has been answered or not
-        self.answered = False
+        self.ringing = True        
         # Amount of times this call has rung (before answer/hangup)
         self.ringCount = 1
     
@@ -306,35 +421,12 @@ class IncomingCall(object):
             self._gsmModem.write('ATA')
             self.ringing = False
             self.answered = True
-        return self
-    
-    def sendDtmfTone(self, tones):
-        """ Send a DTMF tone to the remote party (only allowed for an answered call) 
-        
-        Note: this is highly device-dependent, and might not work
-        
-        @param digits: A str containining one or more DTMF tones to play, e.g. "3" or "*123#"
-
-        @raise CommandError: if the command failed/is not supported
-        """
-        if self.answered:
-            if len(tones) > 1:
-                cmd = 'AT+VTS={}'.format(';+VTS='.join(tones))
-            else:
-                cmd = 'AT+VTS={}'.format(tones)            
-            self._gsmModem.write(cmd)
-        else:
-            raise InvalidStateException('Call is not active (it has not yet been answered, or it has ended).')
+        return self    
 
     def hangup(self):
-        """ End the phone call.        
-        @return: self (for chaining method calls)
-        """
-        self._gsmModem.write('ATH')
+        """ End the phone call. """
         self.ringing = False
-        self.answered = False
-        if self.number in self._gsmModem.activeCalls:
-            del self._gsmModem.activeCalls[self.number]
+        super(IncomingCall, self).hangup()
 
 
 class Sms(object):
