@@ -181,22 +181,25 @@ class TestGsmModemDial(unittest.TestCase):
     def test_dial(self):
         self.init_modem()
         
-        numbers = ['0123456789']
+        tests = (['0123456789', '1', '0'],
+                 ['5551112223', '3', '0'])
         
-        for number in numbers: 
+        for number, callId, callType in tests: 
             def writeCallbackFunc(data):
                 self.assertEqual('ATD{};\r'.format(number), data, 'Invalid data written to modem; expected "{}", got: "{}"'.format('ATD{};\r'.format(number), data))
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
-            self.modem.serial.responseSequence = ['OK\r\n', '^ORIG:1,0\r\n', 0.2, '^CONF:1\r\n']
+            self.modem.serial.responseSequence = ['OK\r\n', '^ORIG:{},{}\r\n'.format(callId, callType), 0.2, '^CONF:{}\r\n'.format(callId)]
             self.modem.serial.flushResponseSequence = True
             call = self.modem.dial(number)
             self.assertIsInstance(call, gsmmodem.modem.Call)
             self.assertIs(call.number, number)
-            self.assertFalse(call.answered, 'Call state invalid: should not yet be answered')
+            self.assertFalse(call.answered, 'Call state invalid: should not yet be answered')            
+            self.assertIn(call.id, self.modem.activeCalls)
+            self.assertEqual(len(self.modem.activeCalls), 1)
             # Fake an answer
             while len(self.modem.serial._readQueue) > 0:
                 time.sleep(0.1)
-            self.modem.serial._readQueue = list('^CONN:1,0\r\n')
+            self.modem.serial._readQueue = list('^CONN:{},{}\r\n'.format(callId, callType))
             # Wait a bit for the event to be picked up
             while len(self.modem.serial._readQueue) > 0:
                 time.sleep(0.1)
@@ -206,6 +209,70 @@ class TestGsmModemDial(unittest.TestCase):
             self.modem.serial.writeCallbackFunc = hangupCallback
             call.hangup()
             self.assertFalse(call.answered, 'Hangup call did not change call state')
+            self.assertNotIn(call.id, self.modem.activeCalls)
+            self.assertEqual(len(self.modem.activeCalls), 0)
+            # Check remote hangup detection
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            self.modem.serial.responseSequence = ['OK\r\n', '^ORIG:{},{}\r\n'.format(callId, callType), '^CONF:{}\r\n'.format(callId), '^CONN:{},{}\r\n'.format(callId, callType)]
+            self.modem.serial.flushResponseSequence = True
+            call = self.modem.dial(number)
+            # Wait a bit for the event to be picked up
+            while len(self.modem.serial._readQueue) > 0:
+                time.sleep(0.1)
+            self.assertTrue(call.answered, 'Remote call answer was not detected')
+            self.assertIn(call.id, self.modem.activeCalls)
+            self.assertEqual(len(self.modem.activeCalls), 1)
+            # Now fake a remote hangup
+            self.modem.serial._readQueue = list('^CEND:{},5,29,16\r\n'.format(callId))
+            # Wait a bit for the event to be picked up
+            while len(self.modem.serial._readQueue) > 0:
+                time.sleep(0.1)
+            self.assertFalse(call.answered, 'Remote hangup was not detected')
+            self.assertNotIn(call.id, self.modem.activeCalls)
+            self.assertEqual(len(self.modem.activeCalls), 0)
+
+class TestIncomingCall(unittest.TestCase):
+
+    def test_incomingCallAnswer(self):
+        mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = mockSerial
+        
+        callReceived = [False]
+        def incomingCallCallbackFunc(call):
+            try:
+                self.assertIsInstance(call, gsmmodem.modem.IncomingCall)
+                self.assertIn(call.id, self.modem.activeCalls)
+                self.assertEqual(len(self.modem.activeCalls), 1)
+                self.assertFalse(call.answered, 'Call state invalid: should not yet be answered')
+                self.assertIsInstance(call.type, int)
+                self.assertEqual(call.type, callReceived[1], 'Invalid call type; expected {}, got {}'.format(callReceived[1], call.type))
+                def writeCallbackFunc1(data):
+                    self.assertEqual('ATA\r', data, 'Invalid data written to modem; expected "{}", got: "{}"'.format('ATA\r', data))
+                self.modem.serial.writeCallbackFunc = writeCallbackFunc1
+                call.answer()
+                self.assertTrue(call.answered, 'Call state invalid: should be answered')
+                def writeCallbackFunc2(data):
+                    self.assertEqual('ATH\r', data, 'Invalid data written to modem; expected "{}", got: "{}"'.format('ATH\r', data))
+                self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+                call.hangup()
+                self.assertFalse(call.answered, 'Call state invalid: hangup did not change call state')
+                self.assertNotIn(call.id, self.modem.activeCalls)
+                self.assertEqual(len(self.modem.activeCalls), 0)
+            finally:
+                callReceived[0] = True
+        
+        self.modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --', incomingCallCallbackFunc=incomingCallCallbackFunc)        
+        self.modem.connect()
+        
+        tests = (('+27820001234', 'VOICE', 0),)
+        
+        for number, cringParam, callType in tests: 
+            callReceived = [False, callType]
+            # Fake incoming voice call
+            self.modem.serial._readQueue = list('+CRING: {}\r\n+CLIP: "{}",145,,,,0\r\n'.format(cringParam, number))
+            # Wait a bit for the event to be picked up
+            while callReceived[0] == False:
+                time.sleep(0.1)
         
         
 if __name__ == "__main__":

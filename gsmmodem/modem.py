@@ -26,8 +26,6 @@ class GsmModem(SerialComms):
     # Used for parsing USSD event notifications
     CUSD_REGEX = re.compile(r'^\+CUSD:\s*(\d),"(.*)",(\d+)$')
     
-    
-    
     def __init__(self, port, baudrate=9600, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None):
         super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification)
         self.incomingCallCallback = incomingCallCallbackFunc or self._placeholderCallback
@@ -36,12 +34,14 @@ class GsmModem(SerialComms):
         self._callingLineIdentification = False
         # Flag indicating whether incoming call notifications have extended information
         self._extendedIncomingCallIndication = False
-        # Current active call (ringing and/or answered)
-        self.activeCall = {}
+        # Current active calls (ringing and/or answered), key is the unique call ID (not the remote number)
+        self.activeCalls = {}
         # Dict containing sent SMS messages (to track their delivery status)
         self.sentSms = {}
         self._ussdSessionEvent = None # threading.Event
         self._ussdResponse = None # gsmmodem.modem.Ussd
+        self._dialEvent = None # threading.Event
+        self._dialResponse = None # gsmmodem.modem.Call        
         
     def connect(self, runInit=True):
         """ Opens the port and initializes the modem """
@@ -220,7 +220,7 @@ class GsmModem(SerialComms):
         sends the specified string in the existing USSD session (if any)
                 
         @param ussdString: The USSD access number to dial
-        @param timeout: Maximum time to wait a response, in seconds
+        @param responseTimeout: Maximum time to wait a response, in seconds
         
         @raise TimeoutException: if no response is received in time
         
@@ -237,18 +237,24 @@ class GsmModem(SerialComms):
             self._ussdSessionEvent = None            
             raise TimeoutException()
     
-    def dial(self, number):
+    def dial(self, number, timeout=5):
         """ Calls the specified phone number using a voice phone call
         
         @param number: The phone number to dial
+        @param timeout: Maximum time to wait for the call to be established
         """
-        if self.activeCall != None:
-            self.write('ATD{};'.format(number))
-            call = Call(self, number)
-            self.activeCall = call
+        self.write('ATD{};'.format(number))
+        # Wait for the ^ORIG notification message
+        self._dialEvent = threading.Event()
+        if self._dialEvent.wait(timeout):
+            self._dialEvent = None
+            callId, callType = self._dialResponse
+            call = Call(self, callId, callType, number)
+            self.activeCalls[callId] = call
             return call
-        else:
-            raise InvalidStateException('Another call is currently active')
+        else: # Call establishing timed out
+            self._dialEvent = None            
+            raise TimeoutException()
 
     def _handleModemNotification(self, lines):
         """ Handler for unsolicited notifications from the modem
@@ -264,7 +270,7 @@ class GsmModem(SerialComms):
         """ Implementation of _handleModemNotification() to be run in a separate thread 
         
         @param lines The lines that were read
-        """
+        """        
         firstLine = lines[0]
         if 'RING' in firstLine:
             # Incoming call (or existing call is ringing)
@@ -275,8 +281,12 @@ class GsmModem(SerialComms):
         elif firstLine.startswith('+CUSD'):
             # USSD notification - either a response or a MT-USSD ("push USSD") message
             self._handleUssd(firstLine)
-        elif firstLine.startswith('^CONN:'): # Call connection established
+        elif firstLine.startswith('^ORIG:'): # Outgoing call established
+            self._handleCallInitiated(firstLine)
+        elif firstLine.startswith('^CONN:'): # Call connection established (remote party answered)
             self._handleCallAnswered(firstLine)
+        elif firstLine.startswith('^CEND:'): # Call ended
+            self._handleCallEnded(firstLine)
         else:
             self.log.debug('Unhandled unsolicited modem notification:', lines)
     
@@ -300,18 +310,40 @@ class GsmModem(SerialComms):
         else:
             callerNumber = ton = callerName = None
         
-        if self.activeCall != None and callerNumber == self.activeCall.number:
-            call = self.activeCall
-            call.ringCount += 1
-        else:        
-            call = IncomingCall(self, callerNumber, ton, callerName, callType)
-            self.activeCall = call
+        call = None
+        for activeCall in self.activeCalls.itervalues():
+            if activeCall.number == callerNumber:
+                call = self.activeCall
+                call.ringCount += 1
+        if call == None:
+            callId = len(self.activeCalls) + 1;
+            call = IncomingCall(self, callerNumber, ton, callerName, callId, callType)
+            self.activeCalls[callId] = call
         self.incomingCallCallback(call)
     
+    def _handleCallInitiated(self, notificationLine):
+        """ Handler for "outgoing call initiated" event notification line """
+        if self._dialEvent:
+            origMatch = re.match(r'^\^ORIG:(\d),(\d)$', notificationLine)
+            if origMatch:
+                # Return callId, callType
+                self._dialResponse = (int(origMatch.group(1)) , int(origMatch.group(2)))
+            self._dialEvent.set()
+                
     def _handleCallAnswered(self, notificationLine):
         """ Handler for "outgoing call answered" event notification line """
-        if self.activeCall != None:
-            self.activeCall.answered = True
+        connMatch = re.match(r'^\^CONN:(\d),(\d)$', notificationLine)
+        if connMatch:
+            callId = int(connMatch.group(1))
+            self.activeCalls[callId].answered = True            
+    
+    def _handleCallEnded(self, notificationLine):
+        cendMatch = re.match(r'^\^CEND:(\d),(\d),(\d)+,(\d)+$', notificationLine)
+        if cendMatch:
+            callId = int(cendMatch.group(1))
+            if callId in self.activeCalls:
+                self.activeCalls[callId].answered = False
+                del self.activeCalls[callId]
     
     def _handleSmsReceived(self, notificationLine):
         """ Handler for "new SMS" unsolicited notification line """
@@ -357,16 +389,20 @@ class Call(object):
     DTMF_COMMAND_BASE = '+VTS='    
     dtmfSupport = False # Indicates whether or not DTMF tones can be sent in calls
     
-    def __init__(self, gsmModem, number):
+    def __init__(self, gsmModem, callId, callType, number):
         """
         @param gsmModem: GsmModem instance that created this object
         @param number: The number that is being called        
         """
         self._gsmModem = weakref.proxy(gsmModem)
-        # The number that is dialling
+        # Unique ID of this call
+        self.id = callId
+        # Call type (VOICE == 0, etc)
+        self.type = callType        
+        # The remote number of this call (destination or origin)
         self.number = number                
         # Flag indicating whether the call has been answered or not
-        self.answered = False
+        self.answered = False        
     
     def sendDtmfTone(self, tones):
         """ Send a DTMF tone to the remote party (only allowed for an answered call) 
@@ -390,24 +426,28 @@ class Call(object):
         """ End the phone call. """
         self._gsmModem.write('ATH')
         self.answered = False
-        if self._gsmModem.activeCall != None and self.number == self._gsmModem.activeCall.number:
-            self._gsmModem.activeCall = None
+        if self.id in self._gsmModem.activeCalls:
+            del self._gsmModem.activeCalls[self.id]
 
 
 class IncomingCall(Call):
+    
+    CALL_TYPE_MAP = {'VOICE': 0}
+    
     """ Represents an incoming call, conveniently allowing access to call meta information and -control """     
-    def __init__(self, gsmModem, number, ton, callerName, callType):
+    def __init__(self, gsmModem, number, ton, callerName, callId, callType):
         """
         @param gsmModem: GsmModem instance that created this object
         @param number: Caller number
         @param ton: TON (type of number/address) in integer format
         @param callType: Type of the incoming call (VOICE, FAX, DATA, etc)
         """
-        super(IncomingCall, self).__init__(gsmModem, number)        
+        if type(callType) == str:
+            callType = self.CALL_TYPE_MAP[callType] 
+        super(IncomingCall, self).__init__(gsmModem, callId, callType, number)        
         # Type attribute of the incoming call
         self.ton = ton
-        self.callerName = callerName
-        self.type = callType
+        self.callerName = callerName        
         # Flag indicating whether the call is ringing or not
         self.ringing = True        
         # Amount of times this call has rung (before answer/hangup)
