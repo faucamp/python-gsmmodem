@@ -99,73 +99,73 @@ class TestGsmModemGeneralApi(unittest.TestCase):
                 
         for test in tests:            
             def writeCallbackFunc(data):                
-                self.assertEqual(test[1], data, 'Invalid data written to modem; expected "{}", got: "{}"'.format(test[1], data))                            
+                self.assertEqual(test[1], data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format(test[1], data))                            
             self.modem.serial.responseSequence = ['OK\r\n', 0.3, test[2]]
             self.modem.serial.flushResponseSequence = True
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
             ussd = self.modem.sendUssd(test[0])
             self.assertIsInstance(ussd, gsmmodem.modem.Ussd)
-            self.assertEqual(ussd.sessionActive, test[4], 'Session state is invalid for test case: {}'.format(test))
+            self.assertEqual(ussd.sessionActive, test[4], 'Session state is invalid for test case: {0}'.format(test))
             self.assertEquals(ussd.message, test[3])
         
     def test_manufacturer(self):
         def writeCallbackFunc(data):
-            self.assertEqual('AT+CGMI\r', data, 'Invalid data written to modem; expected "{}", got: "{}"'.format('AT+CGMI\r', data))
+            self.assertEqual('AT+CGMI\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CGMI\r', data))
         self.modem.serial.writeCallbackFunc = writeCallbackFunc
         tests = ['huawei', 'ABCDefgh1235', 'Some Random Manufacturer']
         for test in tests:
-            self.modem.serial.responseSequence = ['{}\r\n'.format(test), 'OK\r\n']
+            self.modem.serial.responseSequence = ['{0}\r\n'.format(test), 'OK\r\n']
             self.modem.serial.flushResponseSequence = True
             self.assertEqual(test, self.modem.manufacturer)
     
     def test_model(self):
         def writeCallbackFunc(data):
-            self.assertEqual('AT+CGMM\r', data, 'Invalid data written to modem; expected "{}", got: "{}"'.format('AT+CGMM\r', data))
+            self.assertEqual('AT+CGMM\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CGMM\r', data))
         self.modem.serial.writeCallbackFunc = writeCallbackFunc
         tests = ['K3715', '1324-Qwerty', 'Some Random Model']
         for test in tests:
-            self.modem.serial.responseSequence = ['{}\r\n'.format(test), 'OK\r\n']
+            self.modem.serial.responseSequence = ['{0}\r\n'.format(test), 'OK\r\n']
             self.modem.serial.flushResponseSequence = True
             self.assertEqual(test, self.modem.model)
             
     def test_revision(self):
         def writeCallbackFunc(data):
-            self.assertEqual('AT+CGMR\r', data, 'Invalid data written to modem; expected "{}", got: "{}"'.format('AT+CGMR\r', data))
+            self.assertEqual('AT+CGMR\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CGMR\r', data))
         self.modem.serial.writeCallbackFunc = writeCallbackFunc
         tests = ['1', '1324-56768-23414', 'r987']
         for test in tests:
-            self.modem.serial.responseSequence = ['{}\r\n'.format(test), 'OK\r\n']
+            self.modem.serial.responseSequence = ['{0}\r\n'.format(test), 'OK\r\n']
             self.modem.serial.flushResponseSequence = True
             self.assertEqual(test, self.modem.revision)
     
     def test_imei(self):
         def writeCallbackFunc(data):
-            self.assertEqual('AT+CGSN\r', data, 'Invalid data written to modem; expected "{}", got: "{}"'.format('AT+CGSN\r', data))
+            self.assertEqual('AT+CGSN\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CGSN\r', data))
         self.modem.serial.writeCallbackFunc = writeCallbackFunc
         tests = ['012345678912345']
         for test in tests:
-            self.modem.serial.responseSequence = ['{}\r\n'.format(test), 'OK\r\n']
+            self.modem.serial.responseSequence = ['{0}\r\n'.format(test), 'OK\r\n']
             self.modem.serial.flushResponseSequence = True
             self.assertEqual(test, self.modem.imei)
             
     def test_imsi(self):
         def writeCallbackFunc(data):
-            self.assertEqual('AT+CIMI\r', data, 'Invalid data written to modem; expected "{}", got: "{}"'.format('AT+CIMI\r', data))
+            self.assertEqual('AT+CIMI\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CIMI\r', data))
         self.modem.serial.writeCallbackFunc = writeCallbackFunc
         tests = ['987654321012345']
         for test in tests:
-            self.modem.serial.responseSequence = ['{}\r\n'.format(test), 'OK\r\n']
+            self.modem.serial.responseSequence = ['{0}\r\n'.format(test), 'OK\r\n']
             self.modem.serial.flushResponseSequence = True
             self.assertEqual(test, self.modem.imsi)
     
     def test_supportedCommands(self):
         def writeCallbackFunc(data):
-            self.assertEqual('AT+CLAC\r', data, 'Invalid data written to modem; expected "{}", got: "{}"'.format('AT+CLAC\r', data))
+            self.assertEqual('AT+CLAC\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CLAC\r', data))
         self.modem.serial.writeCallbackFunc = writeCallbackFunc
         tests = (('&C,D,E,\S,+CGMM,^DTMF', ['&C', 'D', 'E', '\S', '+CGMM', '^DTMF']),
                  ('Z', ['Z']))
         for test in tests:
-            self.modem.serial.responseSequence = ['+CLAC:{}\r\n'.format(test[0]), 'OK\r\n']
+            self.modem.serial.responseSequence = ['+CLAC:{0}\r\n'.format(test[0]), 'OK\r\n']
             self.modem.serial.flushResponseSequence = True
             commands = self.modem.supportedCommands
             self.assertListEqual(commands, test[1])
@@ -186,9 +186,9 @@ class TestGsmModemDial(unittest.TestCase):
         
         for number, callId, callType in tests: 
             def writeCallbackFunc(data):
-                self.assertEqual('ATD{};\r'.format(number), data, 'Invalid data written to modem; expected "{}", got: "{}"'.format('ATD{};\r'.format(number), data))
+                self.assertEqual('ATD{0};\r'.format(number), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('ATD{0};\r'.format(number), data))
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
-            self.modem.serial.responseSequence = ['OK\r\n', '^ORIG:{},{}\r\n'.format(callId, callType), 0.2, '^CONF:{}\r\n'.format(callId)]
+            self.modem.serial.responseSequence = ['OK\r\n', '^ORIG:{0},{1}\r\n'.format(callId, callType), 0.2, '^CONF:{0}\r\n'.format(callId)]
             self.modem.serial.flushResponseSequence = True
             call = self.modem.dial(number)
             self.assertIsInstance(call, gsmmodem.modem.Call)
@@ -199,13 +199,13 @@ class TestGsmModemDial(unittest.TestCase):
             # Fake an answer
             while len(self.modem.serial._readQueue) > 0:
                 time.sleep(0.1)
-            self.modem.serial._readQueue = list('^CONN:{},{}\r\n'.format(callId, callType))
+            self.modem.serial._readQueue = list('^CONN:{0},{1}\r\n'.format(callId, callType))
             # Wait a bit for the event to be picked up
             while len(self.modem.serial._readQueue) > 0:
                 time.sleep(0.1)
             self.assertTrue(call.answered, 'Remote call answer was not detected')
             def hangupCallback(data):
-                self.assertEqual('ATH\r'.format(number), data, 'Invalid data written to modem; expected "{}", got: "{}"'.format('ATH\r'.format(number), data))
+                self.assertEqual('ATH\r'.format(number), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('ATH\r'.format(number), data))
             self.modem.serial.writeCallbackFunc = hangupCallback
             call.hangup()
             self.assertFalse(call.answered, 'Hangup call did not change call state')
@@ -213,7 +213,7 @@ class TestGsmModemDial(unittest.TestCase):
             self.assertEqual(len(self.modem.activeCalls), 0)
             # Check remote hangup detection
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
-            self.modem.serial.responseSequence = ['OK\r\n', '^ORIG:{},{}\r\n'.format(callId, callType), '^CONF:{}\r\n'.format(callId), '^CONN:{},{}\r\n'.format(callId, callType)]
+            self.modem.serial.responseSequence = ['OK\r\n', '^ORIG:{0},{1}\r\n'.format(callId, callType), '^CONF:{0}\r\n'.format(callId), '^CONN:{0},{1}\r\n'.format(callId, callType)]
             self.modem.serial.flushResponseSequence = True
             call = self.modem.dial(number)
             # Wait a bit for the event to be picked up
@@ -223,7 +223,7 @@ class TestGsmModemDial(unittest.TestCase):
             self.assertIn(call.id, self.modem.activeCalls)
             self.assertEqual(len(self.modem.activeCalls), 1)
             # Now fake a remote hangup
-            self.modem.serial._readQueue = list('^CEND:{},5,29,16\r\n'.format(callId))
+            self.modem.serial._readQueue = list('^CEND:{0},5,29,16\r\n'.format(callId))
             # Wait a bit for the event to be picked up
             while len(self.modem.serial._readQueue) > 0:
                 time.sleep(0.1)
@@ -245,14 +245,14 @@ class TestIncomingCall(unittest.TestCase):
                 self.assertEqual(len(self.modem.activeCalls), 1)
                 self.assertFalse(call.answered, 'Call state invalid: should not yet be answered')
                 self.assertIsInstance(call.type, int)
-                self.assertEqual(call.type, callReceived[1], 'Invalid call type; expected {}, got {}'.format(callReceived[1], call.type))
+                self.assertEqual(call.type, callReceived[1], 'Invalid call type; expected {0}, got {1}'.format(callReceived[1], call.type))
                 def writeCallbackFunc1(data):
-                    self.assertEqual('ATA\r', data, 'Invalid data written to modem; expected "{}", got: "{}"'.format('ATA\r', data))
+                    self.assertEqual('ATA\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('ATA\r', data))
                 self.modem.serial.writeCallbackFunc = writeCallbackFunc1
                 call.answer()
                 self.assertTrue(call.answered, 'Call state invalid: should be answered')
                 def writeCallbackFunc2(data):
-                    self.assertEqual('ATH\r', data, 'Invalid data written to modem; expected "{}", got: "{}"'.format('ATH\r', data))
+                    self.assertEqual('ATH\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('ATH\r', data))
                 self.modem.serial.writeCallbackFunc = writeCallbackFunc2
                 call.hangup()
                 self.assertFalse(call.answered, 'Call state invalid: hangup did not change call state')
@@ -269,7 +269,7 @@ class TestIncomingCall(unittest.TestCase):
         for number, cringParam, callType in tests: 
             callReceived = [False, callType]
             # Fake incoming voice call
-            self.modem.serial._readQueue = list('+CRING: {}\r\n+CLIP: "{}",145,,,,0\r\n'.format(cringParam, number))
+            self.modem.serial._readQueue = list('+CRING: {0}\r\n+CLIP: "{1}",145,,,,0\r\n'.format(cringParam, number))
             # Wait a bit for the event to be picked up
             while callReceived[0] == False:
                 time.sleep(0.1)

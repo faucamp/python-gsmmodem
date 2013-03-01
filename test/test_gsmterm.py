@@ -87,7 +87,7 @@ class TestTrie(unittest.TestCase):
             self.trie[key] = 1
         for prefix, matchingKeys in prefixMatches:
             trieKeys = self.trie.keys(prefix)
-            self.assertEqual(len(trieKeys), len(matchingKeys), 'Filtered keys length failed. Prefix: {}, expected len: {}, items: {}, got len {}, items: {}'.format(prefix, len(matchingKeys), matchingKeys, len(trieKeys), trieKeys))
+            self.assertEqual(len(trieKeys), len(matchingKeys), 'Filtered keys length failed. Prefix: {0}, expected len: {1}, items: {2}, got len {3}, items: {4}'.format(prefix, len(matchingKeys), matchingKeys, len(trieKeys), trieKeys))
             for key in matchingKeys:
                 self.assertTrue(key in trieKeys, 'Key not in trie keys: {0}. Trie keys: {1}'.format(key, trieKeys))
     
@@ -119,9 +119,9 @@ class TestAtCommands(unittest.TestCase):
         for command, help in ATCOMMANDS:
             self.assertNotEqual(command, None)
             self.assertGreater(len(command), 0)
-            self.assertEqual(command.strip(), command, 'Command has leading and/or trailing spaces: {}'.format(command))
+            self.assertEqual(command.strip(), command, 'Command has leading and/or trailing spaces: {0}'.format(command))
             
-            self.assertNotEqual(help, None, 'Command\'s help tuple is None: {}'.format(command))
+            self.assertNotEqual(help, None, 'Command\'s help tuple is None: {0}'.format(command))
             self.assertGreaterEqual(len(help), 2)
             self.assertTrue(help[0] in CATEGORIES)
             if len(help) > 2:
@@ -129,12 +129,12 @@ class TestAtCommands(unittest.TestCase):
                     self.assertIsInstance(help[2], tuple)
                     self.assertGreater(len(help[2]), 0)
                     for item in help[2]:
-                        self.assertEqual(len(item), 2, 'Input value item tuple length should be 2, got {}. Command: {}, item: {}'.format(len(item), command, item))
+                        self.assertEqual(len(item), 2, 'Input value item tuple length should be 2, got {0}. Command: {1}, item: {2}'.format(len(item), command, item))
                 if help[3] != None:
                     self.assertIsInstance(help[3], tuple)
                     self.assertGreater(len(help[3]), 0)
                     for item in help[3]:
-                        self.assertEqual(len(item), 2, 'Output value item tuple length should be 2, got {}. Command: {}, item: {}'.format(len(item), command, item))
+                        self.assertEqual(len(item), 2, 'Output value item tuple length should be 2, got {0}. Command: {1}, item: {2}'.format(len(item), command, item))
                 self.assertIsInstance(help[4], str)
        
 if __name__ == "__main__":

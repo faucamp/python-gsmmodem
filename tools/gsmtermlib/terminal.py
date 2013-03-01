@@ -432,7 +432,7 @@ class GsmTerm(RawTerm):
                     try:
                         f = open(filename, 'r')
                     except IOError:
-                        sys.stdout.write('\n{}\n'.format(self._color(self.COLOR_RED, 'File not found: "{}"'.format(filename))))
+                        sys.stdout.write('\n{0}\n'.format(self._color(self.COLOR_RED, 'File not found: "{0}"'.format(filename))))
                         self._refreshInputPrompt(len(self.inputBuffer))                        
                     else:
                         atCommands = f.readlines()

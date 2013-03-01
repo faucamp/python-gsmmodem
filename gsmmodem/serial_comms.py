@@ -81,7 +81,7 @@ class SerialComms(object):
             while self.alive:
                 data = self.serial.read(1)
                 if data != '': # check for timeout
-                    #print(' RX:', data,'({})'.format(ord(data)))
+                    #print(' RX:', data,'({0})'.format(ord(data)))
                     rxBuffer.append(data)
                     if rxBuffer[-readTermLen:] == readTermSeq:                        
                         # A line (or other logical segment) has been read

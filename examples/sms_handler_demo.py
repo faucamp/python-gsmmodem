@@ -15,7 +15,7 @@ BAUDRATE = 9600
 from gsmmodem.modem import GsmModem
 
 def handleSms(sms):
-    print('== SMS message received ==\nFrom: {}\nTime: {}\nMessage:\n{}\n\n'.format(sms.number, sms.time, sms.text))
+    print('== SMS message received ==\nFrom: {0}\nTime: {1}\nMessage:\n{2}\n\n'.format(sms.number, sms.time, sms.text))
     print('Replying to SMS...')
     sms.reply('Thank you')
     print('SMS sent.\n')

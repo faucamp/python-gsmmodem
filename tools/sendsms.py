@@ -27,7 +27,7 @@ def main():
     modem = GsmModem(args.port)
     
     
-    print('Connecting to GSM modem on {}...'.format(args.port))            
+    print('Connecting to GSM modem on {0}...'.format(args.port))            
     modem.connect()
     print('Checking for network coverage...')
     try:

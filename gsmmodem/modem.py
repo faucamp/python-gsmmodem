@@ -45,7 +45,7 @@ class GsmModem(SerialComms):
         
     def connect(self, runInit=True):
         """ Opens the port and initializes the modem """
-        self.log.debug('Connecting to modem on port {} at {}bps'.format(self.port, self.baudrate))
+        self.log.debug('Connecting to modem on port {0} at {1}bps'.format(self.port, self.baudrate))
         super(GsmModem, self).connect()                
         # Send some initialization commands to the modem
         self.write('ATZ') # reset configuration
@@ -83,14 +83,14 @@ class GsmModem(SerialComms):
             self.write('AT+CLIP=1') # Enable calling line identification presentation
         except CommandError, clipError:
             self._callingLineIdentification = False
-            self.log.warn('Incoming call calling line identification (caller ID) not supported by modem. Error: {}'.format(clipError))
+            self.log.warn('Incoming call calling line identification (caller ID) not supported by modem. Error: {0}'.format(clipError))
         else:
             self._callingLineIdentification = True
             try:
                 self.write('AT+CRC=1') # Enable extended format of incoming indication (optional)
             except CommandError, crcError:
                 self._extendedIncomingCallIndication = False
-                self.log.info('Extended format incoming call indication not supported by modem. Error: {}'.format(crcError))
+                self.log.info('Extended format incoming call indication not supported by modem. Error: {0}'.format(crcError))
             else:
                 self._extendedIncomingCallIndication = True        
 
@@ -243,7 +243,7 @@ class GsmModem(SerialComms):
         @param number: The phone number to dial
         @param timeout: Maximum time to wait for the call to be established
         """
-        self.write('ATD{};'.format(number))
+        self.write('ATD{0};'.format(number))
         # Wait for the ^ORIG notification message
         self._dialEvent = threading.Event()
         if self._dialEvent.wait(timeout):
@@ -355,7 +355,7 @@ class GsmModem(SerialComms):
             self.smsReceivedCallback(sms)            
     
     def _readStoredSmsMessage(self, msgIndex):
-        msgData = self.write('AT+CMGR={}'.format(msgIndex))
+        msgData = self.write('AT+CMGR={0}'.format(msgIndex))
         # Parse meta information
         cmgrMatch = self.CMGR_SM_DELIVER_REGEX.match(msgData[0])
         if not cmgrMatch:
@@ -366,7 +366,7 @@ class GsmModem(SerialComms):
         return ReceivedSms(self, msgStatus, number, msgTime, msgText)
             
     def _deleteStoredMessage(self, msgIndex):
-        self.write('AT+CMGD={}'.format(msgIndex))
+        self.write('AT+CMGD={0}'.format(msgIndex))
     
     def _handleUssd(self, notificationLine):
         """ Handler for USSD event notification line """
@@ -380,7 +380,7 @@ class GsmModem(SerialComms):
     
     def _placeHolderCallback(self, *args):
         """ Does nothing """
-        self.log.debug('called with args: {}'.format(args))
+        self.log.debug('called with args: {0}'.format(args))
 
 
 class Call(object):
@@ -417,7 +417,7 @@ class Call(object):
             if len(tones) > 1:
                 cmd = ('AT{0}{1};{0}' + ';{0}'.join(tones[1:])).format(self.DTMF_COMMAND_BASE, tones[0])                
             else:
-                cmd = 'AT+VTS={}'.format(tones)            
+                cmd = 'AT+VTS={0}'.format(tones)            
             self._gsmModem.write(cmd)
         else:
             raise InvalidStateException('Call is not active (it has not yet been answered, or it has ended).')

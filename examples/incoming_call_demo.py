@@ -29,7 +29,7 @@ def handleIncomingCall(call):
             print('Modem has no DTMF support - hanging up call.')
         call.hangup()
     else:
-        print(' Call from {} is still ringing...'.format(call.number))
+        print(' Call from {0} is still ringing...'.format(call.number))
     
 def main():
     modem = GsmModem(PORT, BAUDRATE, incomingCallCallbackFunc=handleIncomingCall)
