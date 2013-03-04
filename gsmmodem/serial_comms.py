@@ -9,7 +9,7 @@ import re
 import serial # pyserial: http://pyserial.sourceforge.net
 
 from .exceptions import TimeoutException
-
+import compat # For Python 2.6 compatibility
 
 class SerialComms(object):
     """ Wraps all low-level serial communications (actual read/write operations) """

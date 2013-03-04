@@ -7,6 +7,7 @@ from __future__ import print_function
 import time
 import unittest
 
+import compat # For Python 2.6 compatibility
 import gsmmodem.serial_comms
 import gsmmodem.modem
 
@@ -78,7 +79,8 @@ class MockSerialPackage():
     
     class SerialException(Exception):
         """ Mock serial exception """
- 
+
+
 class TestGsmModemGeneralApi(unittest.TestCase):
     """ Tests the API of GsmModem class (excluding connect/close) """
     
@@ -137,6 +139,9 @@ class TestGsmModemGeneralApi(unittest.TestCase):
             self.modem.serial.responseSequence = ['{0}\r\n'.format(test), 'OK\r\n']
             self.modem.serial.flushResponseSequence = True
             self.assertEqual(test, self.modem.revision)
+        # Fake a modem that does not support this command
+        self.modem.serial.defaultResponse = 'ERROR\r\n'
+        self.assertEqual(None, self.modem.revision)
     
     def test_imei(self):
         def writeCallbackFunc(data):
@@ -169,6 +174,11 @@ class TestGsmModemGeneralApi(unittest.TestCase):
             self.modem.serial.flushResponseSequence = True
             commands = self.modem.supportedCommands
             self.assertListEqual(commands, test[1])
+        # Fake a modem that does not support this command
+        self.modem.serial.defaultResponse = 'ERROR\r\n'
+        commands = self.modem.supportedCommands
+        self.assertEqual(commands, None)
+        
             
 class TestGsmModemDial(unittest.TestCase):
     
@@ -232,7 +242,7 @@ class TestGsmModemDial(unittest.TestCase):
             self.assertEqual(len(self.modem.activeCalls), 0)
 
 class TestIncomingCall(unittest.TestCase):
-
+    
     def test_incomingCallAnswer(self):
         mockSerial = MockSerialPackage()
         gsmmodem.serial_comms.serial = mockSerial

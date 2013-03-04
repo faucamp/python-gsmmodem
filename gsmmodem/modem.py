@@ -7,6 +7,7 @@ import re, logging, weakref, time, threading, abc
 from .serial_comms import SerialComms
 from .exceptions import CommandError, InvalidStateException
 from gsmmodem.exceptions import TimeoutException
+import compat # For Python 2.6 compatibility
 
 class GsmModem(SerialComms):
     """ Main class for interacting with an attached GSM modem """
@@ -148,8 +149,11 @@ class GsmModem(SerialComms):
     
     @property
     def revision(self):
-        """ @return: The modem's software revision """
-        return self.write('AT+CGMR')[0]
+        """ @return: The modem's software revision, or None if not known/supported """
+        try:
+            return self.write('AT+CGMR')[0]
+        except CommandError:
+            return None
     
     @property
     def imei(self):
@@ -171,8 +175,11 @@ class GsmModem(SerialComms):
 
     @property
     def supportedCommands(self):
-        """ @return: list of AT commands supported by this modem (without the AT prefix) """
-        return self.write('AT+CLAC')[0][6:].split(',') # remove the +CLAC: prefix before splitting
+        """ @return: list of AT commands supported by this modem (without the AT prefix). Returns None if not known """
+        try:
+            return self.write('AT+CLAC')[0][6:].split(',') # remove the +CLAC: prefix before splitting
+        except CommandError:
+            return None
 
     def waitForNetworkCoverage(self, timeout=None):
         """ Block until the modem has GSM network coverage.

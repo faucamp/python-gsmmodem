@@ -1,3 +1,6 @@
+* Mon Mar 04 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.4
+- Library and utilities now supported under Python 2.6
+
 * Tue Feb 26 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.3
 - USSD functionality added
 - GsmModem class now exposed in main gsmmodem package

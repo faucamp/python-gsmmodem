@@ -2,8 +2,10 @@
 
 """ Test suite for GsmTerm """
 
-import unittest
+import sys, unittest
 
+    
+import compat # For Python 2.6 compatibility
 import gsmtermlib.trie
 
 class TestTrie(unittest.TestCase):
