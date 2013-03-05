@@ -10,7 +10,7 @@ except ImportError:
 with open('requirements.txt') as f:
     requires = f.readlines() 
 
-VERSION = 0.3
+VERSION = 0.4
 
 setup(name='python-gsmmodem',
       version='{0}'.format(VERSION),
@@ -29,7 +29,7 @@ interacting with a GSM modem.
 
 Its features include:
 - simple methods for sending SMS messages, checking signal level, etc
-- easy-to-use API for starting and responding to USSD sessions
+- easy-to-use API for starting and responding to USSD sessions and making voice calls
 - handling incoming phone calls and received SMS messages via callback methods
 - wraps AT command errors into Python exceptions by default
 - modular design; you easily issue your own AT commands to the modem with error

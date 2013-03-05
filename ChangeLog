@@ -1,6 +1,8 @@
-* Mon Mar 04 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.4
+* Tue Mar 05 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.4
+- Support added for making voice calls
 - Library and utilities now supported under Python 2.6
 - Support added for Wavecom modems
+- Tests expanded
 
 * Tue Feb 26 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.3
 - USSD functionality added

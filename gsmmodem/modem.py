@@ -87,6 +87,8 @@ class GsmModem(SerialComms):
                                       (re.compile(r'^OK$'), self._handleCallAnswered),
                                       (re.compile(r'^\+WIND: 6,(\d)$'), self._handleCallEnded))            
             self._waitForAtdResponse = False # Wavecom modems return OK only when the call is answered
+            if commands == None: # older modem, assume it has standard DTMF support
+                Call.dtmfSupport = True
         
         # General meta-information setup
         self.write('AT+COPS=0,0', parseError=False) # Automatic network selection, use long alphanumeric name format
