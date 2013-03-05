@@ -57,14 +57,17 @@ class SerialComms(object):
             self._response.append(line)
             if not checkForResponseTerm or self.RESPONSE_TERM.match(line):
                 # End of response reached; notify waiting thread
+                #print 'response:', self._response
                 self._responseEvent.set()
         else:
             # Nothing was waiting for this - treat it as a notification
             self._notification.append(line)
             if self.serial.inWaiting() == 0:
                 # No more chars on the way for this notification - notify higher-level callback
+                #print 'notification:', self._notification
                 self.notifyCallback(self._notification)
                 self._notification = []
+                
 
     def _placeholderCallback(self, *args, **kwargs):
         """ Placeholder callback function (does nothing) """

@@ -25,7 +25,7 @@ class GsmModem(SerialComms):
     # Used for parsing SMS message reads
     CMGR_SM_DELIVER_REGEX = re.compile(r'^\+CMGR:\s*"([^"]+)","([^"]+)",[^,]*,"([^"]+)"$')
     # Used for parsing USSD event notifications
-    CUSD_REGEX = re.compile(r'^\+CUSD:\s*(\d),"(.*)",(\d+)$')
+    CUSD_REGEX = re.compile(r'^\+CUSD:\s*(\d),"(.*)",(\d+)$')    
     
     def __init__(self, port, baudrate=9600, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None):
         super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification)
@@ -42,7 +42,9 @@ class GsmModem(SerialComms):
         self._ussdSessionEvent = None # threading.Event
         self._ussdResponse = None # gsmmodem.modem.Ussd
         self._dialEvent = None # threading.Event
-        self._dialResponse = None # gsmmodem.modem.Call        
+        self._dialResponse = None # gsmmodem.modem.Call
+        self._waitForAtdResponse = True # Flag that controls if we should wait for an immediate response to ATD, or not
+        self.callStatusUpdates = [] # populated during connect() - contains regexes and handlers for detecting/handling call status updates    
         
     def connect(self, runInit=True):
         """ Opens the port and initializes the modem """
@@ -56,27 +58,52 @@ class GsmModem(SerialComms):
         
         # Get list of supported commands from modem
         commands = self.supportedCommands
-        
-        # disable misc notifications (we will enable what we need in a bit) - not all modems support this command; doesn't matter
-        self.write('AT+WIND=0', parseError=False)        
+
+        # Device-specific settings
+        if commands != None:
+            if '^CVOICE' in commands:
+                self.write('AT^CVOICE=0', parseError=False) # Enable voice calls
+            if '+VTS' in commands: # Check for DTMF sending support
+                Call.dtmfSupport = True
+            elif '^DTMF' in commands:
+                # Huawei modems use ^DTMF to send DTMF tones; use that instead
+                Call.DTMF_COMMAND_BASE = '^DTMF=1,'
+                Call.dtmfSupport = True
+            
+        # Enable general notifications on Wavecom-like devices - also use result to select the type of call status updates we will receive
+        try:
+            self.write('AT+WIND=63')
+        except CommandError:
+            # Modem does not support +WIND notifications, use Hauwei's ^NOTIFICATIONs
+            self.log.info('Loading Huawei call update table')
+            self.callStatusUpdates = ((re.compile(r'^\^ORIG:(\d),(\d)$'), self._handleCallInitiated),
+                                      (re.compile(r'^\^CONN:(\d),(\d)$'), self._handleCallAnswered),
+                                      (re.compile(r'^\^CEND:(\d),(\d),(\d)+,(\d)+$'), self._handleCallEnded))            
+            self._waitForAtdResponse = True # Huawei modems return OK immediately after issuing ATD            
+        else:
+            # +WIND notifications supported
+            self.log.info('Loading Wavecom call update table')
+            self.callStatusUpdates = ((re.compile(r'^\+WIND: 5,(\d)$'), self._handleCallInitiated),
+                                      (re.compile(r'^OK$'), self._handleCallAnswered),
+                                      (re.compile(r'^\+WIND: 6,(\d)$'), self._handleCallEnded))            
+            self._waitForAtdResponse = False # Wavecom modems return OK only when the call is answered
         
         # General meta-information setup
         self.write('AT+COPS=0,0', parseError=False) # Automatic network selection, use long alphanumeric name format
-        
-        # Device-specific settings
-        if '^CVOICE' in commands:
-            self.write('AT^CVOICE=0', parseError=False) # Enable voice calls
-        if '+VTS' in commands: # Check for DTMF sending support
-            Call.dtmfSupport = True
-        elif '^DTMF' in commands:
-            # Huawei modems use ^DTMF to send DTMF tones; use that instead
-            Call.DTMF_COMMAND_BASE = '^DTMF=1,'
-            Call.dtmfSupport = True
-        
+                
         # SMS setup
         self.write('AT+CMGF=1') # Switch to text mode for SMS messages
         self.write('AT+CSMP=49,167') # Enable delivery reports
-        self.write('AT+CPMS="SM","SM","SR"') # Set message storage
+        
+        # Set message storage, but first check what the modem supports - example response: +CPMS: (("SM","BM","SR"),("SM"))
+        cpmsSupport = self.write('AT+CPMS=?')[0].split(' ', 1)[1].split('),(')        
+        cpmsItems = ['"SM"', '"SM"', '"SR"'][:len(cpmsSupport)]
+        #cpmsItems = cpmsItems[:len(cpmsSupport)]
+        for i in xrange(len(cpmsItems)):            
+            if cpmsItems[i] not in cpmsSupport[i]:
+                cpmsItems[i] = ''
+        self.write('AT+CPMS={0}'.format(','.join(cpmsItems))) # Set message storage        
+        #self.write('AT+CPMS="SM","SM","SR"') # Set message storage
         self.write('AT+CNMI=2,1,0,2') # Set message notifications
         
         # Incoming call notification setup        
@@ -250,7 +277,7 @@ class GsmModem(SerialComms):
         @param number: The phone number to dial
         @param timeout: Maximum time to wait for the call to be established
         """
-        self.write('ATD{0};'.format(number))
+        self.write('ATD{0};'.format(number), waitForResponse=self._waitForAtdResponse)
         # Wait for the ^ORIG notification message
         self._dialEvent = threading.Event()
         if self._dialEvent.wait(timeout):
@@ -288,13 +315,15 @@ class GsmModem(SerialComms):
         elif firstLine.startswith('+CUSD'):
             # USSD notification - either a response or a MT-USSD ("push USSD") message
             self._handleUssd(firstLine)
-        elif firstLine.startswith('^ORIG:'): # Outgoing call established
-            self._handleCallInitiated(firstLine)
-        elif firstLine.startswith('^CONN:'): # Call connection established (remote party answered)
-            self._handleCallAnswered(firstLine)
-        elif firstLine.startswith('^CEND:'): # Call ended
-            self._handleCallEnded(firstLine)
         else:
+            # Check for call status updates
+            for updateRegex, handlerFunc in self.callStatusUpdates:
+                match = updateRegex.match(firstLine)
+                if match:
+                    # Handle the update
+                    handlerFunc(match)
+                    return
+            # If this is reached, the notification wasn't handled
             self.log.debug('Unhandled unsolicited modem notification:', lines)
     
     def _handleIncomingCall(self, lines):
@@ -328,29 +357,41 @@ class GsmModem(SerialComms):
             self.activeCalls[callId] = call
         self.incomingCallCallback(call)
     
-    def _handleCallInitiated(self, notificationLine):
+    def _handleCallInitiated(self, regexMatch):
         """ Handler for "outgoing call initiated" event notification line """
         if self._dialEvent:
-            origMatch = re.match(r'^\^ORIG:(\d),(\d)$', notificationLine)
-            if origMatch:
+            #origMatch = re.match(r'^\^ORIG:(\d),(\d)$', notificationLine)
+            #if origMatch:
                 # Return callId, callType
-                self._dialResponse = (int(origMatch.group(1)) , int(origMatch.group(2)))
+            groups = regexMatch.groups()
+            if len(groups) >= 2:                                
+                self._dialResponse = (int(groups[0]) , int(groups[1]))
+            else:
+                self._dialResponse = (int(groups[0]), 1) # assume call type: VOICE
             self._dialEvent.set()
                 
-    def _handleCallAnswered(self, notificationLine):
+    def _handleCallAnswered(self, regexMatch):
         """ Handler for "outgoing call answered" event notification line """
-        connMatch = re.match(r'^\^CONN:(\d),(\d)$', notificationLine)
-        if connMatch:
-            callId = int(connMatch.group(1))
-            self.activeCalls[callId].answered = True            
+        #connMatch = re.match(r'^\^CONN:(\d),(\d)$', notificationLine)
+        #if connMatch:
+        groups = regexMatch.groups()
+        if len(groups) > 1:
+            callId = int(groups[0])
+            self.activeCalls[callId].answered = True
+        else:
+            # Call ID not available for this notificaiton - check for the first outgoing call that has not been answered
+            for call in self.activeCalls.itervalues():
+                if call.answered == False and type(call) == Call:
+                    call.answered = True
+                    return
     
-    def _handleCallEnded(self, notificationLine):
-        cendMatch = re.match(r'^\^CEND:(\d),(\d),(\d)+,(\d)+$', notificationLine)
-        if cendMatch:
-            callId = int(cendMatch.group(1))
-            if callId in self.activeCalls:
-                self.activeCalls[callId].answered = False
-                del self.activeCalls[callId]
+    def _handleCallEnded(self, regexMatch):
+        #cendMatch = re.match(r'^\^CEND:(\d),(\d),(\d)+,(\d)+$', notificationLine)
+        #if cendMatch:
+        callId = int(regexMatch.group(1))
+        if callId in self.activeCalls:
+            self.activeCalls[callId].answered = False
+            del self.activeCalls[callId]
     
     def _handleSmsReceived(self, notificationLine):
         """ Handler for "new SMS" unsolicited notification line """
