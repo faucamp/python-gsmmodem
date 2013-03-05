@@ -17,7 +17,7 @@ def parseArgs():
     from argparse import ArgumentParser
     parser = ArgumentParser(description='Simple script for sending SMS messages')
     parser.add_argument('-p', '--port', metavar='PORT', help='port to which the GSM modem is connected; a number or a device name.')
-    parser.add_argument('-b', '--baud', metavar='BAUDRATE', default=9600, help='set baud rate')
+    parser.add_argument('-b', '--baud', metavar='BAUDRATE', default=115200, help='set baud rate')
     parser.add_argument('-d', '--deliver',  action='store_true', help='wait for SMS delivery report')
     parser.add_argument('destination', metavar='DESTINATION', help='destination mobile number')    
     return parser.parse_args()
@@ -27,7 +27,7 @@ def parseArgsPy26():
     from gsmtermlib.posoptparse import PosOptionParser, Option
     parser = PosOptionParser(description='Simple script for sending SMS messages')
     parser.add_option('-p', '--port', metavar='PORT', help='port to which the GSM modem is connected; a number or a device name.')
-    parser.add_option('-b', '--baud', metavar='BAUDRATE', default=9600, help='set baud rate')
+    parser.add_option('-b', '--baud', metavar='BAUDRATE', default=115200, help='set baud rate')
     parser.add_option('-d', '--deliver',  action='store_true', help='wait for SMS delivery report')
     parser.add_positional_argument(Option('--destination', metavar='DESTINATION', help='destination mobile number'))    
     options, args = parser.parse_args()

@@ -11,7 +11,7 @@ and hangs up the call.
 from __future__ import print_function
 
 PORT = '/dev/ttyUSB2'
-BAUDRATE = 9600
+BAUDRATE = 115200
 
 from gsmmodem.modem import GsmModem
 

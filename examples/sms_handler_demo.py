@@ -10,7 +10,7 @@ and the messages, then replies to the SMS by saying "thank you"
 from __future__ import print_function
 
 PORT = '/dev/ttyUSB2'
-BAUDRATE = 9600
+BAUDRATE = 115200
 
 from gsmmodem.modem import GsmModem
 

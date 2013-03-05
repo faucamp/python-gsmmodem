@@ -21,10 +21,10 @@ class SerialComms(object):
     # Default timeout for serial port reads (in seconds)
     timeout = 1
         
-    def __init__(self, port, baudrate=9600, notifyCallbackFunc=None, *args, **kwargs):        
+    def __init__(self, port, baudrate=115200, notifyCallbackFunc=None, *args, **kwargs):        
         self.alive = False
         self.port = port
-        self.baudrate = 9600
+        self.baudrate = baudrate
         
         self._responseEvent = None # threading.Event()
         self._expectResponseTermSeq = None # expected response terminator sequence
