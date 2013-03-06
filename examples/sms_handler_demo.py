@@ -24,11 +24,14 @@ def handleSms(sms):
     
 def main():
     print('Initializing modem...')
-    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
+    #logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
     modem = GsmModem(PORT, BAUDRATE, smsReceivedCallbackFunc=handleSms)
     modem.connect()
-    print('Waiting for SMS message...')    
-    modem.rxThread.join(2**31) # Specify a (huge) timeout so that it essentially blocks indefinitely, but still receives CTRL+C interrupt signal
+    print('Waiting for SMS message...')
+    try:    
+        modem.rxThread.join(2**31) # Specify a (huge) timeout so that it essentially blocks indefinitely, but still receives CTRL+C interrupt signal
+    finally:
+        modem.close();
 
 if __name__ == '__main__':
     main()

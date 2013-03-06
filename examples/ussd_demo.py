@@ -21,7 +21,7 @@ from gsmmodem.modem import GsmModem
 
 def main():
     print('Initializing modem...')
-    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
+    #logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
     modem = GsmModem(PORT, BAUDRATE)
     modem.connect()
     modem.waitForNetworkCoverage(10)

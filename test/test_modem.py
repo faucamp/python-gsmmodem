@@ -286,9 +286,14 @@ class TestGsmModemDial(unittest.TestCase):
                 self.assertFalse(call.answered, 'Remote hangup was not detected. Modem: {0}'.format(modem))
                 self.assertNotIn(call.id, self.modem.activeCalls)
                 self.assertEqual(len(self.modem.activeCalls), 0)
+            self.modem.close()
 
 
 class TestIncomingCall(unittest.TestCase):
+    
+    def tearDown(self):
+        global FAKE_MODEM
+        FAKE_MODEM = None
     
     def init_modem(self, modem, incomingCallCallbackFunc):
         global FAKE_MODEM
@@ -337,11 +342,75 @@ class TestIncomingCall(unittest.TestCase):
                 callReceived[1] = callType
                 callReceived[2] = number
                 # Fake incoming voice call                
-                #self.modem.serial._readQueue = list('+CRING: {0}\r\n+CLIP: "{1}",145,,,,0\r\n'.format(cringParam, number))
                 self.modem.serial.responseSequence = modem.getIncomingCallNotification(number, cringParam)
                 # Wait for the handler function to finish
                 while callReceived[0] == False:
                     time.sleep(0.1)
+            self.modem.close()
+
+
+class TestSms(unittest.TestCase):
+    """ Tests the SMS API of GsmModem class """
+    
+    def initModem(self, smsReceivedCallbackFunc):
+        # Override the pyserial import        
+        self.mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = self.mockSerial
+        self.modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --', smsReceivedCallbackFunc=smsReceivedCallbackFunc)        
+        self.modem.connect()
+    
+    
+    
+    def test_sendSms(self):
+        tests = (('0123456789', 'Hello world!'),
+                 ('9876543210', 'Hallo\nhoe gaan dit?'))
+        
+        self.initModem(None)        
+        for number, message in tests:
+            def writeCallbackFunc(data):
+                def writeCallbackFunc2(data):
+                    self.assertEqual('{0}{1}'.format(message, chr(26)), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('{0}{1}'.format(message, chr(26)), data))                
+                self.assertEqual('AT+CMGS="{0}"\r'.format(number), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS="{0}"'.format(number), data))
+                self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            self.modem.sendSms(number, message)        
+        self.modem.close()
+    
+    def test_receiveSms(self):
+        tests = (('+0123456789', 'Hello world!', 1),
+                 ('+9876543210', 'Hallo\nhoe gaan dit?', 4))
+        
+        callbackInfo = [False, '', '', -1]
+        def smsReceivedCallbackFunc(sms):
+            try:
+                self.assertIsInstance(sms, gsmmodem.modem.ReceivedSms)
+                self.assertEqual(sms.number, callbackInfo[1], 'SMS sender number incorrect. Expected: "{0}", got: "{1}"'.format(callbackInfo[1], sms.number))
+                self.assertEqual(sms.text, callbackInfo[2], 'SMS text incorrect. Expected: "{0}", got: "{1}"'.format(callbackInfo[2], sms.text))
+            finally:
+                callbackInfo[0] = True
+
+        self.initModem(smsReceivedCallbackFunc=smsReceivedCallbackFunc)
+        for number, message, index in tests:            
+            # Wait for the handler function to finish
+            callbackInfo[0] = False # "done" flag
+            callbackInfo[1] = number
+            callbackInfo[2] = message
+            callbackInfo[3] = index
+            
+            def writeCallbackFunc(data):
+                """ Intercept the "read stored message" command """
+                self.assertEqual('AT+CMGR={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGR={0}'.format(index), data))
+                self.modem.serial.responseSequence = ['+CMGR: "REC UNREAD","{0}",,"98/10/01,18:22:11+00"\r\n'.format(number), '{0}\r\n'.format(message), 'OK\r\n']
+                def writeCallbackFunc2(data):
+                    self.assertEqual('AT+CMGD={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(index), data))
+                self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            # Fake a "new message" notification
+            self.modem.serial.responseSequence = ['+CMTI: "SM",{0}\r\n'.format(index)]
+            # Wait for the handler function to finish
+            while callbackInfo[0] == False:
+                time.sleep(0.1)
+        self.modem.close()
 
 
 if __name__ == "__main__":

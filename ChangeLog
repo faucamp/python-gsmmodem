@@ -1,3 +1,9 @@
+* Wed Mar 06 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.5
+- Many bugfixes and improvements, especially to USSD handling
+- Improved exceptions to allow more Pythonic error handling
+- Tests added for SMS API
+- Unit tests speeded up
+
 * Tue Mar 05 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.4
 - Support added for making voice calls
 - Library and utilities now supported under Python 2.6

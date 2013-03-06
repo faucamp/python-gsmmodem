@@ -44,11 +44,14 @@ def handleIncomingCall(call):
     
 def main():
     print('Initializing modem...')
-    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
+    #logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
     modem = GsmModem(PORT, BAUDRATE, incomingCallCallbackFunc=handleIncomingCall)
     modem.connect()
-    print('Waiting for incoming calls...')    
-    modem.rxThread.join(2**31) # Specify a (huge) timeout so that it essentially blocks indefinitely, but still receives CTRL+C interrupt signal
+    print('Waiting for incoming calls...')
+    try:    
+        modem.rxThread.join(2**31) # Specify a (huge) timeout so that it essentially blocks indefinitely, but still receives CTRL+C interrupt signal
+    finally:
+        modem.close()
 
 if __name__ == '__main__':
     main()
