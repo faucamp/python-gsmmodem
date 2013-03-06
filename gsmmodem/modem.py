@@ -5,7 +5,7 @@
 import re, logging, weakref, time, threading, abc
 
 from .serial_comms import SerialComms
-from .exceptions import CommandError, InvalidStateException
+from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException
 from gsmmodem.exceptions import TimeoutException
 import compat # For Python 2.6 compatibility
 
@@ -18,14 +18,14 @@ class GsmModem(SerialComms):
     CM_ERROR_REGEX = re.compile(r'^\+(CM[ES]) ERROR: (\d+)$')
     # Used for parsing signal strength query responses
     CSQ_REGEX = re.compile(r'^\+CSQ:\s*(\d+),')
-    # Used for parsing caller ID announcements for incoming calls. Group 1 is the number, group 3 is the caller's name (if available)
-    CLIP_REGEX = re.compile(r'^\+CLIP:\s*"(\+{0,1}\d+)",\d+,[^,]*,[^,]*,("([^"]+)"|,.*)$')
+    # Used for parsing caller ID announcements for incoming calls. Group 1 is the number
+    CLIP_REGEX = re.compile(r'^\+CLIP:\s*"(\+{0,1}\d+)",(\d+).*$')
     # Used for parsing new SMS message indications
     CMTI_REGEX = re.compile(r'^\+CMTI:\s*([^,]+),(\d+)$')
     # Used for parsing SMS message reads
     CMGR_SM_DELIVER_REGEX = re.compile(r'^\+CMGR:\s*"([^"]+)","([^"]+)",[^,]*,"([^"]+)"$')
     # Used for parsing USSD event notifications
-    CUSD_REGEX = re.compile(r'^\+CUSD:\s*(\d),"(.*)",(\d+)$')    
+    CUSD_REGEX = re.compile(r'^\+CUSD:\s*(\d),"(.*)",(\d+)$', re.DOTALL)    
     
     def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None):
         super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification)
@@ -44,16 +44,23 @@ class GsmModem(SerialComms):
         self._dialEvent = None # threading.Event
         self._dialResponse = None # gsmmodem.modem.Call
         self._waitForAtdResponse = True # Flag that controls if we should wait for an immediate response to ATD, or not
-        self.callStatusUpdates = [] # populated during connect() - contains regexes and handlers for detecting/handling call status updates    
+        self.callStatusUpdates = [] # populated during connect() - contains regexes and handlers for detecting/handling call status updates
+        self._writeWait = 0 # Time (in seconds to wait after writing a command (adjusted when 515 errors are detected)    
         
     def connect(self, runInit=True):
         """ Opens the port and initializes the modem """
-        self.log.debug('Connecting to modem on port {0} at {1}bps'.format(self.port, self.baudrate))
+        self.log.info('Connecting to modem on port %s at %dbps', self.port, self.baudrate)        
         super(GsmModem, self).connect()                
-        # Send some initialization commands to the modem
+        # Send some initialization commands to the modem        
         self.write('ATZ') # reset configuration
         self.write('ATE0') # echo off
-        self.write('AT+CFUN=1') # enable full modem functionality
+        try:
+            cfun = int(self.write('AT+CFUN?')[0][7:]) # example response: +CFUN: 1
+            if cfun != 1:
+                self.write('AT+CFUN=1')
+        except CommandError:
+            pass # just ignore if the +CFUN command isn't supported
+         
         self.write('AT+CMEE=1') # enable detailed error messages
         
         # Get list of supported commands from modem
@@ -72,7 +79,9 @@ class GsmModem(SerialComms):
             
         # Enable general notifications on Wavecom-like devices - also use result to select the type of call status updates we will receive
         try:
-            self.write('AT+WIND=63')
+            wind = self.write('AT+WIND?')[0] # Check current WIND value; example response: +WIND: 63            
+            if int(wind[7:]) != 50:
+                self.write('AT+WIND=50') # Enabled notifications for call setup, hangup, etc
         except CommandError:
             # Modem does not support +WIND notifications, use Hauwei's ^NOTIFICATIONs
             self.log.info('Loading Huawei call update table')
@@ -91,14 +100,15 @@ class GsmModem(SerialComms):
                 Call.dtmfSupport = True
         
         # General meta-information setup
-        self.write('AT+COPS=0,0', parseError=False) # Automatic network selection, use long alphanumeric name format
+        self.write('AT+COPS=3,0', parseError=False) # Use long alphanumeric name format
                 
         # SMS setup
         self.write('AT+CMGF=1') # Switch to text mode for SMS messages
         self.write('AT+CSMP=49,167') # Enable delivery reports
         
         # Set message storage, but first check what the modem supports - example response: +CPMS: (("SM","BM","SR"),("SM"))
-        cpmsSupport = self.write('AT+CPMS=?')[0].split(' ', 1)[1].split('),(')        
+        lines = self.write('AT+CPMS=?')        
+        cpmsSupport = lines[0].split(' ', 1)[1].split('),(')        
         cpmsItems = ['"SM"', '"SM"', '"SR"'][:len(cpmsSupport)]
         #cpmsItems = cpmsItems[:len(cpmsSupport)]
         for i in xrange(len(cpmsItems)):            
@@ -120,14 +130,13 @@ class GsmModem(SerialComms):
                 self.write('AT+CRC=1') # Enable extended format of incoming indication (optional)
             except CommandError, crcError:
                 self._extendedIncomingCallIndication = False
-                self.log.info('Extended format incoming call indication not supported by modem. Error: {0}'.format(crcError))
+                self.log.warn('Extended format incoming call indication not supported by modem. Error: {0}'.format(crcError))
             else:
                 self._extendedIncomingCallIndication = True        
 
         # Call control setup
-        self.write('AT+CVHU=0') # Enable call hang-up with ATH command
-        
-
+        self.write('AT+CVHU=0', parseError=False) # Enable call hang-up with ATH command (ignore if command not supported)
+                    
     def write(self, data, waitForResponse=True, timeout=5, parseError=True, writeTerm='\r', expectedResponseTermSeq=None):
         """ Write data to the modem
         
@@ -144,16 +153,35 @@ class GsmModem(SerialComms):
         
         @return: A list containing the response lines from the modem, or None if waitForResponse is False
         """
+        self.log.debug('write: %s', data)
         responseLines = SerialComms.write(self, data + writeTerm, waitForResponse=waitForResponse, timeout=timeout, expectedResponseTermSeq=expectedResponseTermSeq)
+        if self._writeWait > 0: # Sleep a bit if required (some older modems suffer under load)            
+            time.sleep(self._writeWait)
         if waitForResponse:
             cmdStatusLine = responseLines[-1]
             if parseError and 'ERROR' in cmdStatusLine:
                 cmErrorMatch = self.CM_ERROR_REGEX.match(cmdStatusLine)
                 if cmErrorMatch:
-                    errorType, errorCode = cmErrorMatch.groups()
-                    raise CommandError(errorType, int(errorCode))
+                    errorType = cmErrorMatch.group(1)
+                    errorCode = int(cmErrorMatch.group(2))
+                    if errorCode == 515:
+                        # 515 means: "Please wait, init or command processing in progress."
+                        self._writeWait += 0.2 # Increase waiting period temporarily
+                        # Retry the command after waiting a bit
+                        self.log.debug('515 error detected; self._writeWait adjusted to %ds', self._writeWait)
+                        time.sleep(self._writeWait)
+                        result = self.write(data, waitForResponse, timeout, parseError, writeTerm, expectedResponseTermSeq)
+                        self.log.debug('self_writeWait set to 0.1 because of recovering from 515 error')
+                        self._writeWait = 0.1 # Set this to something sane for further commands
+                        return result
+                    if errorType == 'CME':
+                        raise CmeError(data, int(errorCode))
+                    elif errorType == 'CMS':
+                        raise CmsError(data, int(errorCode))
+                    else:
+                        raise CommandError(data, errorType, int(errorCode))
                 else:
-                    raise CommandError()
+                    raise CommandError(data)
             return responseLines
 
     @property
@@ -307,26 +335,30 @@ class GsmModem(SerialComms):
         
         @param lines The lines that were read
         """        
-        firstLine = lines[0]
-        if 'RING' in firstLine:
-            # Incoming call (or existing call is ringing)
-            self._handleIncomingCall(lines)
-        elif firstLine.startswith('+CMTI'):
-            # New SMS message indication
-            self._handleSmsReceived(firstLine)
-        elif firstLine.startswith('+CUSD'):
-            # USSD notification - either a response or a MT-USSD ("push USSD") message
-            self._handleUssd(firstLine)
-        else:
-            # Check for call status updates
-            for updateRegex, handlerFunc in self.callStatusUpdates:
-                match = updateRegex.match(firstLine)
-                if match:
-                    # Handle the update
-                    handlerFunc(match)
-                    return
-            # If this is reached, the notification wasn't handled
-            self.log.debug('Unhandled unsolicited modem notification:', lines)
+        #firstLine = lines[0]
+        for line in lines:
+            if 'RING' in line:
+                # Incoming call (or existing call is ringing)
+                self._handleIncomingCall(lines)
+                return
+            elif line.startswith('+CMTI'):
+                # New SMS message indication
+                self._handleSmsReceived(line)
+                return
+            elif line.startswith('+CUSD'):
+                # USSD notification - either a response or a MT-USSD ("push USSD") message
+                self._handleUssd(line)
+                return
+            else:
+                # Check for call status updates            
+                for updateRegex, handlerFunc in self.callStatusUpdates:
+                    match = updateRegex.match(line)
+                    if match:
+                        # Handle the update
+                        handlerFunc(match)
+                        return
+        # If this is reached, the notification wasn't handled
+        self.log.debug('Unhandled unsolicited modem notification: %s', lines)    
     
     def _handleIncomingCall(self, lines):
         ringLine = lines.pop(0)
@@ -340,9 +372,11 @@ class GsmModem(SerialComms):
             if clipMatch:
                 callerNumber = clipMatch.group(1)
                 ton = clipMatch.group(2)
-                callerName = clipMatch.group(3)
-                if callerName != None and len(callerName) == 0:
-                    callerName = None
+                #TODO: re-add support for this
+                callerName = None
+                #callerName = clipMatch.group(3)
+                #if callerName != None and len(callerName) == 0:
+                #    callerName = None
             else:
                 callerNumber = ton = callerName = None
         else:
@@ -351,7 +385,7 @@ class GsmModem(SerialComms):
         call = None
         for activeCall in self.activeCalls.itervalues():
             if activeCall.number == callerNumber:
-                call = self.activeCall
+                call = activeCall
                 call.ringCount += 1
         if call == None:
             callId = len(self.activeCalls) + 1;
@@ -362,9 +396,6 @@ class GsmModem(SerialComms):
     def _handleCallInitiated(self, regexMatch):
         """ Handler for "outgoing call initiated" event notification line """
         if self._dialEvent:
-            #origMatch = re.match(r'^\^ORIG:(\d),(\d)$', notificationLine)
-            #if origMatch:
-                # Return callId, callType
             groups = regexMatch.groups()
             if len(groups) >= 2:                                
                 self._dialResponse = (int(groups[0]) , int(groups[1]))
@@ -374,8 +405,6 @@ class GsmModem(SerialComms):
                 
     def _handleCallAnswered(self, regexMatch):
         """ Handler for "outgoing call answered" event notification line """
-        #connMatch = re.match(r'^\^CONN:(\d),(\d)$', notificationLine)
-        #if connMatch:
         groups = regexMatch.groups()
         if len(groups) > 1:
             callId = int(groups[0])
@@ -388,8 +417,6 @@ class GsmModem(SerialComms):
                     return
     
     def _handleCallEnded(self, regexMatch):
-        #cendMatch = re.match(r'^\^CEND:(\d),(\d),(\d)+,(\d)+$', notificationLine)
-        #if cendMatch:
         callId = int(regexMatch.group(1))
         if callId in self.activeCalls:
             self.activeCalls[callId].answered = False
@@ -423,11 +450,11 @@ class GsmModem(SerialComms):
         if self._ussdSessionEvent:
             # A sendUssd() call is waiting for this response - parse it
             cusdMatch = self.CUSD_REGEX.match(notificationLine)
-            if cusdMatch:
-                self._ussdResponse = Ussd(self, (cusdMatch.group(1) == '1'), cusdMatch.group(2))
+            if cusdMatch:                
+                self._ussdResponse = Ussd(self, (cusdMatch.group(1) == '1'), cusdMatch.group(2))                        
             # Notify waiting thread
             self._ussdSessionEvent.set()
-    
+
     def _placeHolderCallback(self, *args):
         """ Does nothing """
         self.log.debug('called with args: {0}'.format(args))
@@ -455,20 +482,32 @@ class Call(object):
         self.answered = False        
     
     def sendDtmfTone(self, tones):
-        """ Send a DTMF tone to the remote party (only allowed for an answered call) 
+        """ Send one or more DTMF tones to the remote party (only allowed for an answered call) 
         
         Note: this is highly device-dependent, and might not work
         
         @param digits: A str containining one or more DTMF tones to play, e.g. "3" or "*123#"
 
-        @raise CommandError: if the command failed/is not supported
+        @raise CommandError: if the command failed/is not supported        
+        @raise InvalidStateException: if the call has not been answered, or is ended while the command is still executing
         """        
         if self.answered:
+            toneLen = len(tones)
             if len(tones) > 1:
                 cmd = ('AT{0}{1};{0}' + ';{0}'.join(tones[1:])).format(self.DTMF_COMMAND_BASE, tones[0])                
             else:
-                cmd = 'AT+VTS={0}'.format(tones)            
-            self._gsmModem.write(cmd)
+                cmd = 'AT+VTS={0}'.format(tones)
+            try:
+                self._gsmModem.write(cmd, timeout=(5 + toneLen))
+            except CmeError, e:
+                if e.code == 30:
+                    # No network service - can happen if call is ended during DTMF transmission (but also if DTMF is sent immediately after call is answered)
+                    raise InterruptedException('No network service', e)
+                elif e.code == 3:
+                    # Operation not allowed - can happen if call is ended during DTMF transmission
+                    raise InterruptedException('Operation not allowed', e)
+                else:
+                    raise e
         else:
             raise InvalidStateException('Call is not active (it has not yet been answered, or it has ended).')
     
@@ -583,4 +622,4 @@ class Ussd(object):
         Does nothing if the USSD session is inactive.
         """
         if self.sessionActive:
-            self.write('AT+CUSD=2')
+            self._gsmModem.write('AT+CUSD=2')

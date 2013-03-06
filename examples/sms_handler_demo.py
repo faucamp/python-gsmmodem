@@ -9,6 +9,8 @@ and the messages, then replies to the SMS by saying "thank you"
 
 from __future__ import print_function
 
+import logging
+
 PORT = '/dev/ttyUSB2'
 BAUDRATE = 115200
 
@@ -21,6 +23,8 @@ def handleSms(sms):
     print('SMS sent.\n')
     
 def main():
+    print('Initializing modem...')
+    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
     modem = GsmModem(PORT, BAUDRATE, smsReceivedCallbackFunc=handleSms)
     modem.connect()
     print('Waiting for SMS message...')    

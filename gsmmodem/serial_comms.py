@@ -2,8 +2,7 @@
 
 """ Low-level serial communications handling """
 
-import sys, threading
-from Queue import Queue
+import sys, threading, logging
 
 import re
 import serial # pyserial: http://pyserial.sourceforge.net
@@ -13,6 +12,8 @@ import compat # For Python 2.6 compatibility
 
 class SerialComms(object):
     """ Wraps all low-level serial communications (actual read/write operations) """
+    
+    log = logging.getLogger('gsmmodem.serial_comms.SerialComms')
     
     # End-of-line read terminator
     RX_EOL_SEQ = '\r\n'
@@ -58,13 +59,15 @@ class SerialComms(object):
             if not checkForResponseTerm or self.RESPONSE_TERM.match(line):
                 # End of response reached; notify waiting thread
                 #print 'response:', self._response
+                self.log.debug('response: %s', self._response)
                 self._responseEvent.set()
-        else:
+        else:            
             # Nothing was waiting for this - treat it as a notification
             self._notification.append(line)
             if self.serial.inWaiting() == 0:
                 # No more chars on the way for this notification - notify higher-level callback
                 #print 'notification:', self._notification
+                self.log.debug('notification: %s', self._notification)
                 self.notifyCallback(self._notification)
                 self._notification = []
                 
@@ -84,7 +87,7 @@ class SerialComms(object):
             while self.alive:
                 data = self.serial.read(1)
                 if data != '': # check for timeout
-                    #print(' RX:', data,'({0})'.format(ord(data)))
+                    #print >> sys.stderr, ' RX:', data,'({0})'.format(ord(data))
                     rxBuffer.append(data)
                     if rxBuffer[-readTermLen:] == readTermSeq:                        
                         # A line (or other logical segment) has been read
@@ -105,13 +108,13 @@ class SerialComms(object):
             raise        
         
     def write(self, data, waitForResponse=True, timeout=5, expectedResponseTermSeq=None):
-        with self._txLock:
-            self.serial.write(data)
+        with self._txLock:            
             if waitForResponse:
                 if expectedResponseTermSeq:
                     self._expectResponseTermSeq = list(expectedResponseTermSeq) 
                 self._response = []
-                self._responseEvent = threading.Event()
+                self._responseEvent = threading.Event()                
+                self.serial.write(data)
                 if self._responseEvent.wait(timeout):
                     self._responseEvent = None
                     self._expectResponseTermSeq = False
@@ -120,3 +123,5 @@ class SerialComms(object):
                     self._responseEvent = None
                     self._expectResponseTermSeq = False
                     raise TimeoutException()
+            else:                
+                self.serial.write(data)

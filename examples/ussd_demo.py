@@ -11,6 +11,8 @@ Note: for this to work, a valid USSD string for your network must be used.
 
 from __future__ import print_function
 
+import logging
+
 PORT = '/dev/ttyUSB2'
 BAUDRATE = 115200
 USSD_STRING = '*101#'
@@ -18,6 +20,8 @@ USSD_STRING = '*101#'
 from gsmmodem.modem import GsmModem
 
 def main():
+    print('Initializing modem...')
+    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
     modem = GsmModem(PORT, BAUDRATE)
     modem.connect()
     modem.waitForNetworkCoverage(10)

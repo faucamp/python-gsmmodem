@@ -10,10 +10,13 @@ and hangs up the call.
 
 from __future__ import print_function
 
+import time, logging
+
 PORT = '/dev/ttyUSB2'
 BAUDRATE = 115200
 
 from gsmmodem.modem import GsmModem
+from gsmmodem.exceptions import InterruptedException
 
 def handleIncomingCall(call):
     if call.ringCount == 1:
@@ -22,16 +25,26 @@ def handleIncomingCall(call):
         if call.dtmfSupport:
             print('Answering call and playing some DTMF tones...')
             call.answer()
-            call.sendDtmfTone('9515999955951')
-            print('Hanging up call.')
-            call.hangup()
+            # Wait for a bit - some older modems struggle to send DTMF tone immediately after answering a call
+            time.sleep(2.0) 
+            try:
+                call.sendDtmfTone('9515999955951')
+            except InterruptedException, e:
+                # Call was ended during playback
+                print('DTMF playback interrupted: {0} ({1} Error {2})'.format(e, e.cause.type, e.cause.code))                
+            finally:
+                if call.answered:
+                    print('Hanging up call.')
+                    call.hangup()
         else:            
             print('Modem has no DTMF support - hanging up call.')
-        call.hangup()
+            call.hangup()
     else:
         print(' Call from {0} is still ringing...'.format(call.number))
     
 def main():
+    print('Initializing modem...')
+    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
     modem = GsmModem(PORT, BAUDRATE, incomingCallCallbackFunc=handleIncomingCall)
     modem.connect()
     print('Waiting for incoming calls...')    

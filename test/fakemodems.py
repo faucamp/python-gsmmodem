@@ -25,6 +25,10 @@ class FakeModem(object):
     @abc.abstractmethod
     def getRemoteHangupNotification(self, callId, callType):
         return ['NO CARRIER\r\n', '+WIND: 6,1\r\n']
+    
+    @abc.abstractmethod
+    def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
+        return ['RING\r\n']
 
 class WavecomMultiband900E1800(FakeModem):
 
@@ -34,14 +38,15 @@ class WavecomMultiband900E1800(FakeModem):
                  'AT+CGMR\r': ['ERROR\r\n'],
                  'AT+CIMI\r': ['111111111111111\r\n', 'OK\r\n'],
                  'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],
+                 'AT+CFUN?\r': ['+CFUN: 1\r\n', 'OK\r\n'],
                  'AT+CLAC\r': ['ERROR\r\n'],
-                 'AT+WIND=63\r': ['OK\r\n'],
+                 'AT+WIND?\r': ['+WIND: 0\r\n', 'OK\r\n'],
+                 'AT+WIND=50\r': ['OK\r\n'],
                  'AT+CPMS="SM","SM","SR"\r': ['ERROR\r\n'],                 
                  'AT+CPMS=?\r': ['+CPMS: (("SM","BM","SR"),("SM"))\r\n', 'OK\r\n'],
                  'AT+CPMS="SM","SM"\r': ['+CPMS: 14,50,14,50\r\n', 'OK\r\n'],
                  'AT+CNMI=2,1,0,2\r': ['OK\r\n'],
-                 'AT+WIND?\r': ['+WIND=0\r\n'],
-                 'AT+WIND=50\r': ['OK\r\n'],}
+                 'AT+CVHU=0\r': ['ERROR\r\n']}
         
     def getAtdResponse(self, number):
         return []
@@ -60,16 +65,24 @@ class WavecomMultiband900E1800(FakeModem):
     def getRemoteHangupNotification(self, callId, callType):
         return ['NO CARRIER\r\n', '+WIND: 6,1\r\n']
     
+    def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
+        return ['+CRING: {0}\r\n'.format(callType), '+CLIP: "{1}",{2}\r\n'.format(callType, callerNumber, ton)]
+    
     def __str__(self):
-        return 'WAVECOM MODEM MULTIBAND 900E 1800'
-        
-        
+        return 'WAVECOM MODEM MULTIBAND 900E 1800'    
+
+
 class HuaweiK3715(FakeModem):
     def __init__(self):
         self.responses = {'AT+CGMI\r': ['huawei\r\n', 'OK\r\n'],
                  'AT+CGMM\r': ['K3715\r\n', 'OK\r\n'],
+                 'AT+CGMR\r': ['11.104.05.00.00\r\n', 'OK\r\n'],
+                 'AT+CIMI\r': ['111111111111111\r\n', 'OK\r\n'],
+                 'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],
+                 'AT+CFUN?\r': ['+CFUN: 1\r\n', 'OK\r\n'],
                  'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
-                 'AT+WIND=63\r': ['ERROR\r\n'],
+                 'AT+WIND?\r': ['ERROR\r\n'],
+                 'AT+WIND=50\r': ['ERROR\r\n'],
                  'AT+CLAC\r': ['+CLAC:&C,&D,&E,&F,&S,&V,&W,E,I,L,M,Q,V,X,Z,T,P,\S,\V,\
 %V,D,A,H,O,S0,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S30,S103,S104,+FCLASS,+ICF,+IFC,+IPR,+GMI,\
 +GMM,+GMR,+GCAP,+GSN,+DR,+DS,+WS46,+CLAC,+CCLK,+CBST,+CRLP,+CV120,+CHSN,+CSSN,+CREG,+CGREG,\
@@ -101,7 +114,13 @@ $QCPDPLT,$QCPWRDN,$QCDGEN,$BREW,$QCSYSMODE,^CVOICE,^DDSETEX,^pcmrecord,^SYSINFO,
     def getRemoteHangupNotification(self, callId, callType):
             return ['^CEND:{0},5,29,16\r\n'.format(callId)]
         
+    def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
+        return ['+CRING: {0}\r\n'.format(callType), '+CLIP: "{1}",{2},,,,0\r\n'.format(callType, callerNumber, ton)]
+        
     def __str__(self):
         return 'Huawei K3715'
 
-modems = [HuaweiK3715(), WavecomMultiband900E1800()]
+modemClasses = [HuaweiK3715, WavecomMultiband900E1800]
+
+def createModems():
+    return [modem() for modem in modemClasses]
