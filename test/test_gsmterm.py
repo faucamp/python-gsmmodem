@@ -138,6 +138,7 @@ class TestAtCommands(unittest.TestCase):
                     for item in help[3]:
                         self.assertEqual(len(item), 2, 'Output value item tuple length should be 2, got {0}. Command: {1}, item: {2}'.format(len(item), command, item))
                 self.assertIsInstance(help[4], str)
-       
+
+
 if __name__ == "__main__":
     unittest.main()

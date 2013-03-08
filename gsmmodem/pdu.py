@@ -1,4 +1,4 @@
-# -*- coding: utf8 -*- 
+# -*- coding: utf8 -*-
 
 """ SMS PDU encoding methods """
 
@@ -17,33 +17,51 @@ GSM7_EXTENDED = {chr(0xFF): chr(0x0A),
                  '|':  chr(0x40),
                  '€':  chr(0x65)}
                 
-def createSmsPdu(number, text):
-    bytes = bytearray()
-    bytes.append(0x00) # Don't supply an SMSC number - use the one configured in the device
-    bytes.append(0x01) # SMS-SUBMIT PDU
-    bytes.append(0x00) # message reference - not used in this implementation
+def encodeSmsPdu(number, text):
+    """ Creates an SMS-SUBMIT PDU for sending a message with the specified text to the specified number
+    
+    @param number: the destination mobile number
+    @type number: str
+    @param text: the message text
+    @type text: str
+    
+    @return: The SMS PDU
+    @rtype: bytearray
+    """ 
+    pdu = bytearray()
+    pdu.append(0x00) # Don't supply an SMSC number - use the one configured in the device
+    pdu.append(0x01) # SMS-SUBMIT PDU
+    pdu.append(0x00) # message reference - not used in this implementation
     # Add destination number
     if number[0] == '+':
         ton = 145 # 0x91
         number = number[1:] # remove the + character
     else:
         ton = 145 # TODO: get real value
-    bytes.append(len(number)) # size of destination mobile number
-    bytes.append(ton) # Type of nubmer 145 == 0x91 == international number format
-    bytes.extend(encodeReverseNibble(text)) # destination phone number
-    bytes.append(0x00) # Protocol identifier - no higher-level protocol
+    pdu.append(len(number)) # size of destination mobile number
+    pdu.append(ton) # Type of nubmer 145 == 0x91 == international number format
+    pdu.extend(encodeReverseNibble(number)) # destination phone number
+    pdu.append(0x00) # Protocol identifier - no higher-level protocol
     #TODO: dynamically set data coding scheme based on text contents
-    bytes.append(0x00) # Data Coding scheme - 00: GSM7 (default), 08: UCS-2
-    #TODO: finish
+    pdu.append(0x00) # Data Coding scheme - 00: GSM7 (default), 08: UCS-2
+    encodedText = encodeGsm7(text)
+    pdu.append(len(encodedText)) # Payload size in septets/characters
+    userData = packSeptets(encodeGsm7(text))
+    pdu.extend(userData) # User Data (payload)
+    return pdu
 
-def encodeReverseNibble(plaintext):
-    """ Reverse nibble encoding algorithm """
-    if len(plaintext) % 2 == 1:
-        plaintext = plaintext[:-1] + 'f' +plaintext[-1] # insert the "end" indicator
-    octets = [int(plaintext[i+1] + plaintext[i], 16) for i in xrange(0, len(plaintext), 2)]
+def encodeReverseNibble(number):
+    """ Reverse nibble encoding algorithm for phone numbers
+        
+    @return: bytearray containing the encoded octets
+    @rtype: bytearray
+    """
+    if len(number) % 2 == 1:
+        number = number + 'F' # append the "end" indicator
+    octets = [int(number[i+1] + number[i], 16) for i in xrange(0, len(number), 2)]
     return bytearray(octets)
 
-def encodeGsm7(text, discardInvalid=False):
+def encodeGsm7(plaintext, discardInvalid=False):
     """ GSM-7 text encoding algorithm
     
     Encodes the specified text string into GSM-7 octets (characters). This method does not pack
@@ -58,13 +76,61 @@ def encodeGsm7(text, discardInvalid=False):
     @rtype: bytearray
     """
     result = bytearray()
-    for char in text:
+    for char in plaintext:
         idx = GSM7_BASIC.find(char)
         if idx != -1:
             result.append(chr(idx))
         elif char in GSM7_EXTENDED:
-            result.append(char(0x1B)) # ESC - switch to extended table
+            result.append(chr(0x1B)) # ESC - switch to extended table
             result.append(GSM7_EXTENDED[char])
         elif not discardInvalid:
             raise ValueError('Cannot encode char "{0}" using GSM-7 encoding')
+    return result
+
+def decodeGsm7(encodedText):
+    """ GSM-7 text decoding algorithm
+    
+    Decodes the specified GSM-7-encoded string into a plaintext string.
+    
+    @param encodedText: the text string to encode
+    @type encodedText: bytearray or str
+    
+    @return: A string containing the decoded text
+    @rtype: str
+    """
+    result = []
+    if type(encodedText) == str:
+        encodedText = bytearray(encodedText)
+    iterEncoded = iter(encodedText)
+    for b in iterEncoded:
+        if b == 0x1B: # ESC - switch to extended table
+            c = chr(iterEncoded.next())
+            for char, value in GSM7_EXTENDED.iteritems():
+                if c == value:
+                    result.append(char)
+                    break
+        else:
+            result.append(GSM7_BASIC[b])
+    return ''.join(result)
+
+def packSeptets(octets):
+    """ Packs the specified octets into septets
+    
+    Typically the output of encodeGsm7 would be used as input to this function. The resulting
+    bytearray contains the original GSM-7 characters packed into septets ready for transmission.
+    """
+    result = bytearray()
+    if type(octets) == str:
+        octets = bytearray(octets)
+    bits = 0
+    octetsLen = len(octets)
+    for i in xrange(octetsLen):    
+        if bits == 7:
+            bits = 0
+            continue
+        octet = (octets[i] & 0x7f) >> bits;
+        if i < octetsLen - 1:
+            octet |= (octets[i+1] << (7 - bits)) & 0xff        
+        result.append(octet)
+        bits += 1    
     return result
