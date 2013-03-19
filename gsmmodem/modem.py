@@ -104,7 +104,7 @@ class GsmModem(SerialComms):
                 
         # SMS setup
         self.write('AT+CMGF=1') # Switch to text mode for SMS messages
-        self.write('AT+CSMP=49,167') # Enable delivery reports
+        self.write('AT+CSMP=49,167,0,0') # Enable delivery reports
         
         # Set message storage, but first check what the modem supports - example response: +CPMS: (("SM","BM","SR"),("SM"))
         lines = self.write('AT+CPMS=?')        
