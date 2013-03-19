@@ -44,7 +44,23 @@ def main():
     print('Connecting to GSM modem on {0}...'.format(args.port))            
     modem.connect()
     if args.debug:
-        pass
+        # Print debug info
+        print('\n== MODEM DEBUG INFORMATION ==\n')
+        print('ATI', modem.write('ATI', parseError=False))
+        print('AT+CGMI:', modem.write('AT+CGMI', parseError=False))
+        print('AT+CGMM:', modem.write('AT+CGMM', parseError=False))
+        print('AT+CGMR:', modem.write('AT+CGMR', parseError=False))
+        print('AT+CFUN=?:', modem.write('AT+CFUN=?', parseError=False))
+        print('AT+WIND=?:', modem.write('AT+WIND=?', parseError=False))
+        print('AT+WIND?:', modem.write('AT+WIND?', parseError=False))
+        print('AT+CPMS=?:', modem.write('AT+CPMS=?', parseError=False))
+        print('AT+CNMI=?:', modem.write('AT+CNMI=?', parseError=False))
+        print('AT+CVHU=?:', modem.write('AT+CVHU=?', parseError=False))
+        print('AT+CSMP?:', modem.write('AT+CSMP?', parseError=False))
+        print('AT+GCAP:', modem.write('AT+GCAP', parseError=False))
+        print('AT+CPIN?', modem.write('AT+CPIN?', parseError=False))
+        print('AT+CLAC:', modem.write('AT+CLAC', parseError=False))
+        print()
     else:
         # Print basic info
         print('\n== MODEM INFORMATION ==\n')
@@ -54,7 +70,8 @@ def main():
         print('\nIMEI:', modem.imei if modem.imei != None else 'N/A')
         print('IMSI:', modem.imsi if modem.imsi != None else 'N/A')
         print('\nNetwork:', modem.networkName)
-        print('\nSignal strength:', modem.signalStrength)
+        print('Signal strength:', modem.signalStrength)
+        print()
 
 if __name__ == '__main__':
     main()
