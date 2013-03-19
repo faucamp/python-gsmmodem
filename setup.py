@@ -10,7 +10,7 @@ except ImportError:
 with open('requirements.txt') as f:
     requires = f.readlines() 
 
-VERSION = 0.5
+VERSION = 0.5.1
 
 setup(name='python-gsmmodem',
       version='{0}'.format(VERSION),

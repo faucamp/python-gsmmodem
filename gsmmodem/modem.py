@@ -225,7 +225,7 @@ class GsmModem(SerialComms):
     @property
     def networkName(self):
         """ @return: the name of the GSM Network Operator to which the modem is connected """
-        response = self.write('AT+COPS?') # response format: +COPS: mode,format,"operator_name",x
+        response = self.write('AT+COPS?')[0] # response format: +COPS: mode,format,"operator_name",x
         copsMatch = re.match(r'^\+COPS: (\d),(\d),"(.+)",\d$', response)
         if copsMatch:
             return copsMatch.group(3)

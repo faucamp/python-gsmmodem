@@ -1,3 +1,7 @@
+* Tue Mar 19 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.5.1
+- Added identify-modem.py scrip to assist with debugging different modem types
+- Fixed bug in modem.networkName
+
 * Wed Mar 06 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.5
 - Many bugfixes and improvements, especially to USSD handling
 - Improved exceptions to allow more Pythonic error handling
