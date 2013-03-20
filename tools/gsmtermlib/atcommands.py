@@ -224,7 +224,7 @@ is entered (OK response shall be given before flushing the codes)\n\
 1: TA buffer of unsolicited result codes defined within this command is cleared when <mode> 1...3 is entered.')),
              None, 'This command selects the procedure for message reception from the network.')),
 ('AT+CMGR', (c[5], 'Read Message', (('<index>', 'Location of message to read'),), None, 'This command allows the application to read stored messages. The messages are read from the memory selected by the +CPMS command.')),
-('AT+CMGL', (c[5], 'List Message', (('<stat>', 'Status of messages in memory to list'),), None, 'This command allows the application to read stored messages, by indicating the type of the message to read. The messages are read from the memory selected by the +CPMS command.')),
+('AT+CMGL', (c[5], 'List Message', (('<stat>', 'Status of messages in memory to list: "ALL", "REC UNREAD" or "REC READ"'),), None, 'This command allows the application to read stored messages, by indicating the type of the message to read. The messages are read from the memory selected by the +CPMS command.')),
 ('AT+CMGS', (c[5], 'Send Message', (('<da>', 'Destination Address (text mode) - message destination phone number'),), None, 'The <address> field is the address of the terminal to which the message is sent. To send the message, \
 simply type, <ctrl-Z> character (ASCII 26). The text can contain all existing characters except <ctrl-Z> and \
 <ESC> (ASCII 27). This command can be aborted using the <ESC> character when entering text. In PDU \
