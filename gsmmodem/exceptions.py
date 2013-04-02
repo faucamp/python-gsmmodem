@@ -46,4 +46,7 @@ class CmsError(CommandError):
     Issued in response to an AT command
     """
     def __init__(self, command, code):
-        super(CmeError, self).__init__(command, 'CMS', code)
+        super(CmsError, self).__init__(command, 'CMS', code)
+
+class EncodingError(GsmModemException):
+    """ Raised if a decoding- or encoding operation failed """

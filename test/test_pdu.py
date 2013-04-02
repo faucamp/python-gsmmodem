@@ -4,22 +4,12 @@
 """ Test suite for SMS PDU encoding/decoding algorithms """
 
 import sys, unittest, random
-from datetime import datetime, timedelta, tzinfo
-    
-import compat # For Python 2.6 compatibility
-import gsmmodem.pdu
+from datetime import datetime, timedelta
 
-class SimpleOffsetTzInfo(tzinfo):
-    
-    def __init__(self, offsetInHours=None):
-        if offsetInHours != None:
-            self.offsetInHours = offsetInHours        
-    
-    def utcoffset(self, dt):
-        return timedelta(hours=self.offsetInHours)
-    
-    def dst(self, dt):        
-        return timedelta(0)
+import compat # For Python 2.6 compatibility
+
+import gsmmodem.pdu
+from gsmmodem.util import SimpleOffsetTzInfo
 
 class TestSemiOctets(unittest.TestCase):
     """ Tests the semi-octet encoder/decoder """
