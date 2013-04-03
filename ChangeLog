@@ -1,6 +1,9 @@
-* Tue Mar 19 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.5.1
-- Added identify-modem.py scrip to assist with debugging different modem types
-- Fixed bug in modem.networkName
+* Tue Apr 03 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.6
+- Added support for PDU mode SMS
+- Default SMS read/write mode is now PDU mode
+- Added identify-modem.py script to assist with debugging different modem types
+- Lots of bugfixes
+- Lots of tests added
 
 * Wed Mar 06 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.5
 - Many bugfixes and improvements, especially to USSD handling

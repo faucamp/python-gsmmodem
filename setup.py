@@ -10,7 +10,7 @@ except ImportError:
 with open('requirements.txt') as f:
     requires = f.readlines() 
 
-VERSION = 0.5.1
+VERSION = 0.6
 
 setup(name='python-gsmmodem',
       version='{0}'.format(VERSION),
@@ -61,5 +61,5 @@ Bundled utilities:
       
       packages=['gsmmodem', 'gsmtermlib'],
       package_dir = {'gsmtermlib': 'tools/gsmtermlib'},
-      scripts=['tools/gsmterm.py', 'tools/sendsms.py'],      
+      scripts=['tools/gsmterm.py', 'tools/sendsms.py', 'tools/identify-modem.py'],
       install_requires=requires)
