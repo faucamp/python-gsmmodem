@@ -53,21 +53,49 @@ class SmsPduTzInfo(tzinfo):
         return timedelta(0)
     
 
-def encodeSmsSubmitPdu(number, text):
+def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, rejectDuplicates=False):
     """ Creates an SMS-SUBMIT PDU for sending a message with the specified text to the specified number
     
     @param number: the destination mobile number
     @type number: str
     @param text: the message text
     @type text: str
-    
+    @param reference: message reference number (see also: rejectDuplicates parameter)
+    @type reference: int
+    @param validity: message validity period (absolute or relative)
+    @type validity: datetime.timedelta (relative) or datetime.datetime (absolute)
+    @param smsc: SMSC number to use (leave None to use default)
+    @type smsc: str
+    @param rejectDuplicates: Flag that controls the TP-RD parameter (messages with same destination and reference may be rejected if True)
+    @type rejectDuplicates: bool
+            
     @return: A tuple containing the SMS PDU as a bytearray, and the length of the TPDU part
     @rtype: tuple
     """ 
     pdu = bytearray()
-    pdu.append(0x00) # Don't supply an SMSC number - use the one configured in the device    
-    pdu.append(0x01) # SMS-SUBMIT PDU
-    pdu.append(0x00) # message reference - not used in this implementation
+    if smsc:
+        pdu.extend(_encodeAddressField(smsc, smscField=True))
+    else:
+        pdu.append(0x00) # Don't supply an SMSC number - use the one configured in the device
+    tpduFirstOctet = 0x01 # SMS-SUBMIT PDU
+    if validity != None:    
+        # Validity period format (TP-VPF) is stored in bits 4,3 of the first TPDU octet
+        if type(validity) == timedelta:
+            # Relative (TP-VP is integer)
+            tpduFirstOctet |= 0x10 # bit4 == 1, bit3 == 0
+            validityPeriod = [_encodeRelativeValidityPeriod(validity)]
+        elif type(validity) == datetime:
+            # Absolute (TP-VP is semi-octet encoded date)
+            tpduFirstOctet |= 0x18 # bit4 == 1, bit3 == 1
+            validityPeriod = _encodeTimestamp(validity) 
+        else:
+            raise ValueError('"validity" must be of type datetime.timedelta (for relative value) or datetime.datetime (for absolute value)')        
+    else:
+        validityPeriod = None
+    if rejectDuplicates:
+        tpduFirstOctet |= 0x20 # bit5 == 1
+    pdu.append(tpduFirstOctet)
+    pdu.append(reference) # message reference
     # Add destination number    
     pdu.extend(_encodeAddressField(number))
     pdu.append(0x00) # Protocol identifier - no higher-level protocol
@@ -76,16 +104,18 @@ def encodeSmsSubmitPdu(number, text):
         encodedText = encodeGsm7(text)
     except ValueError:
         # Cannot encode text using GSM-7; use UCS2 instead
-        alphabet = 0x08 # UCS2
-        pdu.append(alphabet)
+        alphabet = 0x08 # UCS2        
         encodedText = text.encode('utf-16')
-        pdu.append(len(encodedText)) # Payload size in septets/characters
+        userDataLength = len(encodedText) # Payload size in septets/characters
         userData = encodedText
     else:
-        alphabet = 0x00 # GSM-7
-        pdu.append(alphabet)
-        pdu.append(len(encodedText)) # Payload size in septets/characters
-        userData = packSeptets(encodeGsm7(text))
+        alphabet = 0x00 # GSM-7        
+        userDataLength = len(encodedText) # Payload size in septets/characters
+        userData = packSeptets(encodeGsm7(text))    
+    pdu.append(alphabet)
+    if validityPeriod:
+        pdu.extend(validityPeriod)
+    pdu.append(userDataLength)
     pdu.extend(userData) # User Data (payload)
     tpdu_length = len(pdu) - 1
     return pdu, tpdu_length
@@ -104,7 +134,7 @@ def decodeSmsPdu(pdu):
     result = {}
     pduIter = iter(pdu)
  
-    smscNumber, smscBytesRead = _decodeAddressField(pduIter)
+    smscNumber, smscBytesRead = _decodeAddressField(pduIter, smscField=True)
     result['smsc'] = smscNumber
     result['tpdu_length'] = len(pdu) - smscBytesRead
     
@@ -136,7 +166,7 @@ def decodeSmsPdu(pdu):
         dataCoding = _decodeDataCoding(pduIter.next())
         validityPeriodFormat = (tpduFirstOctet & 0x18) >> 3 # bits 4,3
         if validityPeriodFormat == 0x02: # TP-VP field present and integer represented (relative)
-            result['validity'] = _calculateRelativeValidityPeriod(pduIter.next())
+            result['validity'] = _decodeRelativeValidityPeriod(pduIter.next())
         elif validityPeriodFormat == 0x03: # TP-VP field present and semi-octet represented (absolute)            
             result['validity'] = _decodeTimestamp(pduIter)
         userDataLen = pduIter.next()
@@ -161,8 +191,8 @@ def decodeSmsPdu(pdu):
     
     return result
 
-def _calculateRelativeValidityPeriod(tpVp):
-    """ Calculates the relative SMS validity period based on the table in section 9.2.3.12 of GSM 03.40)
+def _decodeRelativeValidityPeriod(tpVp):
+    """ Calculates the relative SMS validity period (based on the table in section 9.2.3.12 of GSM 03.40)
     @rtype: datetime.timedelta
     """
     if tpVp <= 143:
@@ -172,13 +202,48 @@ def _calculateRelativeValidityPeriod(tpVp):
     elif 168 <= tpVp <= 196:
         return timedelta(days=(tpVp - 166))
     elif 197 <= tpVp <= 255:
-        return timedelta(weeks=(tpVp))
-
+        return timedelta(weeks=(tpVp - 192))
+    
+def _encodeRelativeValidityPeriod(validityPeriod):
+    """ Encodes the specified relative validity period timedelta into an integer for use in an SMS PDU
+    (based on the table in section 9.2.3.12 of GSM 03.40)
+    
+    @param validityPeriod: The validity period to encode
+    @type validityPeriod: datetime.timedelta
+    @rtype: int
+    """
+    seconds = validityPeriod.total_seconds()
+    if seconds <= 43200: # 12 hours
+        tpVp = (seconds / 300) - 1 # divide by 5 minutes, subtract 1
+    elif seconds <= 86400: # 24 hours
+        tpVp = (seconds - 43200) / 1800 + 143 # subtract 12 hours, divide by 30 minutes. add 143
+    elif validityPeriod.days <= 30: # 30 days
+        tpVp = validityPeriod.days + 166 # amount of days + 166
+    elif validityPeriod.days > 30:
+        tpVp = validityPeriod.days / 7 + 192 # amount of weeks + 192
+    return tpVp
+        
 def _decodeTimestamp(byteIter):
     """ Decodes a 7-octet timestamp """
     dateStr = decodeSemiOctets(byteIter, 7)
     timeZoneStr = dateStr[-2:]        
     return datetime.strptime(dateStr[:-2], '%y%m%d%H%M%S').replace(tzinfo=SmsPduTzInfo(timeZoneStr))
+
+def _encodeTimestamp(timestamp):
+    """ Encodes a 7-octet timestamp from the specified date
+    
+    Note: the specified timestamp must have a UTC offset set; you can use gsmmodem.util.SimpleOffsetTzInfo for simple cases
+    
+    @param timestamp: The timestamp to encode
+    @type timestamp: datetime.datetime
+    
+    @return: The encoded timestamp
+    @rtype: bytearray
+    """
+    if timestamp.utcoffset == None:
+        raise ValueError('Please specify a UTC offset for the timestamp (e.g. by using gsmmodem.util.SimpleOffsetTzInfo)')
+    dateStr = timestamp.strftime('%y%m%d%H%M%S%z')[-2]
+    return encodeSemiOctets(dateStr)    
 
 def _decodeDataCoding(octet):
     if octet & 0xC0 == 0:
@@ -188,7 +253,7 @@ def _decodeDataCoding(octet):
     # We ignore other coding groups
     return 0    
 
-def _decodeAddressField(byteIter):
+def _decodeAddressField(byteIter, smscField=False):
     """ Decodes the address field at the current position of the bytearray iterator
     
     @param byteIter: Iterator over bytearray
@@ -202,8 +267,7 @@ def _decodeAddressField(byteIter):
         toa = byteIter.next()
         ton = (toa & 0x70) # bits 6,5,4 of type-of-address == type-of-number
         if ton == 0x50: 
-            # Alphanumberic number
-            
+            # Alphanumberic number            
             addressLen /= 2
             septets = unpackSeptets(byteIter, addressLen)
             addressValue = decodeGsm7(septets)
@@ -211,14 +275,19 @@ def _decodeAddressField(byteIter):
         else:
             # ton == 0x00: Unknown (might be international, local, etc) - leave as is            
             # ton == 0x20: National number
-            addressValue = decodeSemiOctets(byteIter, addressLen-1)
+            if smscField:
+                addressValue = decodeSemiOctets(byteIter, addressLen-1)
+            else:
+                addressLen = int(round(addressLen / 2.0))
+                addressValue = decodeSemiOctets(byteIter, addressLen)
+                addressLen += 1 # for the return value, add the toa byte
             if ton == 0x10: # International number
                 addressValue = '+' + addressValue
             return (addressValue, (addressLen + 1))
     else:
         return (None, 1)
 
-def _encodeAddressField(address):
+def _encodeAddressField(address, smscField=False):
     """ Encodes the address into an address field
     
     @param address: The address to encode (phone number or alphanumeric)
@@ -256,7 +325,10 @@ def _encodeAddressField(address):
         addressLen = len(addressValue) * 2        
     else:
         addressValue = encodeSemiOctets(address)
-        addressLen = len(addressValue) + 1
+        if smscField:            
+            addressLen = len(addressValue) + 1
+        else:
+            addressLen = len(address)
     result = bytearray()
     result.append(addressLen)
     result.append(toa)

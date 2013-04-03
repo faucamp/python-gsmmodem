@@ -102,13 +102,13 @@ class TestGsm7(unittest.TestCase):
 
 
 class TestSmsPduAddressFields(unittest.TestCase):
-    """ Tests for SMS PDU address fields (these method are not meant to be public) """
+    """ Tests for SMS PDU address fields (these methods are not meant to be public) """
     
     def setUp(self):
-        self.tests = (('+9876543210', 7, '06918967452301', '06918967452301'),
-                 ('+9876543210', 7, '06918967452301000000', '06918967452301'), # same as above, but checking read limits
-                 ('+987654321', 7, '069189674523F1000000', '069189674523F1'), 
-                 ('+2782913593', 7, '06917228195339', '06917228195339'),
+        self.tests = (('+9876543210', 7, '0A918967452301', '0A918967452301'),
+                 ('+9876543210', 7, '0A918967452301000000', '0A918967452301'), # same as above, but checking read limits
+                 ('+987654321', 7, '099189674523F1000000', '099189674523F1'), 
+                 ('+27829135934', 8, '0B917228195339F4', '0B917228195339F4'),
                  ('abc', 5, '06D061F118', '06D061F118'),
                  ('abc', 5, '06D061F118D3F1FF0032', '06D061F118'), # same as above, but checking read limits                 
                  ('FRANCOIS', 9, '0ED04669D0397C26A7', '0ED04669D0397C26A7'),
@@ -128,16 +128,61 @@ class TestSmsPduAddressFields(unittest.TestCase):
             result = gsmmodem.pdu._encodeAddressField(plaintext)
             self.assertEqual(result, expected, u'Failed to encode address field data "{0}". Expected: "{1}", got: "{2}"'.format(plaintext, realHexEncoded, str(result).encode('hex').upper()))            
 
+class TestSmsPduSmscFields(unittest.TestCase):
+    """ Tests for SMS PDU SMSC-specific address fields (these methods are not meant to be public)
+
+    Note: SMSC fields are encoded *slightly* differently from "normal" address fields (the length indicator is different)
+    """
+    
+    def setUp(self):
+        self.tests = (('+9876543210', 7, '06918967452301', '06918967452301'),
+                 ('+9876543210', 7, '06918967452301000000', '06918967452301'), # same as above, but checking read limits
+                 ('+987654321', 7, '069189674523F1000000', '069189674523F1'), 
+                 ('+2782913593', 7, '06917228195339', '06917228195339'))
+        
+    def test_decodeSmscField(self):        
+        for plaintext, bytesRead, hexEncoded, realHexEncoded in self.tests:
+            byteIter = iter(bytearray(hexEncoded.decode('hex')))
+            resultValue, resultNumBytesRead = gsmmodem.pdu._decodeAddressField(byteIter, smscField=True)
+            self.assertEqual(resultValue, plaintext, u'Failed to decode SMSC address field data "{0}". Expected: "{1}", got: "{2}"'.format(hexEncoded, plaintext, resultValue))
+            self.assertEqual(resultNumBytesRead, bytesRead, u'Incorrect "number of bytes read" returned for data "{0}". Expected: "{1}", got: "{2}"'.format(hexEncoded, bytesRead, resultNumBytesRead))
+    
+    def test_encodeSmscField(self):
+        for plaintext, bytesRead, hexEncoded, realHexEncoded in self.tests:
+            expected = bytearray(realHexEncoded.decode('hex'))
+            result = gsmmodem.pdu._encodeAddressField(plaintext, smscField=True)
+            self.assertEqual(result, expected, u'Failed to encode SMSC address field data "{0}". Expected: "{1}", got: "{2}"'.format(plaintext, realHexEncoded, str(result).encode('hex').upper()))
+
+class TestRelativeValidityPeriod(unittest.TestCase):
+    """ Tests for SMS PDU relative validity period encoding/decoding (these methods are not meant to be public) """
+    
+    def setUp(self):
+        self.tests = ((timedelta(minutes=30), 5),
+                      (timedelta(hours=16), 151),
+                      (timedelta(days=3), 169),
+                      (timedelta(weeks=5), 197))
+        
+    def test_encode(self):
+        for validity, tpVp in self.tests:
+            result = gsmmodem.pdu._encodeRelativeValidityPeriod(validity)
+            self.assertEqual(result, tpVp, u'Failed to encode relative validity period: {0}. Expected: "{1}", got: "{2}"'.format(validity, tpVp, result))
+    
+    def test_decode(self):
+        for validity, tpVp in self.tests:
+            result = gsmmodem.pdu._decodeRelativeValidityPeriod(tpVp)
+            self.assertEqual(result, validity, u'Failed to decode relative validity period: {0}. Expected: "{1}", got: "{2}"'.format(tpVp, validity, result))
+
 class TestSmsPdu(unittest.TestCase):
     """ Tests encoding/decoding of SMS PDUs """
         
     def test_encodeSmsSubmit(self):
         """ Tests SMS PDU encoding """
-        tests = (('+27820001111', 'Hello World!', '00010007917228001011F100000CC8329BFD065DDF72363904'),
-                 ('+123456789', u'世界您好！', '000100069121436587F900080CFFFE164E4C75A8607D5901FF'))
-        for number, text, pduHex in tests:
+        tests = (('+27820001111', 'Hello World!', 0, None, None, False, '0001000B917228001011F100000CC8329BFD065DDF72363904'),
+                 ('+123456789', u'世界您好！', 0, None, None, False, '000100099121436587F900080CFFFE164E4C75A8607D5901FF'),
+                 ('+31628870634', 'www.diafaan.com', 13, timedelta(days=3), '+31624000000', True, '07911326040000F0310D0B911326880736F40000A90FF7FBDD454E87CDE1B0DB357EB701'))
+        for number, text, reference, validity, smsc, rejectDuplicates, pduHex in tests:
             pdu = bytearray(pduHex.decode('hex'))
-            result = gsmmodem.pdu.encodeSmsSubmitPdu(number, text)[0]            
+            result = gsmmodem.pdu.encodeSmsSubmitPdu(number, text, reference, validity, smsc, rejectDuplicates)[0]            
             self.assertEqual(result, pdu, u'Failed to encode SMS PDU for number: "{0}" and text "{1}". Expected: "{2}", got: "{3}"'.format(number, text, pduHex, str(result).encode('hex').upper()))
 
     def test_decode(self):
