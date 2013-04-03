@@ -154,7 +154,7 @@ def decodeSmsPdu(pdu):
         elif dataCoding == 0x02: # UCS2
             userData = []
             for i in xrange(userDataLen):
-                userData.append(pduIter.next())
+                userData.append(chr(pduIter.next()))
             result['text'] = ''.join(userData).decode('utf-16')
         else:
             result['text'] = ''        

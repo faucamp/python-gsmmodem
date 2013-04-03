@@ -51,7 +51,7 @@ class GsmModem(SerialComms):
         self._waitForAtdResponse = True # Flag that controls if we should wait for an immediate response to ATD, or not
         self.callStatusUpdates = [] # populated during connect() - contains regexes and handlers for detecting/handling call status updates
         self._writeWait = 0 # Time (in seconds to wait after writing a command (adjusted when 515 errors are detected)
-        self._smsTextMode = True # Storage variable for the smsTextMode property
+        self._smsTextMode = False # Storage variable for the smsTextMode property
         
     def connect(self, runInit=True):
         """ Opens the port and initializes the modem """

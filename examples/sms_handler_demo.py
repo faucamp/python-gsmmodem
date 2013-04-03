@@ -17,15 +17,17 @@ BAUDRATE = 115200
 from gsmmodem.modem import GsmModem
 
 def handleSms(sms):
-    print('== SMS message received ==\nFrom: {0}\nTime: {1}\nMessage:\n{2}\n\n'.format(sms.number, sms.time, sms.text))
+    print(u'== SMS message received ==\nFrom: {0}\nTime: {1}\nMessage:\n{2}\n'.format(sms.number, sms.time, sms.text))
     print('Replying to SMS...')
-    sms.reply('Thank you')
+    sms.reply(u'SMS received: "{0}{1}"'.format(sms.text[:20], '...' if len(sms.text) > 20 else ''))
     print('SMS sent.\n')
     
 def main():
     print('Initializing modem...')
+    # Uncomment the following line to see what the modem is doing:
     #logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
     modem = GsmModem(PORT, BAUDRATE, smsReceivedCallbackFunc=handleSms)
+    modem.smsTextMode = False
     modem.connect()
     print('Waiting for SMS message...')
     try:    
