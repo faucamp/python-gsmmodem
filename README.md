@@ -34,7 +34,7 @@ How to install this package
 
 To install, do:
 
-$ python setup.py install
+> $ python setup.py install
 
 Note that python-gsmmodem relies on pyserial for 
 serial communications: http://pyserial.sourceforge.net
