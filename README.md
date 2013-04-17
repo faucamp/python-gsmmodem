@@ -1,5 +1,6 @@
-python-gsmmodem - GSM modem module for Python
-=============================================
+python-gsmmodem 
+===============
+*GSM modem module for Python*
 
 python-gsmmodem is a module that allows easy control of a GSM modem attached
 to the system. It also includes a couple of useful commandline utilities for
@@ -23,27 +24,37 @@ Bundled utilities:
   provide debug information used for development of python-gsmmodem. 
 
 Requirements
-============
+------------
 
 - Python 2.6 or later
 - pyserial
 
 
 How to install this package
-===========================
+---------------------------
 
-To install, do:
+There are two ways to install python-gsmmodem:
 
-> $ python setup.py install
+### Option 1: Automatic installation using pip: ###
+
+> pip install python-gsmmodem
+
+pip will automatically download and install pyserial if needed.
+
+### Option 2: Manual installation ###
+
+Download and extract python-gsmmodem. Next, do:
+
+> python setup.py install
 
 Note that python-gsmmodem relies on pyserial for 
 serial communications: http://pyserial.sourceforge.net
 
 
 License information
-===================
+-------------------
 
-Copyright (C) 2013 Francois Aucamp
+Copyright (C) 2013 Francois Aucamp  
 See AUTHORS for all authors and contact information. 
 
 License: GNU Lesser General Public License, version 3 or later; see COPYING
