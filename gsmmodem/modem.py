@@ -284,7 +284,9 @@ class GsmModem(SerialComms):
                 pass # Some modems return a CMS 330 error if the value isn't set
             else:
                 if len(readSmsc) == 2:
-                    self._smscNumber = readSmsc[0]
+                    cscaMatch = re.match(r'\+CSCA:\s*"([^,]+)",(\d+)$', readSmsc[0])
+                    if cscaMatch:
+                        self._smscNumber = cscaMatch.group(1)
         return self._smscNumber
     @smsc.setter
     def smsc(self, smscNumber):

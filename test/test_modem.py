@@ -219,7 +219,7 @@ class TestGsmModemGeneralApi(unittest.TestCase):
         tests = [None, '+12345678']
         for test in tests:
             if test:
-                self.modem.serial.responseSequence = ['{0}\r\n'.format(test), 'OK\r\n']
+                self.modem.serial.responseSequence = ['+CSCA: "{0}",145\r\n'.format(test), 'OK\r\n']
             else:
                 self.modem.serial.responseSequence = ['OK\r\n']
             self.assertEqual(test, self.modem.smsc)
