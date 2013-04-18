@@ -46,7 +46,8 @@ class WavecomMultiband900E1800(FakeModem):
                  'AT+CPMS=?\r': ['+CPMS: (("SM","BM","SR"),("SM"))\r\n', 'OK\r\n'],
                  'AT+CPMS="SM","SM"\r': ['+CPMS: 14,50,14,50\r\n', 'OK\r\n'],
                  'AT+CNMI=2,1,0,2\r': ['OK\r\n'],
-                 'AT+CVHU=0\r': ['ERROR\r\n']}
+                 'AT+CVHU=0\r': ['ERROR\r\n'],
+                 'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
         
     def getAtdResponse(self, number):
         return []
@@ -97,7 +98,8 @@ class HuaweiK3715(FakeModem):
 $QCPDPLT,$QCPWRDN,$QCDGEN,$BREW,$QCSYSMODE,^CVOICE,^DDSETEX,^pcmrecord,^SYSINFO,^SYSCFG,^IMSICHG,\
 ^HS,^DTMF,^EARST,^CDUR,^LIGHT,^CPBR,^CPBW,^HWVER,^HVER,^DSFLOWCLR,^DSFLOWQRY,^DSFLOWRPT,^SPN,\
 ^PORTSEL,^CPIN,^PNN,^OPL,^CPNN,^SN,^CARDLOCK,^BOOT,^FHVER,^CURC,^FREQLOCK,^HSDPA,^HSUPA,^CARDMODE,\
-^U2DIAG,^CELLMODE,^HSPA,^SCSIOVERTIME,^SETPID,^ADCTEMP,^OPWORD,^CPWORD,^DISLOG,^ANQUERY,^RSCPCFG,^ECIOCFG,\r\n', 'OK\r\n']}
+^U2DIAG,^CELLMODE,^HSPA,^SCSIOVERTIME,^SETPID,^ADCTEMP,^OPWORD,^CPWORD,^DISLOG,^ANQUERY,^RSCPCFG,^ECIOCFG,\r\n', 'OK\r\n'],
+                 'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
     
     def getAtdResponse(self, number):
         return ['OK\r\n']

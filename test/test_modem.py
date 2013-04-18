@@ -43,7 +43,8 @@ class MockSerialPackage(object):
             else:
                 self.responses = {'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
                                   'AT+CFUN?\r': ['+CFUN: 1\r\n', 'OK\r\n'],
-                                  'AT+WIND?\r': ['ERROR\r\n']} 
+                                  'AT+WIND?\r': ['ERROR\r\n'],
+                                  'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']} 
         
         def read(self, timeout=None):
             if len(self._readQueue) > 0:    
@@ -209,6 +210,31 @@ class TestGsmModemGeneralApi(unittest.TestCase):
         self.modem.serial.defaultResponse = 'ERROR\r\n'
         commands = self.modem.supportedCommands
         self.assertEqual(commands, None)
+        
+    def test_smsc(self):
+        """ Tests reading and writing the SMSC number from the SIM card """
+        def writeCallbackFunc1(data):
+            self.assertEqual('AT+CSCA?\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSCA?', data))
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc1
+        tests = [None, '+12345678']
+        for test in tests:
+            if test:
+                self.modem.serial.responseSequence = ['{0}\r\n'.format(test), 'OK\r\n']
+            else:
+                self.modem.serial.responseSequence = ['OK\r\n']
+            self.assertEqual(test, self.modem.smsc)
+        # Reset SMSC number internally
+        self.modem._smscNumber = None        
+        self.assertEqual(self.modem.smsc, None)
+        # Now test setting the SMSC number
+        for test in tests:
+            if not test:
+                continue
+            def writeCallbackFunc2(data):
+                self.assertEqual('AT+CSCA="{0}"\r'.format(test), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSCA="{0}"'.format(test), data))
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+            self.modem.smsc = test
+            self.assertEqual(test, self.modem.smsc)
 
 
 class TestGsmModemDial(unittest.TestCase):

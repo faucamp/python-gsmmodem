@@ -6,7 +6,7 @@ import re, logging, weakref, time, threading, abc
 from datetime import datetime
 
 from .serial_comms import SerialComms
-from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException, TimeoutException, PinRequiredError, IncorrectPinError
+from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException, TimeoutException, PinRequiredError, IncorrectPinError, SmscNumberUnknownError
 from .pdu import encodeSmsSubmitPdu, decodeSmsPdu
 from .util import SimpleOffsetTzInfo
 
@@ -52,6 +52,7 @@ class GsmModem(SerialComms):
         self.callStatusUpdates = [] # populated during connect() - contains regexes and handlers for detecting/handling call status updates
         self._writeWait = 0 # Time (in seconds to wait after writing a command (adjusted when 515 errors are detected)
         self._smsTextMode = False # Storage variable for the smsTextMode property
+        self._smscNumber = None # Default SMSC number
         
     def connect(self, pin=None):
         """ Opens the port and initializes the modem and SIM card
@@ -124,6 +125,8 @@ class GsmModem(SerialComms):
                 
         # SMS setup
         self.write('AT+CMGF={0}'.format(1 if self._smsTextMode else 0)) # Switch to text or PDU mode for SMS messages
+        if self._smscNumber != None:
+            self.write('AT+CSCA="{0}"'.format(self._smscNumber)) # Set default SMSC number
         self.write('AT+CSMP=49,167,0,0') # Enable delivery reports
         
         # Set message storage, but first check what the modem supports - example response: +CPMS: (("SM","BM","SR"),("SM"))
@@ -135,10 +138,10 @@ class GsmModem(SerialComms):
             if cpmsItems[i] not in cpmsSupport[i]:
                 cpmsItems[i] = ''
         self.write('AT+CPMS={0}'.format(','.join(cpmsItems))) # Set message storage        
-        #self.write('AT+CPMS="SM","SM","SR"') # Set message storage
+        
         self.write('AT+CNMI=2,1,0,2') # Set message notifications
         
-        # Incoming call notification setup        
+        # Incoming call notification setup
         try:
             self.write('AT+CLIP=1') # Enable calling line identification presentation
         except CommandError, clipError:
@@ -270,6 +273,26 @@ class GsmModem(SerialComms):
             if self.alive:
                 self.write('AT+CMGF={0}'.format(1 if textMode else 0))
             self._smsTextMode = textMode
+    
+    @property
+    def smsc(self):
+        """ @return: The default SMSC number stored on the SIM card """
+        if self._smscNumber == None:
+            try:
+                readSmsc = self.write('AT+CSCA?')
+            except SmscNumberUnknownError:
+                pass # Some modems return a CMS 330 error if the value isn't set
+            else:
+                if len(readSmsc) == 2:
+                    self._smscNumber = readSmsc[0]
+        return self._smscNumber
+    @smsc.setter
+    def smsc(self, smscNumber):
+        """ Set the default SMSC number to use when sending SMS messages """
+        if smscNumber != self._smscNumber:
+            if self.alive:
+                self.write('AT+CSCA="{0}"'.format(smscNumber))
+            self._smscNumber = smscNumber 
 
     def waitForNetworkCoverage(self, timeout=None):
         """ Block until the modem has GSM network coverage.
@@ -370,11 +393,10 @@ class GsmModem(SerialComms):
         threading.Thread(target=self.__threadedHandleModemNotification, kwargs={'lines': lines}).start()
     
     def __threadedHandleModemNotification(self, lines):
-        """ Implementation of _handleModemNotification() to be run in a separate thread 
+        """ Implementation of _handleModemNotification() to be run in a separate thread
         
         @param lines The lines that were read
-        """        
-        #firstLine = lines[0]
+        """
         for line in lines:
             if 'RING' in line:
                 # Incoming call (or existing call is ringing)

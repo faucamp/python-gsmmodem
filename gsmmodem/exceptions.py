@@ -28,12 +28,14 @@ class CommandError(GsmModemException):
     May optionally include an error type (CME or CMS) and -code (error-specific).
     """
     
+    _description = ''
+    
     def __init__(self, command=None, type=None, code=None):
         self.command = command
         self.type = type
         self.code = code
         if type != None and code != None:
-            super(CommandError, self).__init__('{0} {1}'.format(type, code))
+            super(CommandError, self).__init__('{0} {1}{2}'.format(type, code, ' ({0})'.format(self._description) if len(self._description) > 0 else ''))
 
 
 class CmeError(CommandError):
@@ -41,6 +43,7 @@ class CmeError(CommandError):
      
     Issued in response to an AT command
     """
+
     def __new__(cls, *args, **kwargs):
         # Return a specialized version of this class if possible
         if len(args) >= 2:
@@ -55,17 +58,9 @@ class CmeError(CommandError):
         super(CmeError, self).__init__(command, 'CME', code)
 
 
-class CmsError(CommandError):
-    """ Message service failure result code: +CMS ERROR : <er>
-    
-    Issued in response to an AT command
-    """
-    def __init__(self, command, code):
-        super(CmsError, self).__init__(command, 'CMS', code)
-
-
 class SecurityException(CmeError):
     """ Security-related CME error """
+
     def __init__(self, command, code):
         super(SecurityException, self).__init__(command, code)
 
@@ -73,15 +68,46 @@ class SecurityException(CmeError):
 class PinRequiredError(SecurityException):
     """ Raised if an operation failed because the SIM card's PIN has not been entered """
 
-    def __init__(self, command):
-        super(PinRequiredError, self).__init__(command, 11)
+    _description = 'SIM card PIN is required'
+
+    def __init__(self, command, code=11):
+        super(PinRequiredError, self).__init__(command, code)
 
 
 class IncorrectPinError(SecurityException):
     """ Raised if an incorrect PIN is entered """
 
+    _description = 'Incorrect PIN entered'
+
     def __init__(self, command, code=16):
-        super(IncorrectPinError, self).__init__(command, 16)
+        super(IncorrectPinError, self).__init__(command, code)
+
+
+class CmsError(CommandError):
+    """ Message service failure result code: +CMS ERROR : <er>
+    
+    Issued in response to an AT command
+    """
+
+    def __new__(cls, *args, **kwargs):
+        # Return a specialized version of this class if possible
+        if len(args) >= 2:
+            code = args[1]
+            if code == 330:
+                return SmscNumberUnknownError(args[0])
+        return super(CmsError, cls).__new__(cls, *args, **kwargs)
+    
+    def __init__(self, command, code):
+        super(CmsError, self).__init__(command, 'CMS', code)
+
+
+class SmscNumberUnknownError(CmsError):
+    """ Raised if the SMSC (service centre) address is missing when trying to send an SMS message """
+    
+    _description = 'SMSC number not set'
+
+    def __init__(self, command, code=330):
+        super(SmscNumberUnknownError, self).__init__(command, code)
 
 
 class EncodingError(GsmModemException):

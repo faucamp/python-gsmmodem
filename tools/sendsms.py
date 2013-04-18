@@ -47,6 +47,7 @@ def main():
     modem = GsmModem(args.port, args.baud)    
     # Uncomment the following line to see what the modem is doing:
     #logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
+    
     print('Connecting to GSM modem on {0}...'.format(args.port))
     try:
         modem.connect(args.pin)
@@ -55,8 +56,7 @@ def main():
         sys.exit(1)
     except IncorrectPinError:
         sys.stderr.write('Error: Incorrect SIM card PIN entered.\n')
-        sys.exit(1)
-    modem.smsTextMode = True
+        sys.exit(1)    
 
     print('Checking for network coverage...')
     try:
