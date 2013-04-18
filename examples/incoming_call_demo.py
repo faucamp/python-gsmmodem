@@ -14,6 +14,7 @@ import time, logging
 
 PORT = '/dev/ttyUSB2'
 BAUDRATE = 115200
+PIN = None # SIM card PIN (if any)
 
 from gsmmodem.modem import GsmModem
 from gsmmodem.exceptions import InterruptedException
@@ -46,7 +47,7 @@ def main():
     print('Initializing modem...')
     #logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
     modem = GsmModem(PORT, BAUDRATE, incomingCallCallbackFunc=handleIncomingCall)
-    modem.connect()
+    modem.connect(PIN)
     print('Waiting for incoming calls...')
     try:    
         modem.rxThread.join(2**31) # Specify a (huge) timeout so that it essentially blocks indefinitely, but still receives CTRL+C interrupt signal

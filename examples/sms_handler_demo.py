@@ -13,6 +13,7 @@ import logging
 
 PORT = '/dev/ttyUSB2'
 BAUDRATE = 115200
+PIN = None # SIM card PIN (if any)
 
 from gsmmodem.modem import GsmModem
 
@@ -28,7 +29,7 @@ def main():
     #logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
     modem = GsmModem(PORT, BAUDRATE, smsReceivedCallbackFunc=handleSms)
     modem.smsTextMode = False
-    modem.connect()
+    modem.connect(PIN)
     print('Waiting for SMS message...')
     try:    
         modem.rxThread.join(2**31) # Specify a (huge) timeout so that it essentially blocks indefinitely, but still receives CTRL+C interrupt signal

@@ -7,17 +7,18 @@ Simple script to send an SMS message
 @author: Francois Aucamp <francois.aucamp@gmail.com>
 """
 from __future__ import print_function
-import sys
+import sys, logging
 
 from gsmmodem.modem import GsmModem
-from gsmmodem.exceptions import TimeoutException
+from gsmmodem.exceptions import TimeoutException, PinRequiredError, IncorrectPinError
 
 def parseArgs():
     """ Argument parser for Python 2.7 and above """
     from argparse import ArgumentParser
     parser = ArgumentParser(description='Simple script for sending SMS messages')
-    parser.add_argument('-p', '--port', metavar='PORT', help='port to which the GSM modem is connected; a number or a device name.')
+    parser.add_argument('-i', '--port', metavar='PORT', help='port to which the GSM modem is connected; a number or a device name.')
     parser.add_argument('-b', '--baud', metavar='BAUDRATE', default=115200, help='set baud rate')
+    parser.add_argument('-p', '--pin', metavar='PIN', default=None, help='SIM card PIN')
     parser.add_argument('-d', '--deliver',  action='store_true', help='wait for SMS delivery report')
     parser.add_argument('destination', metavar='DESTINATION', help='destination mobile number')    
     return parser.parse_args()
@@ -26,8 +27,9 @@ def parseArgsPy26():
     """ Argument parser for Python 2.6 """
     from gsmtermlib.posoptparse import PosOptionParser, Option
     parser = PosOptionParser(description='Simple script for sending SMS messages')
-    parser.add_option('-p', '--port', metavar='PORT', help='port to which the GSM modem is connected; a number or a device name.')
+    parser.add_option('-i', '--port', metavar='PORT', help='port to which the GSM modem is connected; a number or a device name.')
     parser.add_option('-b', '--baud', metavar='BAUDRATE', default=115200, help='set baud rate')
+    parser.add_option('-p', '--pin', metavar='PIN', default=None, help='SIM card PIN')
     parser.add_option('-d', '--deliver',  action='store_true', help='wait for SMS delivery report')
     parser.add_positional_argument(Option('--destination', metavar='DESTINATION', help='destination mobile number'))    
     options, args = parser.parse_args()
@@ -39,10 +41,23 @@ def parseArgsPy26():
 
 def main():
     args = parseArgsPy26() if sys.version_info[0] == 2 and sys.version_info[1] < 7 else parseArgs()
-    modem = GsmModem(args.port)    
-    
-    print('Connecting to GSM modem on {0}...'.format(args.port))            
-    modem.connect()
+    if args.port == None:
+        sys.stderr.write('Error: No port specified. Please specify the port to which the GSM modem is connected using the -i argument.\n')
+        sys.exit(1)
+    modem = GsmModem(args.port, args.baud)    
+    # Uncomment the following line to see what the modem is doing:
+    #logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
+    print('Connecting to GSM modem on {0}...'.format(args.port))
+    try:
+        modem.connect(args.pin)
+    except PinRequiredError:
+        sys.stderr.write('Error: SIM card PIN required. Please specify a PIN with the -p argument.\n')
+        sys.exit(1)
+    except IncorrectPinError:
+        sys.stderr.write('Error: Incorrect SIM card PIN entered.\n')
+        sys.exit(1)
+    modem.smsTextMode = True
+
     print('Checking for network coverage...')
     try:
         modem.waitForNetworkCoverage(5)
@@ -55,7 +70,7 @@ def main():
         text = raw_input('> ')        
         print('\nSending SMS message...')
         try:
-            modem.sendSms(args.destination, text, waitForDelivery=True)
+            modem.sendSms(args.destination, text, waitForDeliveryReport=True)
         except TimeoutException:
             print('Failed to send message: the send operation timed out')
             modem.close()

@@ -6,7 +6,7 @@ import re, logging, weakref, time, threading, abc
 from datetime import datetime
 
 from .serial_comms import SerialComms
-from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException, TimeoutException
+from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException, TimeoutException, PinRequiredError, IncorrectPinError
 from .pdu import encodeSmsSubmitPdu, decodeSmsPdu
 from .util import SimpleOffsetTzInfo
 
@@ -53,10 +53,17 @@ class GsmModem(SerialComms):
         self._writeWait = 0 # Time (in seconds to wait after writing a command (adjusted when 515 errors are detected)
         self._smsTextMode = False # Storage variable for the smsTextMode property
         
-    def connect(self, runInit=True):
-        """ Opens the port and initializes the modem """
+    def connect(self, pin=None):
+        """ Opens the port and initializes the modem and SIM card
+         
+        @param pin: The SIM card PIN code, if any
+        @type pin: str
+        
+        @raise PinRequiredError: if the SIM card requires a PIN but none was provided
+        @raise IncorrectPinError: if the specified PIN is incorrect
+        """
         self.log.info('Connecting to modem on port %s at %dbps', self.port, self.baudrate)        
-        super(GsmModem, self).connect()                
+        super(GsmModem, self).connect()
         # Send some initialization commands to the modem        
         self.write('ATZ') # reset configuration
         self.write('ATE0') # echo off
@@ -68,7 +75,14 @@ class GsmModem(SerialComms):
             pass # just ignore if the +CFUN command isn't supported
          
         self.write('AT+CMEE=1') # enable detailed error messages
-        
+
+        # Unlock the SIM card if needed
+        if self.write('AT+CPIN?')[0] != '+CPIN: READY':
+            if pin != None:
+                self.write('AT+CPIN="{0}"'.format(pin))
+            else:
+                raise PinRequiredError('AT+CPIN')
+
         # Get list of supported commands from modem
         commands = self.supportedCommands
 
@@ -170,8 +184,9 @@ class GsmModem(SerialComms):
                 if cmErrorMatch:
                     errorType = cmErrorMatch.group(1)
                     errorCode = int(cmErrorMatch.group(2))
-                    if errorCode == 515:
+                    if errorCode == 515 or errorCode == 14:
                         # 515 means: "Please wait, init or command processing in progress."
+                        # 14 means "SIM busy"
                         self._writeWait += 0.2 # Increase waiting period temporarily
                         # Retry the command after waiting a bit
                         self.log.debug('515 error detected; self._writeWait adjusted to %ds', self._writeWait)

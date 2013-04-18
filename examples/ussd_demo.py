@@ -16,6 +16,7 @@ import logging
 PORT = '/dev/ttyUSB2'
 BAUDRATE = 115200
 USSD_STRING = '*101#'
+PIN = None # SIM card PIN (if any)
 
 from gsmmodem.modem import GsmModem
 
@@ -23,7 +24,7 @@ def main():
     print('Initializing modem...')
     #logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
     modem = GsmModem(PORT, BAUDRATE)
-    modem.connect()
+    modem.connect(PIN)
     modem.waitForNetworkCoverage(10)
     print('Sending USSD string: {0}'.format(USSD_STRING))
     response = modem.sendUssd(USSD_STRING) # response type: gsmmodem.modem.Ussd
