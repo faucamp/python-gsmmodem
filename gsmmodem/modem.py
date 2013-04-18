@@ -196,7 +196,10 @@ class GsmModem(SerialComms):
                         time.sleep(self._writeWait)
                         result = self.write(data, waitForResponse, timeout, parseError, writeTerm, expectedResponseTermSeq)
                         self.log.debug('self_writeWait set to 0.1 because of recovering from 515 error')
-                        self._writeWait = 0.1 # Set this to something sane for further commands
+                        if errorCode == 515:
+                            self._writeWait = 0.1 # Set this to something sane for further commands
+                        else:
+                            self._writeWait = 0 # The modem was just waiting for the SIM card
                         return result
                     if errorType == 'CME':
                         raise CmeError(data, int(errorCode))
