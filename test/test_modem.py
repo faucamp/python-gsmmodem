@@ -387,13 +387,13 @@ class TestSms(unittest.TestCase):
                        1,
                        datetime(2013, 3, 8, 15, 02, 16, tzinfo=SimpleOffsetTzInfo(2)),
                        '+2782913593',
-                       '06917228195339040A9110325476980000313080512061800CC8329BFD06DDDF72363904', 29),
+                       '06917228195339040A9110325476980000313080512061800CC8329BFD06DDDF72363904', 29, 142),
                       ('+9876543210', 
                        'Hallo\nhoe gaan dit?', 
                        4,
                        datetime(2013, 3, 8, 15, 02, 16, tzinfo=SimpleOffsetTzInfo(2)),
                        '+2782913593',
-                       '06917228195339040A91896745230100003130805120618013C8309BFD56A0DF65D0391C7683C869FA0F', 35)
+                       '06917228195339040A91896745230100003130805120618013C8309BFD56A0DF65D0391C7683C869FA0F', 35, 33),
                       )
     
     
@@ -404,40 +404,55 @@ class TestSms(unittest.TestCase):
         self.modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --', smsReceivedCallbackFunc=smsReceivedCallbackFunc)        
         self.modem.connect()
 
-    def Xtest_sendSmsTextMode(self):
+    def test_sendSmsTextMode(self):
         """ Tests sending SMS messages in text mode """
         self.initModem(None)
         self.modem.smsTextMode = True # Set modem to text mode
-        for number, message, index, smsTime, smsc, pdu, tpdu_length in self.tests:
+        for number, message, index, smsTime, smsc, pdu, tpdu_length, ref in self.tests:
+            self.modem._smsRef = ref
             def writeCallbackFunc(data):
                 def writeCallbackFunc2(data):
-                    self.assertEqual('{0}{1}'.format(message, chr(26)), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('{0}{1}'.format(message, chr(26)), data))                
+                    self.assertEqual('{0}{1}'.format(message, chr(26)), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('{0}{1}'.format(message, chr(26)), data))
+                    self.modem.serial.flushResponseSequence = True                
                 self.assertEqual('AT+CMGS="{0}"\r'.format(number), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS="{0}"'.format(number), data))
                 self.modem.serial.writeCallbackFunc = writeCallbackFunc2
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
-            self.modem.sendSms(number, message)        
-        self.modem.close()
-        
-    def Xtest_sendSmsPduMode(self):
-        """ Tests sending a SMS messages in PDU mode """
-        self.initModem(None)
-        self.modem.smsTextMode = False # Set modem to PDU mode        
-        for number, message, index, smsTime, smsc, pdu, sms_deliver_tpdu_length in self.tests:
-            calcPdu, tpdu_length = gsmmodem.pdu.encodeSmsSubmitPdu(number, message)
-            pduHex = str(calcPdu).encode('hex').upper()
-            def writeCallbackFunc(data):
-                def writeCallbackFunc2(data):
-                    self.assertEqual('{0}{1}'.format(pduHex, chr(26)), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('{0}{1}'.format(pduHex, chr(26)), data))                
-                self.assertEqual('AT+CMGS={0}\r'.format(tpdu_length), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS={0}'.format(tpdu_length), data))
-                self.modem.serial.writeCallbackFunc = writeCallbackFunc2
-            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            self.modem.serial.flushResponseSequence = False
+            self.modem.serial.responseSequence = ['> \r\n', '+CMGS: {0}\r\n'.format(ref), 'OK\r\n']
             sms = self.modem.sendSms(number, message)
             self.assertIsInstance(sms, gsmmodem.modem.SentSms)
             self.assertEqual(sms.number, number, 'Sent SMS has invalid number. Expected "{0}", got "{1}"'.format(number, sms.number))
             self.assertEqual(sms.text, message, 'Sent SMS has invalid text. Expected "{0}", got "{1}"'.format(message, sms.text))
+            self.assertIsInstance(sms.reference, int, 'Sent SMS reference type incorrect. Expected "{0}", got "{1}"'.format(int, type(sms.reference)))
+            self.assertEqual(sms.reference, ref, 'Sent SMS reference incorrect. Expected "{0}", got "{1}"'.format(ref, sms.reference))
+        self.modem.close()
+        
+    def test_sendSmsPduMode(self):
+        """ Tests sending a SMS messages in PDU mode """
+        self.initModem(None)
+        self.modem.smsTextMode = False # Set modem to PDU mode        
+        for number, message, index, smsTime, smsc, pdu, sms_deliver_tpdu_length, ref in self.tests:
+            self.modem._smsRef = ref
+            calcPdu, tpdu_length = gsmmodem.pdu.encodeSmsSubmitPdu(number, message, ref)
+            pduHex = str(calcPdu).encode('hex').upper()
+            def writeCallbackFunc(data):
+                def writeCallbackFunc2(data):
+                    self.assertEqual('{0}{1}'.format(pduHex, chr(26)), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('{0}{1}'.format(pduHex, chr(26)), data))
+                    self.modem.serial.flushResponseSequence = True                
+                self.assertEqual('AT+CMGS={0}\r'.format(tpdu_length), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS={0}'.format(tpdu_length), data))
+                self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            self.modem.serial.flushResponseSequence = False
+            self.modem.serial.responseSequence = ['> \r\n', '+CMGS: {0}\r\n'.format(ref), 'OK\r\n']            
+            sms = self.modem.sendSms(number, message)
+            self.assertIsInstance(sms, gsmmodem.modem.SentSms)
+            self.assertEqual(sms.number, number, 'Sent SMS has invalid number. Expected "{0}", got "{1}"'.format(number, sms.number))
+            self.assertEqual(sms.text, message, 'Sent SMS has invalid text. Expected "{0}", got "{1}"'.format(message, sms.text))
+            self.assertIsInstance(sms.reference, int, 'Sent SMS reference type incorrect. Expected "{0}", got "{1}"'.format(int, type(sms.reference)))
+            self.assertEqual(sms.reference, ref, 'Sent SMS reference incorrect. Expected "{0}", got "{1}"'.format(ref, sms.reference))
         self.modem.close()
     
-    def Xtest_receiveSmsTextMode(self):
+    def test_receiveSmsTextMode(self):
         """ Tests receiving SMS messages in text mode """
         callbackInfo = [False, '', '', -1, None, '']
         def smsReceivedCallbackFuncText(sms):
@@ -454,7 +469,7 @@ class TestSms(unittest.TestCase):
 
         self.initModem(smsReceivedCallbackFunc=smsReceivedCallbackFuncText)
         self.modem.smsTextMode = True # Set modem to text mode
-        for number, message, index, smsTime, smsc, pdu, tpdu_length in self.tests:            
+        for number, message, index, smsTime, smsc, pdu, tpdu_length, ref in self.tests:            
             # Wait for the handler function to finish
             callbackInfo[0] = False # "done" flag
             callbackInfo[1] = number
@@ -496,7 +511,7 @@ class TestSms(unittest.TestCase):
 
         self.initModem(smsReceivedCallbackFunc=smsReceivedCallbackFuncPdu)
         self.modem.smsTextMode = False # Set modem to PDU mode
-        for number, message, index, smsTime, smsc, pdu, tpdu_length in self.tests:            
+        for number, message, index, smsTime, smsc, pdu, tpdu_length, ref in self.tests:            
             # Wait for the handler function to finish
             callbackInfo[0] = False # "done" flag
             callbackInfo[1] = number

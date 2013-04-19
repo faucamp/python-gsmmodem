@@ -9,7 +9,7 @@ Simple script to send an SMS message
 from __future__ import print_function
 import sys, logging
 
-from gsmmodem.modem import GsmModem
+from gsmmodem.modem import GsmModem, SentSms
 from gsmmodem.exceptions import TimeoutException, PinRequiredError, IncorrectPinError
 
 def parseArgs():
@@ -56,8 +56,7 @@ def main():
         sys.exit(1)
     except IncorrectPinError:
         sys.stderr.write('Error: Incorrect SIM card PIN entered.\n')
-        sys.exit(1)    
-
+        sys.exit(1)
     print('Checking for network coverage...')
     try:
         modem.waitForNetworkCoverage(5)
@@ -67,17 +66,23 @@ def main():
         sys.exit(1)
     else:
         print('\nPlease type your message and press enter to send it:')
-        text = raw_input('> ')        
-        print('\nSending SMS message...')
+        text = raw_input('> ')
+        if args.deliver:
+            print ('\nSending SMS and waiting for delivery report...')
+        else:
+            print('\nSending SMS message...')
         try:
-            modem.sendSms(args.destination, text, waitForDeliveryReport=True)
+            sms = modem.sendSms(args.destination, text, waitForDeliveryReport=args.deliver)
         except TimeoutException:
             print('Failed to send message: the send operation timed out')
             modem.close()
             sys.exit(1)
         else:
             modem.close()
-            print('Message sent.')
+            if sms.report:
+                print('Message sent{0}'.format(' and delivered OK.' if sms.status == SentSms.DELIVERED else ', but delivery failed.'))
+            else:
+                print('Message sent.')
 
 if __name__ == '__main__':
     main()

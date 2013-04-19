@@ -30,8 +30,7 @@ def main():
     modem = GsmModem(PORT, BAUDRATE, smsReceivedCallbackFunc=handleSms)
     modem.smsTextMode = True    
     modem.connect(PIN)
-    print('Waiting for SMS message...')
-    modem.sendSms('+27829207025', 'test1')
+    print('Waiting for SMS message...')    
     try:    
         modem.rxThread.join(2**31) # Specify a (huge) timeout so that it essentially blocks indefinitely, but still receives CTRL+C interrupt signal
     finally:

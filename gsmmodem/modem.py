@@ -26,15 +26,15 @@ class GsmModem(SerialComms):
     # Used for parsing new SMS message indications
     CMTI_REGEX = re.compile(r'^\+CMTI:\s*([^,]+),(\d+)$')
     # Used for parsing SMS message reads (text mode)
-    CMGR_SM_DELIVER_REGEX_TEXT = re.compile(r'^\+CMGR: "([^"]+)","([^"]+)",[^,]*,"([^"]+)"$')
+    CMGR_SM_DELIVER_REGEX_TEXT = None
     # Used for parsing SMS status report message reads (text mode)
-    CMGR_SM_REPORT_REGEXT_TEXT = re.compile(r'^\+CMGR: "([^"]+)",\d+,(\d+),"{0,1}([^"]*)"{0,1},\d*,"([^"]+)","([^"]+)",(\d+)$')
+    CMGR_SM_REPORT_REGEXT_TEXT = None
     # Used for parsing SMS message reads (PDU mode)
-    CMGR_SM_DELIVER_REGEX_PDU = re.compile(r'^\+CMGR: (\d+),(\d*),(\d+)$')
+    CMGR_REGEX_PDU = None
     # Used for parsing USSD event notifications
     CUSD_REGEX = re.compile(r'^\+CUSD:\s*(\d),"(.*)",(\d+)$', re.DOTALL)
     # Used for parsing SMS status reports
-    CDSI_REGEX = re.compile(r'\+CDSI:\s*"([^,]+)",(\d+)$')    
+    CDSI_REGEX = re.compile(r'\+CDSI:\s*"([^,]+)",(\d+)$')
     
     def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallback=None):
         super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification)
@@ -47,10 +47,11 @@ class GsmModem(SerialComms):
         self._extendedIncomingCallIndication = False
         # Current active calls (ringing and/or answered), key is the unique call ID (not the remote number)
         self.activeCalls = {}
-        # Dict containing sent SMS messages (to track their delivery status)
-        self.sentSms = {}
+        # Dict containing sent SMS messages (for auto-tracking their delivery status)
+        self.sentSms = weakref.WeakValueDictionary()
         self._ussdSessionEvent = None # threading.Event
         self._ussdResponse = None # gsmmodem.modem.Ussd
+        self._smsStatusReportEvent = None # threading.Event
         self._dialEvent = None # threading.Event
         self._dialResponse = None # gsmmodem.modem.Call
         self._waitForAtdResponse = True # Flag that controls if we should wait for an immediate response to ATD, or not
@@ -131,6 +132,7 @@ class GsmModem(SerialComms):
                 
         # SMS setup
         self.write('AT+CMGF={0}'.format(1 if self._smsTextMode else 0)) # Switch to text or PDU mode for SMS messages
+        self._compileSmsRegexes()
         if self._smscNumber != None:
             self.write('AT+CSCA="{0}"'.format(self._smscNumber)) # Set default SMSC number
         self.write('AT+CSMP=49,167,0,0') # Enable delivery reports
@@ -282,7 +284,17 @@ class GsmModem(SerialComms):
             if self.alive:
                 self.write('AT+CMGF={0}'.format(1 if textMode else 0))
             self._smsTextMode = textMode
-    
+            self._compileSmsRegexes()
+            
+    def _compileSmsRegexes(self):
+        """ Compiles regular expression used for parsing SMS messages based on current mode """
+        if self._smsTextMode:
+            if self.CMGR_SM_DELIVER_REGEX_TEXT == None:
+                self.CMGR_SM_DELIVER_REGEX_TEXT = re.compile(r'^\+CMGR: "([^"]+)","([^"]+)",[^,]*,"([^"]+)"$')
+                self.CMGR_SM_REPORT_REGEXT_TEXT = re.compile(r'^\+CMGR: "([^"]+)",\d+,(\d+),"{0,1}([^"]*)"{0,1},\d*,"([^"]+)","([^"]+)",(\d+)$')
+        elif self.CMGR_REGEX_PDU == None:
+            self.CMGR_REGEX_PDU = re.compile(r'^\+CMGR: (\d+),(\d*),(\d+)$')
+            
     @property
     def smsc(self):
         """ @return: The default SMSC number stored on the SIM card """
@@ -340,21 +352,31 @@ class GsmModem(SerialComms):
         
         @param destination: The recipient's phone number
         @param text: The message text
-        """
-        sms = SentSms(destination, text)
+        """        
         if self._smsTextMode:
             self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq='> ')
-            self.write(text, timeout=15, writeTerm=chr(26))
+            result = self.write(text, timeout=15, writeTerm=chr(26))[0]
         else:
             smsPdu, tpduLength = encodeSmsSubmitPdu(destination, text, reference=self._smsRef)
             smsPduHex = str(smsPdu).encode('hex').upper()
             self.write('AT+CMGS={0}'.format(tpduLength), timeout=3, expectedResponseTermSeq='> ')
-            self.write(smsPduHex, timeout=15, writeTerm=chr(26))
-            self._smsRef += 1
-            if self._smsRef > 255:
-                self._smsRef = 1
+            result = self.write(smsPduHex, timeout=15, writeTerm=chr(26))[0] # example: +CMGS: xx
+        reference = int(result[7:])
+        self._smsRef = reference + 1
+        if self._smsRef > 255:
+            self._smsRef = 0
+        sms = SentSms(destination, text, reference)
+        # Add a weak-referenced entry for this SMS (allows us to update the SMS state if a status report is received)
+        self.sentSms[reference] = sms
+        if waitForDeliveryReport:
+            self._smsStatusReportEvent = threading.Event()
+            if self._smsStatusReportEvent.wait(deliveryTimeout):
+                self._smsStatusReportEvent = None
+            else: # Response timed out
+                self._smsStatusReportEvent = None
+                raise TimeoutException()
         return sms
-    
+
     def sendUssd(self, ussdString, responseTimeout=15):
         """ Starts a USSD session by dialing the the specified USSD string, or \
         sends the specified string in the existing USSD session (if any)
@@ -510,7 +532,7 @@ class GsmModem(SerialComms):
             msgIndex = cmtiMatch.group(2)
             sms = self._readStoredSmsMessage(msgIndex)
             self._deleteStoredMessage(msgIndex)
-            self.smsReceivedCallback(sms)            
+            self.smsReceivedCallback(sms)
     
     def _handleSmsStatusReport(self, notificationLine):
         """ Handler for SMS status reports """
@@ -520,7 +542,15 @@ class GsmModem(SerialComms):
             msgIndex = cdsiMatch.group(2)
             report = self._readStoredSmsMessage(msgIndex)
             self._deleteStoredMessage(msgIndex)
-            self.smsStatusReportCallback(report)
+            # Update sent SMS status if possible            
+            if report.reference in self.sentSms:                
+                self.sentSms[report.reference].report = report
+            if self._smsStatusReportEvent:                
+                # A sendSms() call is waiting for this response - notify waiting thread
+                self._smsStatusReportEvent.set()
+            else:
+                # Nothing is waiting for this report directly - use callback
+                self.smsStatusReportCallback(report)
     
     def _readStoredSmsMessage(self, msgIndex):
         msgData = self.write('AT+CMGR={0}'.format(msgIndex))
@@ -551,7 +581,7 @@ class GsmModem(SerialComms):
                 else:
                     raise CommandError('Failed to parse the SMS message +CMGR response: {0}'.format(msgData))
         else:
-            cmgrMatch = self.CMGR_SM_DELIVER_REGEX_PDU.match(msgData[0])
+            cmgrMatch = self.CMGR_REGEX_PDU.match(msgData[0])
             if not cmgrMatch:
                 raise CommandError('Failed to parse the SMS message +CMGR response: {0}'.format(msgData))
             stat, alpha, length = cmgrMatch.groups()
@@ -719,14 +749,27 @@ class SentSms(Sms):
     """ An SMS message that has been sent (MO) """
         
     ENROUTE = 0 # Status indicating message is still enroute to destination
-    RECEIVED = 1 # Status indicating message has been received by destination handset
+    DELIVERED = 1 # Status indicating message has been received by destination handset
     FAILED = 2 # Status indicating message delivery has failed
 
-    def __init__(self, number, text, smsc=None):
+    def __init__(self, number, text, reference, smsc=None):
         super(SentSms, self).__init__(number, text, smsc)
-        self.status = SentSms.ENROUTE
+        self.report = None # Status report for this SMS (StatusReport object)
+        self.reference = reference
         
+    @property
+    def status(self):
+        """ Status of this SMS. Can be ENROUTE, DELIVERED or FAILED
         
+        The actual status report object may be accessed via the 'report' attribute
+        if status is 'DELIVERED' or 'FAILED'
+        """
+        if self.report == None:
+            return SentSms.ENROUTE
+        else:
+            return SentSms.DELIVERED if self.report.deliveryStatus == StatusReport.DELIVERED else SentSms.FAILED
+
+
 class StatusReport(Sms):
     """ An SMS status/delivery report 
     

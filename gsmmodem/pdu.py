@@ -53,7 +53,7 @@ class SmsPduTzInfo(tzinfo):
         return timedelta(0)
     
 
-def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, rejectDuplicates=False):
+def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requestStatusReport=True, rejectDuplicates=False):
     """ Creates an SMS-SUBMIT PDU for sending a message with the specified text to the specified number
     
     @param number: the destination mobile number
@@ -93,6 +93,8 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, reje
     else:
         validityPeriod = None
     if rejectDuplicates:
+        tpduFirstOctet |= 0x04 # bit2 == 1
+    if requestStatusReport:
         tpduFirstOctet |= 0x20 # bit5 == 1
     pdu.append(tpduFirstOctet)
     pdu.append(reference) # message reference

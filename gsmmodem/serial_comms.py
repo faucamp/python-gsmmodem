@@ -69,8 +69,7 @@ class SerialComms(object):
                 #print 'notification:', self._notification
                 self.log.debug('notification: %s', self._notification)
                 self.notifyCallback(self._notification)
-                self._notification = []
-                
+                self._notification = []                
 
     def _placeholderCallback(self, *args, **kwargs):
         """ Placeholder callback function (does nothing) """
