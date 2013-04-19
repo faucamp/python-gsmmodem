@@ -1,3 +1,9 @@
+* Fri Apr 19 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.7
+- Support added for tracking SMS status reports
+- PIN unlock support
+- SMS API cleaned up
+- Bugfixes
+
 * Tue Apr 03 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.6
 - Added support for PDU mode SMS
 - Default SMS read/write mode is now PDU mode

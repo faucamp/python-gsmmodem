@@ -10,7 +10,7 @@ except ImportError:
 with open('requirements.txt') as f:
     requires = f.readlines() 
 
-VERSION = 0.6
+VERSION = 0.7
 
 setup(name='python-gsmmodem',
       version='{0}'.format(VERSION),
@@ -32,6 +32,7 @@ Its features include:
 - easy-to-use API for starting and responding to USSD sessions and making voice calls
 - handling incoming phone calls and received SMS messages via callback methods
 - support for SMS PDU and text mode
+- support for tracking SMS status reports
 - wraps AT command errors into Python exceptions by default
 - modular design; you easily issue your own AT commands to the modem with error
   (with error checking), or read/write directly from/to the modem if you prefer
