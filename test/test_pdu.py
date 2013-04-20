@@ -6,7 +6,7 @@
 import sys, unittest, random
 from datetime import datetime, timedelta
 
-import compat # For Python 2.6 compatibility
+from . import compat # For Python 2.6 compatibility
 
 import gsmmodem.pdu
 from gsmmodem.util import SimpleOffsetTzInfo

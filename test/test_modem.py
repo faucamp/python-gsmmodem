@@ -7,14 +7,14 @@ from __future__ import print_function
 import time, unittest, logging
 from datetime import datetime
 
-import compat # For Python 2.6 compatibility
+from . import compat # For Python 2.6 compatibility
 
 import gsmmodem.serial_comms
 import gsmmodem.modem
 import gsmmodem.pdu
 from gsmmodem.util import SimpleOffsetTzInfo
 
-import fakemodems
+from . import fakemodems
 
 # The fake modem to use (if any)
 FAKE_MODEM = None
