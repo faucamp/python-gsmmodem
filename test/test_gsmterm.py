@@ -6,7 +6,12 @@ import sys, unittest
 
     
 import compat # For Python 2.6 compatibility
-import gsmtermlib.trie
+try:
+    import gsmtermlib.trie
+except ImportError:
+    # "python -m unittest discover" run from project root
+    sys.path.insert(0, 'tools')
+    import gsmtermlib.trie
 
 class TestTrie(unittest.TestCase):
     """ Tests the trie implementation used by GsmTerm """    
