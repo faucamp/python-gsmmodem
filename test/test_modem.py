@@ -385,13 +385,13 @@ class TestSms(unittest.TestCase):
     def setUp(self):
         self.tests = (('+0123456789', 'Hello world!',                        
                        1,
-                       datetime(2013, 3, 8, 15, 02, 16, tzinfo=SimpleOffsetTzInfo(2)),
+                       datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
                        '+2782913593',
                        '06917228195339040A9110325476980000313080512061800CC8329BFD06DDDF72363904', 29, 142),
                       ('+9876543210', 
                        'Hallo\nhoe gaan dit?', 
                        4,
-                       datetime(2013, 3, 8, 15, 02, 16, tzinfo=SimpleOffsetTzInfo(2)),
+                       datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
                        '+2782913593',
                        '06917228195339040A91896745230100003130805120618013C8309BFD56A0DF65D0391C7683C869FA0F', 35, 33),
                       )
