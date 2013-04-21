@@ -404,7 +404,7 @@ class TestSms(unittest.TestCase):
         self.modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --', smsReceivedCallbackFunc=smsReceivedCallbackFunc)        
         self.modem.connect()
 
-    def Xtest_sendSmsTextMode(self):
+    def test_sendSmsTextMode(self):
         """ Tests sending SMS messages in text mode """
         self.initModem(None)
         self.modem.smsTextMode = True # Set modem to text mode
@@ -427,7 +427,7 @@ class TestSms(unittest.TestCase):
             self.assertEqual(sms.reference, ref, 'Sent SMS reference incorrect. Expected "{0}", got "{1}"'.format(ref, sms.reference))
         self.modem.close()
         
-    def Xtest_sendSmsPduMode(self):
+    def test_sendSmsPduMode(self):
         """ Tests sending a SMS messages in PDU mode """
         self.initModem(None)
         self.modem.smsTextMode = False # Set modem to PDU mode        
@@ -452,7 +452,7 @@ class TestSms(unittest.TestCase):
             self.assertEqual(sms.reference, ref, 'Sent SMS reference incorrect. Expected "{0}", got "{1}"'.format(ref, sms.reference))
         self.modem.close()
     
-    def Xtest_receiveSmsTextMode(self):
+    def test_receiveSmsTextMode(self):
         """ Tests receiving SMS messages in text mode """
         callbackInfo = [False, '', '', -1, None, '']
         def smsReceivedCallbackFuncText(sms):
