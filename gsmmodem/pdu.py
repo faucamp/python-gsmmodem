@@ -214,7 +214,9 @@ def _encodeRelativeValidityPeriod(validityPeriod):
     @type validityPeriod: datetime.timedelta
     @rtype: int
     """
-    seconds = validityPeriod.total_seconds()
+    # Python 2.6 does not have timedelta.total_seconds(), so compute it manually
+    #seconds = validityPeriod.total_seconds()
+    seconds = validityPeriod.seconds + (validityPeriod.days * 24 * 3600)
     if seconds <= 43200: # 12 hours
         tpVp = (seconds / 300) - 1 # divide by 5 minutes, subtract 1
     elif seconds <= 86400: # 24 hours
