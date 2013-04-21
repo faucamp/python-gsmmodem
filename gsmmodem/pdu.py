@@ -2,14 +2,29 @@
 
 """ SMS PDU encoding methods """
 
-import sys
+from __future__ import unicode_literals
+
+import sys, codecs
 from datetime import datetime, timedelta, tzinfo
 
 from .exceptions import EncodingError
 
+# For Python 3 support
+PYTHON_VERSION = sys.version_info[0]
+if PYTHON_VERSION >= 3:
+    MAX_INT = sys.maxsize
+    dictItemsIter = dict.items
+    xrange = range
+    #toByteArray = lambda x: bytearray(codecs.decode(x, 'hex_codec')) if type(x) in (bytes, str) else x
+    toByteArray = lambda x: bytearray(codecs.decode(x, 'hex_codec')) if type(x) == bytes else bytearray(codecs.decode(bytes(x, 'ascii'), 'hex_codec')) if type(x)  == str else x
+else:
+    MAX_INT = sys.maxint
+    dictItemsIter = dict.iteritems
+    toByteArray = lambda x: bytearray(x.decode('hex')) if type(x) in (str, unicode) else x
+
 # Tables can be found at: http://en.wikipedia.org/wiki/GSM_03.38#GSM_7_bit_default_alphabet_and_extension_table_of_3GPP_TS_23.038_.2F_GSM_03.38
-GSM7_BASIC = (u'@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ`¿abcdefghijklmnopqrstuvwxyzäöñüà')
-GSM7_EXTENDED = {chr(0xFF): chr(0x0A),
+GSM7_BASIC = ('@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ`¿abcdefghijklmnopqrstuvwxyzäöñüà')
+GSM7_EXTENDED = {chr(0xFF): 0x0A,
                  #CR2: chr(0x0D),
                  '^':  chr(0x14),
                  #SS2: chr(0x1B),
@@ -20,7 +35,7 @@ GSM7_EXTENDED = {chr(0xFF): chr(0x0A),
                  '~':  chr(0x3D),
                  ']':  chr(0x3E),
                  '|':  chr(0x40),
-                 u'€':  chr(0x65)}
+                 '€':  chr(0x65)}
 
 class SmsPduTzInfo(tzinfo):
     """ Simple implementation of datetime.tzinfo for handling timestamp GMT offsets specified in SMS PDUs """
@@ -131,8 +146,7 @@ def decodeSmsPdu(pdu):
     @return: The decoded SMS data as a dictionary
     @rtype: dict    
     """ 
-    if type(pdu) == str:
-        pdu = bytearray(pdu.decode('hex'))       
+    pdu = toByteArray(pdu)
     result = {}
     pduIter = iter(pdu)
  
@@ -140,54 +154,54 @@ def decodeSmsPdu(pdu):
     result['smsc'] = smscNumber
     result['tpdu_length'] = len(pdu) - smscBytesRead
     
-    tpduFirstOctet = pduIter.next() 
+    tpduFirstOctet = next(pduIter) 
     
     pduType = tpduFirstOctet & 0x03 # bits 1-0
     if pduType == 0x00: # SMS-DELIVER or SMS-DELIVER REPORT        
         result['type'] = 'SMS-DELIVER'
         result['number'] = _decodeAddressField(pduIter)[0]
-        result['protocol_id'] = pduIter.next()
-        dataCoding = _decodeDataCoding(pduIter.next())
+        result['protocol_id'] = next(pduIter)
+        dataCoding = _decodeDataCoding(next(pduIter))
         result['time'] = _decodeTimestamp(pduIter)
-        userDataLen = pduIter.next()
+        userDataLen = next(pduIter)
         if dataCoding == 0x00: # GSM-7
             userDataSeptets = unpackSeptets(pduIter, userDataLen)
             result['text'] = decodeGsm7(userDataSeptets)
         elif dataCoding == 0x02: # UCS2
             userData = []
             for i in xrange(userDataLen):
-                userData.append(chr(pduIter.next()))
+                userData.append(chr(next(pduIter)))
             result['text'] = ''.join(userData).decode('utf-16')
         else:
             result['text'] = ''        
     elif pduType == 0x01: # SMS-SUBMIT or SMS-SUBMIT-REPORT
         result['type'] = 'SMS-SUBMIT'
-        result['reference'] = pduIter.next() # message reference - we don't really use this
+        result['reference'] = next(pduIter) # message reference - we don't really use this
         result['number'] = _decodeAddressField(pduIter)[0]
-        result['protocol_id'] = pduIter.next()
-        dataCoding = _decodeDataCoding(pduIter.next())
+        result['protocol_id'] = next(pduIter)
+        dataCoding = _decodeDataCoding(next(pduIter))
         validityPeriodFormat = (tpduFirstOctet & 0x18) >> 3 # bits 4,3
         if validityPeriodFormat == 0x02: # TP-VP field present and integer represented (relative)
-            result['validity'] = _decodeRelativeValidityPeriod(pduIter.next())
+            result['validity'] = _decodeRelativeValidityPeriod(next(pduIter))
         elif validityPeriodFormat == 0x03: # TP-VP field present and semi-octet represented (absolute)            
             result['validity'] = _decodeTimestamp(pduIter)
-        userDataLen = pduIter.next()
+        userDataLen = next(pduIter)
         if dataCoding == 0x00: # GSM-7
             userDataSeptets = unpackSeptets(pduIter, userDataLen)
             result['text'] = decodeGsm7(userDataSeptets)
         elif dataCoding == 0x02: # UCS2
             for i in xrange(userDataLen):
-                userData.append(pduIter.next())
+                userData.append(next(pduIter))
             result['text'] = ''.join(userData).decode('utf-16')
         else:
             result['text'] = ''        
     elif pduType == 0x02: # SMS-STATUS-REPORT or SMS-COMMAND
         result['type'] = 'SMS-STATUS-REPORT'
-        result['reference'] = pduIter.next()
+        result['reference'] = next(pduIter)
         result['number'] = _decodeAddressField(pduIter)[0]
         result['time'] = _decodeTimestamp(pduIter)
         result['discharge'] = _decodeTimestamp(pduIter)
-        result['status'] = pduIter.next()        
+        result['status'] = next(pduIter)        
     else:
         raise EncodingError('Unknown SMS message type: {0}. First TPDU octect was: {1}'.format(pduType, tpduFirstOctet))
     
@@ -257,7 +271,7 @@ def _decodeDataCoding(octet):
     # We ignore other coding groups
     return 0    
 
-def _decodeAddressField(byteIter, smscField=False):
+def _decodeAddressField(byteIter, smscField=False, log=False):
     """ Decodes the address field at the current position of the bytearray iterator
     
     @param byteIter: Iterator over bytearray
@@ -266,9 +280,9 @@ def _decodeAddressField(byteIter, smscField=False):
     @return: Tuple containing the address value and amount of bytes read (value is or None if it is empty (zero-length))
     @rtype: tuple
     """
-    addressLen = byteIter.next()
+    addressLen = next(byteIter)
     if addressLen > 0:
-        toa = byteIter.next()
+        toa = next(byteIter)
         ton = (toa & 0x70) # bits 6,5,4 of type-of-address == type-of-number
         if ton == 0x50: 
             # Alphanumberic number            
@@ -282,7 +296,10 @@ def _decodeAddressField(byteIter, smscField=False):
             if smscField:
                 addressValue = decodeSemiOctets(byteIter, addressLen-1)
             else:
-                addressLen = int(round(addressLen / 2.0))
+                if addressLen % 2:
+                    addressLen = int(addressLen / 2) + 1
+                else:
+                    addressLen = int(addressLen / 2)                
                 addressValue = decodeSemiOctets(byteIter, addressLen)
                 addressLen += 1 # for the return value, add the toa byte
             if ton == 0x10: # International number
@@ -393,15 +410,17 @@ def encodeGsm7(plaintext, discardInvalid=False):
     @rtype: bytearray
     """
     result = bytearray()
+    if PYTHON_VERSION >= 3: 
+        plaintext = str(plaintext)
     for char in plaintext:
         idx = GSM7_BASIC.find(char)
         if idx != -1:
-            result.append(chr(idx))
+            result.append(idx)
         elif char in GSM7_EXTENDED:
-            result.append(chr(0x1B)) # ESC - switch to extended table
-            result.append(GSM7_EXTENDED[char])
+            result.append(0x1B) # ESC - switch to extended table
+            result.append(ord(GSM7_EXTENDED[char]))
         elif not discardInvalid:
-            raise ValueError(u'Cannot encode char "{0}" using GSM-7 encoding'.format(char))
+            raise ValueError('Cannot encode char "{0}" using GSM-7 encoding'.format(char))
     return result
 
 def decodeGsm7(encodedText):
@@ -421,8 +440,8 @@ def decodeGsm7(encodedText):
     iterEncoded = iter(encodedText)
     for b in iterEncoded:
         if b == 0x1B: # ESC - switch to extended table
-            c = chr(iterEncoded.next())
-            for char, value in GSM7_EXTENDED.iteritems():
+            c = chr(next(iterEncoded))
+            for char, value in dictItemsIter(GSM7_EXTENDED):
                 if c == value:
                     result.append(char)
                     break
@@ -444,7 +463,7 @@ def packSeptets(octets):
     elif type(octets) == bytearray:
         octets = iter(octets)
     shift = 0
-    prevSeptet = octets.next()
+    prevSeptet = next(octets)
     for octet in octets:
         septet = octet & 0x7f;
         if shift == 7:
@@ -478,7 +497,7 @@ def unpackSeptets(septets, numberOfSeptets=None):
     elif type(septets) == bytearray:
         septets = iter(septets)    
     if numberOfSeptets == None:        
-        numberOfSeptets = sys.maxint # Loop until StopIteration
+        numberOfSeptets = MAX_INT # Loop until StopIteration
     shift = 7
     prevOctet = None
     i = 0

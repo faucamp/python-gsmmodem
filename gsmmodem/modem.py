@@ -2,7 +2,7 @@
 
 """ High-level API classes for an attached GSM modem """
 
-import re, logging, weakref, time, threading, abc
+import sys, re, logging, weakref, time, threading, abc
 from datetime import datetime
 
 from .serial_comms import SerialComms
@@ -11,6 +11,11 @@ from .pdu import encodeSmsSubmitPdu, decodeSmsPdu
 from .util import SimpleOffsetTzInfo
 
 from . import compat # For Python 2.6 compatibility
+if sys.version_info[0] >= 3:
+    xrange = range
+    dictValuesIter = dict.values
+else:
+    dictValuesIter = dict.itervalues
 
 class GsmModem(SerialComms):
     """ Main class for interacting with an attached GSM modem """
@@ -485,7 +490,7 @@ class GsmModem(SerialComms):
             callerNumber = ton = callerName = None
         
         call = None
-        for activeCall in self.activeCalls.itervalues():
+        for activeCall in dictValuesIter(self.activeCalls):
             if activeCall.number == callerNumber:
                 call = activeCall
                 call.ringCount += 1
@@ -513,7 +518,7 @@ class GsmModem(SerialComms):
             self.activeCalls[callId].answered = True
         else:
             # Call ID not available for this notificaiton - check for the first outgoing call that has not been answered
-            for call in self.activeCalls.itervalues():
+            for call in dictValuesIter(self.activeCalls):
                 if call.answered == False and type(call) == Call:
                     call.answered = True
                     return

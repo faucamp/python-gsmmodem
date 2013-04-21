@@ -56,7 +56,7 @@ class TestTrie(unittest.TestCase):
             self.trie[key] = value
         # The trie has no concept of ordering, so we can't simply compare keys with ==
         trieKeys = self.trie.keys()
-        self.assertEquals(len(trieKeys), len(localKeys))
+        self.assertEqual(len(trieKeys), len(localKeys))
         for key in localKeys:
             self.assertTrue(key in trieKeys)
     
