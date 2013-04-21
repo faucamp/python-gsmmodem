@@ -4,10 +4,11 @@
 
 from __future__ import print_function
 
-import time, unittest, logging
+import sys, time, unittest, logging, codecs
 from datetime import datetime
 
 from . import compat # For Python 2.6 compatibility
+PYTHON_VERSION = sys.version_info[0]
 
 import gsmmodem.serial_comms
 import gsmmodem.modem
@@ -434,7 +435,10 @@ class TestSms(unittest.TestCase):
         for number, message, index, smsTime, smsc, pdu, sms_deliver_tpdu_length, ref in self.tests:
             self.modem._smsRef = ref
             calcPdu, tpdu_length = gsmmodem.pdu.encodeSmsSubmitPdu(number, message, ref)
-            pduHex = str(calcPdu).encode('hex').upper()
+            pduHex = codecs.encode(compat.str(calcPdu), 'hex_codec').upper()
+            if PYTHON_VERSION >= 3:
+                pduHex = str(pduHex, 'ascii')
+            
             def writeCallbackFunc(data):
                 def writeCallbackFunc2(data):
                     self.assertEqual('{0}{1}'.format(pduHex, chr(26)), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('{0}{1}'.format(pduHex, chr(26)), data))

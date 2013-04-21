@@ -2,7 +2,7 @@
 
 """ High-level API classes for an attached GSM modem """
 
-import sys, re, logging, weakref, time, threading, abc
+import sys, re, logging, weakref, time, threading, abc, codecs
 from datetime import datetime
 
 from .serial_comms import SerialComms
@@ -11,7 +11,8 @@ from .pdu import encodeSmsSubmitPdu, decodeSmsPdu
 from .util import SimpleOffsetTzInfo
 
 from . import compat # For Python 2.6 compatibility
-if sys.version_info[0] >= 3:
+PYTHON_VERSION = sys.version_info[0]
+if PYTHON_VERSION >= 3:
     xrange = range
     dictValuesIter = dict.values
 else:
@@ -357,13 +358,17 @@ class GsmModem(SerialComms):
         
         @param destination: The recipient's phone number
         @param text: The message text
-        """        
+        """
+        global PYTHON_VERSION
         if self._smsTextMode:
             self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq='> ')
             result = self.write(text, timeout=15, writeTerm=chr(26))[0]
         else:
             smsPdu, tpduLength = encodeSmsSubmitPdu(destination, text, reference=self._smsRef)
-            smsPduHex = str(smsPdu).encode('hex').upper()
+            if PYTHON_VERSION < 3:
+                smsPduHex = str(smsPdu).encode('hex').upper()
+            else:
+                smsPduHex = str(codecs.encode(smsPdu, 'hex_codec'), 'ascii').upper()
             self.write('AT+CMGS={0}'.format(tpduLength), timeout=3, expectedResponseTermSeq='> ')
             result = self.write(smsPduHex, timeout=15, writeTerm=chr(26))[0] # example: +CMGS: xx
         reference = int(result[7:])

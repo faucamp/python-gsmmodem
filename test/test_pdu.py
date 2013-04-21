@@ -9,10 +9,7 @@ import sys, unittest, random, codecs
 from datetime import datetime, timedelta
 
 from . import compat # For Python 2.6, 3.0-2 compatibility
-if sys.version_info[0] == 2:
-    s = str
-else:
-    s = lambda x: x 
+ 
 
 import gsmmodem.pdu
 from gsmmodem.util import SimpleOffsetTzInfo
@@ -132,7 +129,7 @@ class TestSmsPduAddressFields(unittest.TestCase):
         for plaintext, bytesRead, hexEncoded, realHexEncoded in self.tests:
             expected = bytearray(codecs.decode(realHexEncoded, 'hex_codec'))
             result = gsmmodem.pdu._encodeAddressField(plaintext)
-            self.assertEqual(result, expected, 'Failed to encode address field data "{0}". Expected: "{1}", got: "{2}"'.format(plaintext, realHexEncoded, codecs.encode(s(result), 'hex_codec').upper()))
+            self.assertEqual(result, expected, 'Failed to encode address field data "{0}". Expected: "{1}", got: "{2}"'.format(plaintext, realHexEncoded, codecs.encode(compat.str(result), 'hex_codec').upper()))
 
 class TestSmsPduSmscFields(unittest.TestCase):
     """ Tests for SMS PDU SMSC-specific address fields (these methods are not meant to be public)
@@ -157,7 +154,7 @@ class TestSmsPduSmscFields(unittest.TestCase):
         for plaintext, bytesRead, hexEncoded, realHexEncoded in self.tests:
             expected = bytearray(codecs.decode(realHexEncoded, 'hex_codec'))
             result = gsmmodem.pdu._encodeAddressField(plaintext, smscField=True)
-            self.assertEqual(result, expected, 'Failed to encode SMSC address field data "{0}". Expected: "{1}", got: "{2}"'.format(plaintext, realHexEncoded, codecs.encode(s(result), 'hex_codec').upper()))
+            self.assertEqual(result, expected, 'Failed to encode SMSC address field data "{0}". Expected: "{1}", got: "{2}"'.format(plaintext, realHexEncoded, codecs.encode(compat.str(result), 'hex_codec').upper()))
 
 class TestRelativeValidityPeriod(unittest.TestCase):
     """ Tests for SMS PDU relative validity period encoding/decoding (these methods are not meant to be public) """
@@ -189,7 +186,7 @@ class TestSmsPdu(unittest.TestCase):
         for number, text, reference, validity, smsc, rejectDuplicates, pduHex in tests:
             pdu = bytearray(codecs.decode(pduHex, 'hex_codec'))
             result = gsmmodem.pdu.encodeSmsSubmitPdu(number, text, reference, validity, smsc, rejectDuplicates)[0]            
-            self.assertEqual(result, pdu, 'Failed to encode SMS PDU for number: "{0}" and text "{1}". Expected: "{2}", got: "{3}"'.format(number, text, pduHex, codecs.encode(s(result), 'hex_codec').upper()))
+            self.assertEqual(result, pdu, 'Failed to encode SMS PDU for number: "{0}" and text "{1}". Expected: "{2}", got: "{3}"'.format(number, text, pduHex, codecs.encode(compat.str(result), 'hex_codec').upper()))
 
     def test_decode(self):
         """ Tests SMS PDU decoding """

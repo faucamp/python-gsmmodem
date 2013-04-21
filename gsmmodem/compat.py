@@ -16,3 +16,7 @@ if sys.version_info[0] == 2 and sys.version_info[1] < 7:
         threading._Event.wait = wrapWait(threading._Event.wait)
     else:
         raise ImportError('Could not patch this version of Python 2.{0} for compatibility with python-gsmmodem.'.format(sys.version_info[1]))
+if sys.version_info[0] == 2:
+    str = str
+else:
+    str = lambda x: x
