@@ -1,5 +1,17 @@
 """ Pure Python trie implementation for strings """
 
+# Compensate for differences between Python 2 and 3
+import sys
+if sys.version_info[0] >= 3:
+    dictKeysIter = dict.keys
+    dictItemsIter = dict.items
+    dictValuesIter = dict.values
+else:
+    dictKeysIter = dict.iterkeys
+    dictItemsIter = dict.iteritems
+    dictValuesIter = dict.itervalues
+
+
 class Trie(object):
         
     def __init__(self, key=None, value=None):
@@ -78,8 +90,9 @@ class Trie(object):
         return True
 
     def __len__(self):
+        global dictValuesIter
         n = 1 if self.key != None else 0
-        for trie in self.slots.itervalues():
+        for trie in dictValuesIter(self.slots):
             n += len(trie)
         return n
 
@@ -91,8 +104,9 @@ class Trie(object):
 
     def _allKeys(self, prefix):
         """ Private implementation method. Use keys() instead. """
+        global dictItemsIter
         result = [prefix + self.key] if self.key != None else []
-        for key, trie in self.slots.iteritems():        
+        for key, trie in dictItemsIter(self.slots):        
             result.extend(trie._allKeys(prefix + key))        
         return result
 
@@ -108,13 +122,15 @@ class Trie(object):
             return self._filteredKeys(prefix, '')
     
     def _filteredKeys(self, key, prefix):
+        global dictKeysIter
+        global dictItemsIter
         if len(key) == 0:
             result = [prefix + self.key] if self.key != None else []
-            for c, trie in self.slots.iteritems():
+            for c, trie in dictItemsIter(self.slots):
                 result.extend(trie._allKeys(prefix + c))
         else:        
             c = key[0]
-            if c in self.slots.iterkeys():
+            if c in dictKeysIter(self.slots):
                 result = []
                 trie = self.slots[c]
                 result.extend(trie._filteredKeys(key[1:], prefix+c))

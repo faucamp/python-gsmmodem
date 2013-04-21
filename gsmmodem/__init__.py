@@ -14,4 +14,4 @@ All python-gsmmodem-specific exceptions are defined in the gsmmodem.modem.except
 @license: LGPLv3+
 """
 
-from modem import GsmModem
+from .modem import GsmModem

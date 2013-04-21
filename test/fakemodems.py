@@ -122,6 +122,47 @@ $QCPDPLT,$QCPWRDN,$QCDGEN,$BREW,$QCSYSMODE,^CVOICE,^DDSETEX,^pcmrecord,^SYSINFO,
     def __str__(self):
         return 'Huawei K3715'
 
+
+class QualcommM6280(FakeModem):
+
+    def __init__(self):        
+        self.responses = {'AT+CGMI\r': ['QUALCOMM INCORPORATED\r\n', 'OK\r\n'],
+                 'AT+CGMM\r': ['M6280\r\n', 'OK\r\n'],
+                 'AT+CGMR\r': ['M6280_V1.0.0 M6280_V1.0.0 1 [Sep 4 2008 12:00:00]\r\n', 'OK\r\n'],
+                 'AT+CIMI\r': ['111111111111111\r\n', 'OK\r\n'],
+                 'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],
+                 'AT+CFUN?\r': ['+CFUN: 1\r\n', 'OK\r\n'],
+                 'AT+CLAC\r': ['ERROR\r\n'],
+                 'AT+WIND?\r': ['ERROR\r\n'],
+                 'AT+WIND=50\r': ['ERROR\r\n'],
+                 'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
+                 'AT+CVHU=0\r': ['+CVHU: (0-1)\r\n', 'OK\r\n'],
+                 'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
+        
+    def getAtdResponse(self, number):
+        return []
+    
+    def getPreCallInitWaitSequence(self):
+        return [0.1]
+        
+    def getCallInitNotification(self, callId, callType):
+        # +WIND: 5 == indication of call
+        # +WIND: 2 == remote party is ringing
+        return ['+WIND: 5,1\r\n', '+WIND: 2\r\n']
+        
+    def getRemoteAnsweredNotification(self, callId, callType):
+        return ['OK\r\n']
+        
+    def getRemoteHangupNotification(self, callId, callType):
+        return ['NO CARRIER\r\n', '+WIND: 6,1\r\n']
+    
+    def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
+        return ['+CRING: {0}\r\n'.format(callType), '+CLIP: "{1}",{2}\r\n'.format(callType, callerNumber, ton)]
+    
+    def __str__(self):
+        return 'QUALCOMM INCORPORATED'
+
+
 modemClasses = [HuaweiK3715, WavecomMultiband900E1800]
 
 def createModems():
