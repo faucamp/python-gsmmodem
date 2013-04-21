@@ -150,7 +150,7 @@ class Trie(object):
             if self.key != None:
                 return prefix + self.key
             else:
-                slotKeys = self.slots.keys()
+                slotKeys = list(self.slots.keys())
                 if len(slotKeys) == 1:
                     c = slotKeys[0]
                     return self.slots[c]._longestCommonPrefix('', prefix + c)
@@ -169,7 +169,7 @@ class Trie(object):
                 return prefix
     
     def __iter__(self):
-        for k in self.keys():
+        for k in list(self.keys()):
             yield k
         raise StopIteration
     

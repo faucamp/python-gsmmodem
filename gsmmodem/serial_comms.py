@@ -102,7 +102,7 @@ class SerialComms(object):
                             self._handleLineRead(line, checkForResponseTerm=False)                                                
             #else:
                 #' <RX timeout>'
-        except serial.SerialException, e:
+        except serial.SerialException as e:
             self.alive = False
             raise        
         

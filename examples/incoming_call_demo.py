@@ -30,7 +30,7 @@ def handleIncomingCall(call):
             time.sleep(2.0) 
             try:
                 call.sendDtmfTone('9515999955951')
-            except InterruptedException, e:
+            except InterruptedException as e:
                 # Call was ended during playback
                 print('DTMF playback interrupted: {0} ({1} Error {2})'.format(e, e.cause.type, e.cause.code))                
             finally:

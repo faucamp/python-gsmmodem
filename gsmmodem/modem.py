@@ -152,14 +152,14 @@ class GsmModem(SerialComms):
         # Incoming call notification setup
         try:
             self.write('AT+CLIP=1') # Enable calling line identification presentation
-        except CommandError, clipError:
+        except CommandError as clipError:
             self._callingLineIdentification = False
             self.log.warn('Incoming call calling line identification (caller ID) not supported by modem. Error: {0}'.format(clipError))
         else:
             self._callingLineIdentification = True
             try:
                 self.write('AT+CRC=1') # Enable extended format of incoming indication (optional)
-            except CommandError, crcError:
+            except CommandError as crcError:
                 self._extendedIncomingCallIndication = False
                 self.log.warn('Extended format incoming call indication not supported by modem. Error: {0}'.format(crcError))
             else:
@@ -651,7 +651,7 @@ class Call(object):
                 cmd = 'AT+VTS={0}'.format(tones)
             try:
                 self._gsmModem.write(cmd, timeout=(5 + toneLen))
-            except CmeError, e:
+            except CmeError as e:
                 if e.code == 30:
                     # No network service - can happen if call is ended during DTMF transmission (but also if DTMF is sent immediately after call is answered)
                     raise InterruptedException('No network service', e)
