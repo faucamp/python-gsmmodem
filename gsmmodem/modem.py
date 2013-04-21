@@ -10,7 +10,7 @@ from .exceptions import CommandError, InvalidStateException, CmeError, CmsError,
 from .pdu import encodeSmsSubmitPdu, decodeSmsPdu
 from .util import SimpleOffsetTzInfo
 
-import compat # For Python 2.6 compatibility
+from . import compat # For Python 2.6 compatibility
 
 class GsmModem(SerialComms):
     """ Main class for interacting with an attached GSM modem """
