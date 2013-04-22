@@ -28,7 +28,7 @@ def main():
     # Uncomment the following line to see what the modem is doing:
     logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
     modem = GsmModem(PORT, BAUDRATE, smsReceivedCallbackFunc=handleSms)
-    modem.smsTextMode = True    
+    modem.smsTextMode = False 
     modem.connect(PIN)
     print('Waiting for SMS message...')    
     try:    
