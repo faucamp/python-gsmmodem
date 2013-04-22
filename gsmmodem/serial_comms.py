@@ -50,7 +50,7 @@ class SerialComms(object):
         self.alive = False
         self.rxThread.join()
         self.serial.close()
-        
+
     def _handleLineRead(self, line, checkForResponseTerm=True):
         #print 'sc.hlineread:',line
         if self._responseEvent and not self._responseEvent.is_set():
@@ -104,7 +104,7 @@ class SerialComms(object):
                 #' <RX timeout>'
         except serial.SerialException as e:
             self.alive = False
-            raise        
+            raise
         
     def write(self, data, waitForResponse=True, timeout=5, expectedResponseTermSeq=None):
         with self._txLock:            

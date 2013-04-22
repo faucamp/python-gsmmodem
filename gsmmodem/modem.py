@@ -78,16 +78,23 @@ class GsmModem(SerialComms):
         """
         self.log.info('Connecting to modem on port %s at %dbps', self.port, self.baudrate)        
         super(GsmModem, self).connect()
-        
-        # Unlock the SIM card if needed
-        if self.write('AT+CPIN?')[0] != '+CPIN: READY':
-            if pin != None:
-                self.write('AT+CPIN="{0}"'.format(pin))
-            else:
-                raise PinRequiredError('AT+CPIN')
-        
-        # Send some initialization commands to the modem        
-        self.write('ATZ') # reset configuration
+        # Send some initialization commands to the modem
+        detailedErrorsActivated = False
+        try:        
+            self.write('ATZ') # reset configuration
+        except CommandError:
+            # Some modems require a SIM PIN at this stage already; unlock it now
+            # Attempt to enable detailed error messages (to catch incorrect PIN error)
+            # but ignore if it fails
+            try:
+                self.write('AT+CMEE=1')
+            except CommandError:
+                detailedErrorsActivated = False
+            self._unlockSim(pin)
+            pinCheckComplete = True
+            self.write('ATZ') # reset configuration        
+        else:
+            pinCheckComplete = False
         self.write('ATE0') # echo off
         try:
             cfun = int(self.write('AT+CFUN?')[0][7:]) # example response: +CFUN: 1
@@ -95,8 +102,11 @@ class GsmModem(SerialComms):
                 self.write('AT+CFUN=1')
         except CommandError:
             pass # just ignore if the +CFUN command isn't supported
-         
-        self.write('AT+CMEE=1') # enable detailed error messages        
+        
+        if not detailedErrorsActivated:
+            self.write('AT+CMEE=1') # enable detailed error messages
+        if not pinCheckComplete:
+            self._unlockSim(pin)
 
         # Get list of supported commands from modem
         commands = self.supportedCommands
@@ -174,7 +184,16 @@ class GsmModem(SerialComms):
 
         # Call control setup
         self.write('AT+CVHU=0', parseError=False) # Enable call hang-up with ATH command (ignore if command not supported)
-                    
+    
+    def _unlockSim(self, pin):
+        """ Unlocks the SIM card using the specified PIN (if necessary, else does nothing) """
+        # Unlock the SIM card if needed
+        if self.write('AT+CPIN?')[0] != '+CPIN: READY':
+            if pin != None:
+                self.write('AT+CPIN="{0}"'.format(pin))
+            else:
+                raise PinRequiredError('AT+CPIN')
+               
     def write(self, data, waitForResponse=True, timeout=5, parseError=True, writeTerm='\r', expectedResponseTermSeq=None):
         """ Write data to the modem
         
