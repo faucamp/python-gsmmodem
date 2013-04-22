@@ -90,6 +90,8 @@ class GsmModem(SerialComms):
                 self.write('AT+CMEE=1')
             except CommandError:
                 detailedErrorsActivated = False
+            else:
+                detailedErrorsActivated = True
             self._unlockSim(pin)
             pinCheckComplete = True
             self.write('ATZ') # reset configuration        
