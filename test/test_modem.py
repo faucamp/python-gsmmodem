@@ -6,8 +6,10 @@ from __future__ import print_function
 
 import sys, time, unittest, logging, codecs
 from datetime import datetime
+from copy import copy
 
 from . import compat # For Python 2.6 compatibility
+from gsmmodem.exceptions import PinRequiredError
 PYTHON_VERSION = sys.version_info[0]
 
 import gsmmodem.serial_comms
@@ -30,7 +32,7 @@ class MockSerialPackage(object):
         """ Mock serial object for use by the GsmModem class during tests """
         def __init__(self, *args, **kwargs):
             # The default value to read/"return" if responseSequence isn't set up, or None for nothing
-            self.defaultResponse = 'OK\r\n'
+            #self.defaultResponse = 'OK\r\n'
             self.responseSequence = []
             self.flushResponseSequence = True
             self.writeQueue = []
@@ -40,12 +42,9 @@ class MockSerialPackage(object):
             global FAKE_MODEM
             # Pre-determined responses to specific commands - used for imitating specific modems
             if FAKE_MODEM != None:
-                self.responses = FAKE_MODEM.responses
+                self.modem = copy(FAKE_MODEM)
             else:
-                self.responses = {'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
-                                  'AT+CFUN?\r': ['+CFUN: 1\r\n', 'OK\r\n'],
-                                  'AT+WIND?\r': ['ERROR\r\n'],
-                                  'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']} 
+                self.modem = fakemodems.GenericTestModem()
         
         def read(self, timeout=None):
             if len(self._readQueue) > 0:    
@@ -82,12 +81,16 @@ class MockSerialPackage(object):
                             self._setupReadValue(command)                    
                     else:                        
                         self._readQueue = list(value)
-                elif command in self.responses:
-                    self.responseSequence = self.responses[command]
+                else:
+                    self.responseSequence = self.modem.getResponse(command)
                     if len(self.responseSequence) > 0:
                         self._setupReadValue(command)
-                elif self.defaultResponse != None:
-                    self._readQueue = list(self.defaultResponse)
+                #elif command in self.modem.responses:
+                #    self.responseSequence = self.modem.responses[command]
+                #    if len(self.responseSequence) > 0:
+                #        self._setupReadValue(command)
+                #elif self.defaultResponse != None:
+                #    self._readQueue = list(self.defaultResponse)
                 
         def write(self, data):            
             if self.writeCallbackFunc != None:
@@ -176,7 +179,7 @@ class TestGsmModemGeneralApi(unittest.TestCase):
             self.modem.serial.responseSequence = ['{0}\r\n'.format(test), 'OK\r\n']
             self.assertEqual(test, self.modem.revision)
         # Fake a modem that does not support this command
-        self.modem.serial.defaultResponse = 'ERROR\r\n'
+        self.modem.serial.modem.defaultResponse = ['ERROR\r\n']
         self.assertEqual(None, self.modem.revision)
     
     def test_imei(self):
@@ -208,7 +211,7 @@ class TestGsmModemGeneralApi(unittest.TestCase):
             commands = self.modem.supportedCommands
             self.assertListEqual(commands, test[1])
         # Fake a modem that does not support this command
-        self.modem.serial.defaultResponse = 'ERROR\r\n'
+        self.modem.serial.modem.defaultResponse = ['ERROR\r\n']
         commands = self.modem.supportedCommands
         self.assertEqual(commands, None)
         
@@ -319,6 +322,40 @@ class TestGsmModemDial(unittest.TestCase):
                 self.assertEqual(len(self.modem.activeCalls), 0)
             self.modem.close()
 
+
+class TestGsmModemPinConnect(unittest.TestCase):
+    """ Tests PIN unlocking and connect() method of GsmModem class (excluding connect/close) """
+    
+    def tearDown(self):
+        global FAKE_MODEM
+        FAKE_MODEM = None
+    
+    def init_modem(self, modem):
+        global FAKE_MODEM
+        FAKE_MODEM = modem
+        self.mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = self.mockSerial        
+        self.modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')        
+        
+    def test_connectPinLockedNoPin(self):
+        """ Test connecting to the modem with a SIM PIN code - no PIN specified"""
+        for modem in fakemodems.createModems():
+            print('Modem:', modem)
+            modem.pinLock = True
+            self.init_modem(modem)
+            self.assertRaises(PinRequiredError, self.modem.connect)
+    
+    def test_connectPinLockedWithPin(self):
+        """ Test connecting to the modem with a SIM PIN code - PIN specified"""
+        for modem in fakemodems.createModems():
+            print('Modem:', modem)
+            modem.pinLock = True
+            self.init_modem(modem)
+            # This should succeed
+            try:
+                self.modem.connect(pin='1234')
+            except PinRequiredError:
+                self.fail("Pin required exception thrown for modem {0}".format(modem))
 
 class TestIncomingCall(unittest.TestCase):
     

@@ -78,6 +78,14 @@ class GsmModem(SerialComms):
         """
         self.log.info('Connecting to modem on port %s at %dbps', self.port, self.baudrate)        
         super(GsmModem, self).connect()
+        
+        # Unlock the SIM card if needed
+        if self.write('AT+CPIN?')[0] != '+CPIN: READY':
+            if pin != None:
+                self.write('AT+CPIN="{0}"'.format(pin))
+            else:
+                raise PinRequiredError('AT+CPIN')
+        
         # Send some initialization commands to the modem        
         self.write('ATZ') # reset configuration
         self.write('ATE0') # echo off
@@ -88,14 +96,7 @@ class GsmModem(SerialComms):
         except CommandError:
             pass # just ignore if the +CFUN command isn't supported
          
-        self.write('AT+CMEE=1') # enable detailed error messages
-
-        # Unlock the SIM card if needed
-        if self.write('AT+CPIN?')[0] != '+CPIN: READY':
-            if pin != None:
-                self.write('AT+CPIN="{0}"'.format(pin))
-            else:
-                raise PinRequiredError('AT+CPIN')
+        self.write('AT+CMEE=1') # enable detailed error messages        
 
         # Get list of supported commands from modem
         commands = self.supportedCommands
