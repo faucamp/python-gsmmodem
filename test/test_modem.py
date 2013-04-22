@@ -432,8 +432,11 @@ class TestSms(unittest.TestCase):
                        datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
                        '+2782913593',
                        '06917228195339040A91896745230100003130805120618013C8309BFD56A0DF65D0391C7683C869FA0F', 35, 33),
-                      )
-    
+                      ('+353870000000', 'My message',
+                       13,
+                       datetime(2013, 4, 20, 20, 22, 27, tzinfo=SimpleOffsetTzInfo(4)),
+                       None, None, 0, 0),
+                      )    
     
     def initModem(self, smsReceivedCallbackFunc):
         # Override the pyserial import        
@@ -552,7 +555,9 @@ class TestSms(unittest.TestCase):
 
         self.initModem(smsReceivedCallbackFunc=smsReceivedCallbackFuncPdu)
         self.modem.smsTextMode = False # Set modem to PDU mode
-        for number, message, index, smsTime, smsc, pdu, tpdu_length, ref in self.tests:            
+        for number, message, index, smsTime, smsc, pdu, tpdu_length, ref in self.tests:
+            if smsc == None or pdu == None:
+                continue # not enough info for a PDU test, skip it
             # Wait for the handler function to finish
             callbackInfo[0] = False # "done" flag
             callbackInfo[1] = number
