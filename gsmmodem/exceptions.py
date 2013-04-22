@@ -36,6 +36,10 @@ class CommandError(GsmModemException):
         self.code = code
         if type != None and code != None:
             super(CommandError, self).__init__('{0} {1}{2}'.format(type, code, ' ({0})'.format(self._description) if len(self._description) > 0 else ''))
+        elif command != None:
+            super(CommandError, self).__init__(command)
+        else:
+            super(CommandError, self).__init__()
 
 
 class CmeError(CommandError):
