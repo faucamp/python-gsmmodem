@@ -66,7 +66,8 @@ class GsmModem(SerialComms):
         self._smsTextMode = False # Storage variable for the smsTextMode property
         self._smscNumber = None # Default SMSC number
         self._smsRef = 0 # Sent SMS reference counter
-
+        self._smsMemReadDelete = None # Preferred message storage memory for reads (<mem1> parameter used for +CPMS) 
+    
     def connect(self, pin=None):
         """ Opens the port and initializes the modem and SIM card
          
@@ -158,12 +159,16 @@ class GsmModem(SerialComms):
         
         # Set message storage, but first check what the modem supports - example response: +CPMS: (("SM","BM","SR"),("SM"))
         lines = self.write('AT+CPMS=?')        
-        cpmsSupport = lines[0].split(' ', 1)[1].split('),(')        
-        cpmsItems = ['"SM"', '"SM"', '"SR"'][:len(cpmsSupport)]
-        #cpmsItems = cpmsItems[:len(cpmsSupport)]
-        for i in xrange(len(cpmsItems)):            
-            if cpmsItems[i] not in cpmsSupport[i]:
-                cpmsItems[i] = ''
+        cpmsSupport = lines[0].split(' ', 1)[1].split('),(')
+        preferredMemoryTypes = ('"ME"', '"SM"', '"SR"')
+        cpmsItems = [''] * len(cpmsSupport)
+        for i in xrange(len(cpmsSupport)):
+            for memType in preferredMemoryTypes:
+                if memType in cpmsSupport[i]:
+                    if i == 0:
+                        self._smsMemReadDelete = memType
+                    cpmsItems[i] = memType
+                    break
         self.write('AT+CPMS={0}'.format(','.join(cpmsItems))) # Set message storage        
         
         self.write('AT+CNMI=2,1,0,2') # Set message notifications
@@ -561,8 +566,9 @@ class GsmModem(SerialComms):
         self.log.debug('SMS message received')
         cmtiMatch = self.CMTI_REGEX.match(notificationLine)
         if cmtiMatch:
+            msgMemory = cmtiMatch.group(1)
             msgIndex = cmtiMatch.group(2)
-            sms = self._readStoredSmsMessage(msgIndex)
+            sms = self._readStoredSmsMessage(msgIndex, msgMemory)
             self._deleteStoredMessage(msgIndex)
             self.smsReceivedCallback(sms)
     
@@ -584,8 +590,22 @@ class GsmModem(SerialComms):
                 # Nothing is waiting for this report directly - use callback
                 self.smsStatusReportCallback(report)
     
-    def _readStoredSmsMessage(self, msgIndex):
-        msgData = self.write('AT+CMGR={0}'.format(msgIndex))
+    def _readStoredSmsMessage(self, index, memory=None):
+        """ Reads and returns the SMS message at the specified index
+        
+        @param index: The index of the SMS message in the specified memory
+        @type index: int
+        @param memory: The memory type to read from. If None, use the current default SMS read memory
+        @type memory: str or None
+        
+        @return: The SMS message
+        @rtype: subclass of gsmmodem.modem.Sms (either ReceivedSms or StatusReport)
+        """
+        # Switch to the correct memory type if required
+        if memory != None and memory != self._smsMemReadDelete:
+            self.write('AT+CPMS={0}'.format(memory))
+            self._smsMemReadDelete = memory        
+        msgData = self.write('AT+CMGR={0}'.format(index))
         # Parse meta information
         if self._smsTextMode:
             cmgrMatch = self.CMGR_SM_DELIVER_REGEX_TEXT.match(msgData[0])

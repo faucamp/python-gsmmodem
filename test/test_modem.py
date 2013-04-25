@@ -425,18 +425,20 @@ class TestSms(unittest.TestCase):
                        1,
                        datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
                        '+2782913593',
-                       '06917228195339040A9110325476980000313080512061800CC8329BFD06DDDF72363904', 29, 142),
+                       '06917228195339040A9110325476980000313080512061800CC8329BFD06DDDF72363904', 29, 142,
+                       '"SM"'),
                       ('+9876543210', 
                        'Hallo\nhoe gaan dit?', 
                        4,
                        datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
                        '+2782913593',
-                       '06917228195339040A91896745230100003130805120618013C8309BFD56A0DF65D0391C7683C869FA0F', 35, 33),
+                       '06917228195339040A91896745230100003130805120618013C8309BFD56A0DF65D0391C7683C869FA0F', 35, 33, 
+                       '"SM"'),
                       ('+353870000000', 'My message',
                        13,
                        datetime(2013, 4, 20, 20, 22, 27, tzinfo=SimpleOffsetTzInfo(4)),
-                       None, None, 0, 0),
-                      )    
+                       None, None, 0, 0, '"ME"'),
+                      )
     
     def initModem(self, smsReceivedCallbackFunc):
         # Override the pyserial import        
@@ -449,7 +451,7 @@ class TestSms(unittest.TestCase):
         """ Tests sending SMS messages in text mode """
         self.initModem(None)
         self.modem.smsTextMode = True # Set modem to text mode
-        for number, message, index, smsTime, smsc, pdu, tpdu_length, ref in self.tests:
+        for number, message, index, smsTime, smsc, pdu, tpdu_length, ref, mem in self.tests:
             self.modem._smsRef = ref
             def writeCallbackFunc(data):
                 def writeCallbackFunc2(data):
@@ -472,7 +474,7 @@ class TestSms(unittest.TestCase):
         """ Tests sending a SMS messages in PDU mode """
         self.initModem(None)
         self.modem.smsTextMode = False # Set modem to PDU mode        
-        for number, message, index, smsTime, smsc, pdu, sms_deliver_tpdu_length, ref in self.tests:
+        for number, message, index, smsTime, smsc, pdu, sms_deliver_tpdu_length, ref, mem in self.tests:
             self.modem._smsRef = ref
             calcPdu, tpdu_length = gsmmodem.pdu.encodeSmsSubmitPdu(number, message, ref)
             pduHex = codecs.encode(compat.str(calcPdu), 'hex_codec').upper()
@@ -498,7 +500,7 @@ class TestSms(unittest.TestCase):
     
     def test_receiveSmsTextMode(self):
         """ Tests receiving SMS messages in text mode """
-        callbackInfo = [False, '', '', -1, None, '']
+        callbackInfo = [False, '', '', -1, None, '', None]
         def smsReceivedCallbackFuncText(sms):
             try:
                 self.assertIsInstance(sms, gsmmodem.modem.ReceivedSms)
@@ -513,26 +515,33 @@ class TestSms(unittest.TestCase):
 
         self.initModem(smsReceivedCallbackFunc=smsReceivedCallbackFuncText)
         self.modem.smsTextMode = True # Set modem to text mode
-        for number, message, index, smsTime, smsc, pdu, tpdu_length, ref in self.tests:            
+        for number, message, index, smsTime, smsc, pdu, tpdu_length, ref, mem in self.tests:            
             # Wait for the handler function to finish
             callbackInfo[0] = False # "done" flag
             callbackInfo[1] = number
             callbackInfo[2] = message
             callbackInfo[3] = index
-            callbackInfo[4] = smsTime            
+            callbackInfo[4] = smsTime
             
             # Time string as returned by modem in text modem
             textModeStr = smsTime.strftime('%y/%m/%d,%H:%M:%S%z')[:-2]
             def writeCallbackFunc(data):
-                """ Intercept the "read stored message" command """
-                self.assertEqual('AT+CMGR={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGR={0}'.format(index), data))
-                self.modem.serial.responseSequence = ['+CMGR: "REC UNREAD","{0}",,"{1}"\r\n'.format(number, textModeStr), '{0}\r\n'.format(message), 'OK\r\n']
-                def writeCallbackFunc2(data):
-                    self.assertEqual('AT+CMGD={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(index), data))
-                self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+                """ Intercept the "read stored message" command """        
+                def writeCallbackFunc2(data):                    
+                    self.assertEqual('AT+CMGR={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGR={0}'.format(index), data))
+                    self.modem.serial.responseSequence = ['+CMGR: "REC UNREAD","{0}",,"{1}"\r\n'.format(number, textModeStr), '{0}\r\n'.format(message), 'OK\r\n']
+                    def writeCallbackFunc3(data):
+                        self.assertEqual('AT+CMGD={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(index), data))
+                    self.modem.serial.writeCallbackFunc = writeCallbackFunc3
+                if self.modem._smsMemReadDelete != mem:
+                    self.assertEqual('AT+CPMS={0}\r'.format(mem), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CPMS={0}'.format(mem), data))
+                    self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+                else:
+                    # Modem does not need to change read memory
+                    writeCallbackFunc2(data)
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
             # Fake a "new message" notification
-            self.modem.serial.responseSequence = ['+CMTI: "SM",{0}\r\n'.format(index)]
+            self.modem.serial.responseSequence = ['+CMTI: {0},{1}\r\n'.format(mem, index)]
             # Wait for the handler function to finish
             while callbackInfo[0] == False:
                 time.sleep(0.1)
@@ -540,7 +549,7 @@ class TestSms(unittest.TestCase):
         
     def test_receiveSmsPduMode(self):
         """ Tests receiving SMS messages in PDU mode """
-        callbackInfo = [False, '', '', -1, None, '']
+        callbackInfo = [False, '', '', -1, None, '', None]
         def smsReceivedCallbackFuncPdu(sms):
             try:
                 self.assertIsInstance(sms, gsmmodem.modem.ReceivedSms)
@@ -555,7 +564,7 @@ class TestSms(unittest.TestCase):
 
         self.initModem(smsReceivedCallbackFunc=smsReceivedCallbackFuncPdu)
         self.modem.smsTextMode = False # Set modem to PDU mode
-        for number, message, index, smsTime, smsc, pdu, tpdu_length, ref in self.tests:
+        for number, message, index, smsTime, smsc, pdu, tpdu_length, ref, mem in self.tests:
             if smsc == None or pdu == None:
                 continue # not enough info for a PDU test, skip it
             # Wait for the handler function to finish
@@ -566,13 +575,20 @@ class TestSms(unittest.TestCase):
             callbackInfo[4] = smsTime
             callbackInfo[5] = smsc
             
-            def writeCallbackFunc(data):
-                """ Intercept the "read stored message" command """
-                self.assertEqual('AT+CMGR={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGR={0}'.format(index), data))
-                self.modem.serial.responseSequence = ['+CMGR: 0,,{0}\r\n'.format(tpdu_length), '{0}\r\n'.format(pdu), 'OK\r\n']                
+            def writeCallbackFunc(data):                
                 def writeCallbackFunc2(data):
-                    self.assertEqual('AT+CMGD={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(index), data))
-                self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+                    """ Intercept the "read stored message" command """
+                    self.assertEqual('AT+CMGR={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGR={0}'.format(index), data))
+                    self.modem.serial.responseSequence = ['+CMGR: 0,,{0}\r\n'.format(tpdu_length), '{0}\r\n'.format(pdu), 'OK\r\n']                
+                    def writeCallbackFunc3(data):
+                        self.assertEqual('AT+CMGD={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(index), data))
+                    self.modem.serial.writeCallbackFunc = writeCallbackFunc3
+                if self.modem._smsMemReadDelete != mem:
+                    self.assertEqual('AT+CPMS={0}\r'.format(mem), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CPMS={0}'.format(mem), data))
+                    self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+                else:
+                    # Modem does not need to change read memory
+                    writeCallbackFunc2(data)
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
             # Fake a "new message" notification
             self.modem.serial.responseSequence = ['+CMTI: "SM",{0}\r\n'.format(index)]

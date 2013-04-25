@@ -56,6 +56,8 @@ class CmeError(CommandError):
                 return PinRequiredError(args[0])
             elif code == 16:
                 return IncorrectPinError(args[0])
+            elif code == 12:
+                return PukRequiredError(args[0])
         return super(CmeError, cls).__new__(cls, *args, **kwargs)
 
     def __init__(self, command, code):
@@ -85,6 +87,15 @@ class IncorrectPinError(SecurityException):
 
     def __init__(self, command, code=16):
         super(IncorrectPinError, self).__init__(command, code)
+
+
+class PukRequiredError(SecurityException):
+    """ Raised an operation failed because the SIM card's PUK is required (SIM locked) """
+    
+    _description = "PUK required (SIM locked)"
+    
+    def __init__(self, command, code=12):
+        super(PinRequiredError, self).__init__(command, code)
 
 
 class CmsError(CommandError):
