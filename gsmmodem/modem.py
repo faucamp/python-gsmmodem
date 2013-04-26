@@ -40,7 +40,7 @@ class GsmModem(SerialComms):
     # Used for parsing USSD event notifications
     CUSD_REGEX = re.compile(r'^\+CUSD:\s*(\d),"(.*)",(\d+)$', re.DOTALL)
     # Used for parsing SMS status reports
-    CDSI_REGEX = re.compile(r'\+CDSI:\s*"([^,]+)",(\d+)$')
+    CDSI_REGEX = re.compile(r'\+CDSI:\s*([^,]+),(\d+)$')
     
     def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallback=None):
         super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification)
@@ -577,8 +577,9 @@ class GsmModem(SerialComms):
         self.log.debug('SMS status report received')
         cdsiMatch = self.CDSI_REGEX.match(notificationLine)
         if cdsiMatch:
+            msgMemory = cdsiMatch.group(1)
             msgIndex = cdsiMatch.group(2)
-            report = self._readStoredSmsMessage(msgIndex)
+            report = self._readStoredSmsMessage(msgIndex, msgMemory)
             self._deleteStoredMessage(msgIndex)
             # Update sent SMS status if possible            
             if report.reference in self.sentSms:                
