@@ -12,7 +12,7 @@ class FakeModem(object):
         self.commandsNoPinRequired = []
         self._pinLock = False
         self.defaultResponse = ['OK\r\n']
-        self.pinRequiredErrorResponse = ['+CME ERROR: 11\r\n']        
+        self.pinRequiredErrorResponse = ['+CME ERROR: 11\r\n']
     
     def getResponse(self, cmd):
         if self._pinLock and not cmd.startswith('AT+CPIN'):
@@ -25,7 +25,7 @@ class FakeModem(object):
                 return copy(self.pinRequiredErrorResponse)
         else:
             if cmd.startswith('AT+CPIN="'):
-                self.pinLock = False                
+                self.pinLock = False            
             if cmd in self.responses:
                 return copy(self.responses[cmd])
             else:
@@ -198,6 +198,9 @@ class QualcommM6280(FakeModem):
 
     def __init__(self):
         super(QualcommM6280, self).__init__()
+        self._callState = 2
+        self._callNumber = None
+        self._callId = None
         self.commandsNoPinRequired = [] # This modem requires the CPIN command to be issued first
         self.responses = {'AT+CGMI\r': ['QUALCOMM INCORPORATED\r\n', 'OK\r\n'],
                  'AT+CGMM\r': ['M6280\r\n', 'OK\r\n'],
@@ -211,21 +214,40 @@ class QualcommM6280(FakeModem):
                  'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
                  'AT+CVHU=0\r': ['+CVHU: (0-1)\r\n', 'OK\r\n'],
                  'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
-        
+
+    def getResponse(self, cmd):
+        if not self._pinLock and cmd == 'AT+CLCC\r':
+            if self._callNumber:
+                if self._callState == 0:                    
+                    return ['+CLCC: 1,0,2,0,0,"{0}",129\r\n'.format(self._callNumber), 'OK\r\n']
+                elif self._callState == 1:
+                    return ['+CLCC: 1,0,0,0,0,"{0}",129\r\n'.format(self._callNumber), 'OK\r\n']
+                else:
+                    return ['OK\r\n']
+            else:
+                return super(QualcommM6280, self).getResponse(cmd)
+        else:
+            return super(QualcommM6280, self).getResponse(cmd)
+
     def getAtdResponse(self, number):
+        self._callNumber = number
+        self._callState = 0
         return ['OK\r\n']
     
     def getPreCallInitWaitSequence(self):
         return [0.1]
     
     def getCallInitNotification(self, callId, callType):
-        return ['^ORIG:{0},{1}\r\n'.format(callId, callType), 0.2, '^CONF:{0}\r\n'.format(callId)]
+        return []
     
     def getRemoteAnsweredNotification(self, callId, callType):
-        return ['^CONN:{0},{1}\r\n'.format(callId, callType)]
+        self._callState = 1
+        return []
     
     def getRemoteHangupNotification(self, callId, callType):
-            return ['^CEND:{0},5,29,16\r\n'.format(callId)]
+        self._callState = 2
+        self._callNumber = None
+        return []
         
     def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
         return ['+CRING: {0}\r\n'.format(callType), '+CLIP: "{1}",{2},,,,0\r\n'.format(callType, callerNumber, ton)]

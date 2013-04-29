@@ -61,7 +61,9 @@ class GsmModem(SerialComms):
         self._dialEvent = None # threading.Event
         self._dialResponse = None # gsmmodem.modem.Call
         self._waitForAtdResponse = True # Flag that controls if we should wait for an immediate response to ATD, or not
-        self.callStatusUpdates = [] # populated during connect() - contains regexes and handlers for detecting/handling call status updates
+        self._callStatusUpdates = [] # populated during connect() - contains regexes and handlers for detecting/handling call status updates
+        self._mustPollCallStatus = False # whether or not the modem must be polled for outgoing call status updates
+        self._pollCallStatusRegex = None # Regular expression used when polling outgoing call status
         self._writeWait = 0 # Time (in seconds to wait after writing a command (adjusted when 515 errors are detected)
         self._smsTextMode = False # Storage variable for the smsTextMode property
         self._smscNumber = None # Default SMSC number
@@ -115,6 +117,7 @@ class GsmModem(SerialComms):
         commands = self.supportedCommands
 
         # Device-specific settings
+        callUpdateTableHint = 0 # unknown modem
         if commands != None:
             if '^CVOICE' in commands:
                 self.write('AT^CVOICE=0', parseError=False) # Enable voice calls
@@ -122,6 +125,7 @@ class GsmModem(SerialComms):
                 Call.dtmfSupport = True
             elif '^DTMF' in commands:
                 # Huawei modems use ^DTMF to send DTMF tones; use that instead
+                callUpdateTableHint = 1 # huawei
                 Call.DTMF_COMMAND_BASE = '^DTMF=1,'
                 Call.dtmfSupport = True
             
@@ -131,19 +135,31 @@ class GsmModem(SerialComms):
             if int(wind[7:]) != 50:
                 self.write('AT+WIND=50') # Enabled notifications for call setup, hangup, etc
         except CommandError:
-            # Modem does not support +WIND notifications, use Hauwei's ^NOTIFICATIONs
-            self.log.info('Loading Huawei call update table')
-            self.callStatusUpdates = ((re.compile(r'^\^ORIG:(\d),(\d)$'), self._handleCallInitiated),
-                                      (re.compile(r'^\^CONN:(\d),(\d)$'), self._handleCallAnswered),
-                                      (re.compile(r'^\^CEND:(\d),(\d),(\d)+,(\d)+$'), self._handleCallEnded))            
-            self._waitForAtdResponse = True # Huawei modems return OK immediately after issuing ATD            
+            # Modem does not support +WIND notifications. See if we can detect other known call update notifications
+            if callUpdateTableHint == 0:
+                if self.manufacturer.lower() == 'huawei':
+                    callUpdateTableHint = 1 # huawei
+            if callUpdateTableHint == 1:
+                # Use Hauwei's ^NOTIFICATIONs
+                self.log.info('Loading Huawei call state update table')
+                self._callStatusUpdates = ((re.compile(r'^\^ORIG:(\d),(\d)$'), self._handleCallInitiated),
+                                          (re.compile(r'^\^CONN:(\d),(\d)$'), self._handleCallAnswered),
+                                          (re.compile(r'^\^CEND:(\d),(\d),(\d)+,(\d)+$'), self._handleCallEnded))
+                self._mustPollCallStatus = False
+            else:
+                # Unknown modem - we do not know what its call updates look like. Use polling instead
+                self.log.info('Unknown modem type - will use polling for call state updates')
+                self._mustPollCallStatus = True
+                self._pollCallStatusRegex = re.compile('^\+CLCC:\s+(\d+),(\d),(\d),(\d),([^,]),"([^,]*)",(\d+)$')
+            self._waitForAtdResponse = True # Most modems return OK immediately after issuing ATD            
         else:
             # +WIND notifications supported
-            self.log.info('Loading Wavecom call update table')
-            self.callStatusUpdates = ((re.compile(r'^\+WIND: 5,(\d)$'), self._handleCallInitiated),
+            self.log.info('Loading Wavecom call state update table')
+            self._callStatusUpdates = ((re.compile(r'^\+WIND: 5,(\d)$'), self._handleCallInitiated),
                                       (re.compile(r'^OK$'), self._handleCallAnswered),
                                       (re.compile(r'^\+WIND: 6,(\d)$'), self._handleCallEnded))            
             self._waitForAtdResponse = False # Wavecom modems return OK only when the call is answered
+            self._mustPollCallStatus = False
             if commands == None: # older modem, assume it has standard DTMF support
                 Call.dtmfSupport = True
         
@@ -443,7 +459,10 @@ class GsmModem(SerialComms):
         @param timeout: Maximum time to wait for the call to be established
         """
         self.write('ATD{0};'.format(number), waitForResponse=self._waitForAtdResponse)
-        # Wait for the ^ORIG notification message
+        if self._mustPollCallStatus:
+            # Fake a call notification by polling call status until the status indicates that the call is being dialed
+            threading.Thread(target=self._pollCallStatus, kwargs={'expectedState': 0, 'timeout': timeout}).start()            
+        # Wait for the "call originated" notification message
         self._dialEvent = threading.Event()
         if self._dialEvent.wait(timeout):
             self._dialEvent = None
@@ -453,7 +472,8 @@ class GsmModem(SerialComms):
             return call
         else: # Call establishing timed out
             self._dialEvent = None            
-            raise TimeoutException()
+            raise TimeoutException()                    
+
 
     def _handleModemNotification(self, lines):
         """ Handler for unsolicited notifications from the modem
@@ -489,7 +509,7 @@ class GsmModem(SerialComms):
                 return
             else:
                 # Check for call status updates            
-                for updateRegex, handlerFunc in self.callStatusUpdates:
+                for updateRegex, handlerFunc in self._callStatusUpdates:
                     match = updateRegex.match(line)
                     if match:
                         # Handle the update
@@ -530,33 +550,42 @@ class GsmModem(SerialComms):
             callId = len(self.activeCalls) + 1;
             call = IncomingCall(self, callerNumber, ton, callerName, callId, callType)
             self.activeCalls[callId] = call
-        self.incomingCallCallback(call)
+        self.incomingCallCallback(call)    
     
-    def _handleCallInitiated(self, regexMatch):
+    def _handleCallInitiated(self, regexMatch, callId=None, callType=1):
         """ Handler for "outgoing call initiated" event notification line """
         if self._dialEvent:
-            groups = regexMatch.groups()
-            if len(groups) >= 2:                                
-                self._dialResponse = (int(groups[0]) , int(groups[1]))
+            if regexMatch:
+                groups = regexMatch.groups()
+                # Set self._dialReponse to (callId, callType)
+                if len(groups) >= 2:                
+                    self._dialResponse = (int(groups[0]) , int(groups[1]))
+                else:
+                    self._dialResponse = (int(groups[0]), 1) # assume call type: VOICE
             else:
-                self._dialResponse = (int(groups[0]), 1) # assume call type: VOICE
+                self._dialResponse = callId, callType
             self._dialEvent.set()
                 
-    def _handleCallAnswered(self, regexMatch):
+    def _handleCallAnswered(self, regexMatch, callId=None):
         """ Handler for "outgoing call answered" event notification line """
-        groups = regexMatch.groups()
-        if len(groups) > 1:
-            callId = int(groups[0])
-            self.activeCalls[callId].answered = True
+        if regexMatch:
+            groups = regexMatch.groups()
+            if len(groups) > 1:
+                callId = int(groups[0])
+                self.activeCalls[callId].answered = True
+            else:
+                # Call ID not available for this notificaiton - check for the first outgoing call that has not been answered
+                for call in dictValuesIter(self.activeCalls):
+                    if call.answered == False and type(call) == Call:
+                        call.answered = True
+                        return
         else:
-            # Call ID not available for this notificaiton - check for the first outgoing call that has not been answered
-            for call in dictValuesIter(self.activeCalls):
-                if call.answered == False and type(call) == Call:
-                    call.answered = True
-                    return
-    
-    def _handleCallEnded(self, regexMatch):
-        callId = int(regexMatch.group(1))
+            # Use supplied values
+            self.activeCalls[callId].answered = True
+
+    def _handleCallEnded(self, regexMatch, callId=None):
+        if regexMatch:
+            callId = int(regexMatch.group(1))
         if callId in self.activeCalls:
             self.activeCalls[callId].answered = False
             del self.activeCalls[callId]
@@ -663,6 +692,45 @@ class GsmModem(SerialComms):
     def _placeHolderCallback(self, *args):
         """ Does nothing """
         self.log.debug('called with args: {0}'.format(args))
+    
+    def _pollCallStatus(self, expectedState, callId=None, timeout=None):
+        """ Poll the status of outgoing calls.    
+        This is used for modems that do not have a known set of call status update notifications.
+        
+        @param expectedState: The internal state we are waiting for. 0 == initiated, 1 == answered, 2 = hangup
+        @type expectedState: int
+        
+        @raise TimeoutException: If a timeout was specified, and has occurred
+        """
+        callDone = False
+        timeLeft = timeout or 999999
+        while self.alive and not callDone and timeLeft > 0:
+            time.sleep(0.5)
+            if expectedState == 0: # Only call initializing can timeout
+                timeLeft -= 0.5
+            clcc = self._pollCallStatusRegex.match(self.write('AT+CLCC')[0])
+            if clcc:
+                # Determine call state        
+                direction = int(clcc.group(2))
+                if direction == 0: # Outgoing call
+                    stat = int(clcc.group(3))
+                    if expectedState == 0: # waiting for call initiated
+                        if stat == 2 or stat == 3: # Dialing or ringing ("alerting")                            
+                            callId = int(clcc.group(1))
+                            callType = int(clcc.group(4))
+                            self._handleCallInitiated(None, callId, callType) # if self_dialEvent is None, this does nothing
+                            expectedState = 1 # Now wait for call answer
+                    elif expectedState == 1: # waiting for call answered
+                        if stat == 0: # Call active
+                            callId = int(clcc.group(1))
+                            self._handleCallAnswered(None, callId)
+                            expectedState = 2 # Now wait for call hangup                            
+            elif expectedState == 2: # waiting for remote hangup
+                # Since there was no +CLCC response, the call is no longer active
+                callDone = True
+                self._handleCallEnded(None, callId=callId)
+        if timeLeft <= 0:
+            raise TimeoutException()
 
 
 class Call(object):
