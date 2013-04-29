@@ -1,0 +1,18 @@
+# .coveragerc to control coverage.py
+[run]
+branch = True
+source =
+    gsmmodem/
+    tools/
+# Omit Python 2.6 and 3 compatibility wrappers
+omit = gsmmodem/compat.py
+
+[report]
+# Regexes for lines to exclude from consideration
+exclude_lines =
+    # Have to re-enable the standard pragma
+    pragma: no cover
+    # Don't complain about Python version checks and subsequent monkey-patching
+    if sys.version_info
+    if PYTHON_VERSION
+

@@ -260,8 +260,7 @@ class TestGsmModemDial(unittest.TestCase):
         tests = (['0123456789', '1', '0'],)
         
         global MODEMS
-        for fakeModem in fakemodems.createModems():
-            print('Modem:', fakeModem)
+        for fakeModem in fakemodems.createModems():            
             self.init_modem(fakeModem)
             
             modem = self.modem.serial.modem # load the copy()-ed modem instance
@@ -357,7 +356,6 @@ class TestGsmModemPinConnect(unittest.TestCase):
     def test_connectPinLockedNoPin(self):
         """ Test connecting to the modem with a SIM PIN code - no PIN specified"""
         for modem in fakemodems.createModems():
-            print('Modem:', modem)
             modem.pinLock = True
             self.init_modem(modem)
             self.assertRaises(PinRequiredError, self.modem.connect)
@@ -365,7 +363,6 @@ class TestGsmModemPinConnect(unittest.TestCase):
     def test_connectPinLockedWithPin(self):
         """ Test connecting to the modem with a SIM PIN code - PIN specified"""
         for modem in fakemodems.createModems():
-            print('Modem:', modem)
             modem.pinLock = True
             self.init_modem(modem)
             # This should succeed
@@ -391,8 +388,6 @@ class TestIncomingCall(unittest.TestCase):
     def test_incomingCallAnswer(self):
         
         for modem in fakemodems.createModems():
-            print('Modem:', modem)
-            
             callReceived = [False, 'VOICE', '']
             def incomingCallCallbackFunc(call):
                 try:                    

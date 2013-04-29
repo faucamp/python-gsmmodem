@@ -1,0 +1,24 @@
+*.py[cod]
+
+# Package-building stuff
+*.egg
+*.egg-info
+dist
+build
+
+# Eclipse project info
+.project
+.pydevproject
+.settings
+
+# Symlinks (if present)
+examples/gsmmodem
+test/gsmmodem
+test/gsmtermlib
+tools/gsmmodem
+tools/gsmtermlib/gsmmodem
+tools/init
+
+# Unit tests / coverage reports
+.coverage
+htmlcov
