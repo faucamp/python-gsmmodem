@@ -58,6 +58,9 @@ http://pyserial.sourceforge.net
 Testing the package
 -------------------
 
+[![Build Status](https://travis-ci.org/faucamp/python-gsmmodem.png?branch=master)](https://travis-ci.org/faucamp/python-gsmmodem)
+[![Coverage Status](https://coveralls.io/repos/faucamp/python-gsmmodem/badge.png?branch=master)](https://coveralls.io/r/faucamp/python-gsmmodem)
+
 To run all unit tests, do:
 
 > python setup.py test

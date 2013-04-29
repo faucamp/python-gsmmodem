@@ -3,9 +3,13 @@
 branch = True
 source =
     gsmmodem/
-    tools/
-# Omit Python 2.6 and 3 compatibility wrappers
-omit = gsmmodem/compat.py
+    tools/gsmtermlib
+omit =
+    # Omit Python 2.6 and 3 compatibility wrappers
+    gsmmodem/compat.py
+    tools/gsmtermlib/posoptparse.py
+    # Omit GSMTerm UI
+    tools/gsmtermlib/terminal.py
 
 [report]
 # Regexes for lines to exclude from consideration
