@@ -56,23 +56,35 @@ class Trie(object):
         if key == None:            
             raise ValueError('Key may not be None')
         if len(key) == 0:
-            self.key = None
-            self.value = None
-            return        
+            if self.key == '':
+                self.key = None
+                self.value = None
+                return
+            else:
+                raise KeyError(key)
         c = key[0]
         if c in self.slots:
-            trie = self.slots[c]            
-            if key == trie.key:
-                del self.slots[c] # Remove the node
+            trie = self.slots[c]
+            if key[1:] == trie.key:
+                if len(trie.slots) > 0:
+                    trie.key = None
+                    trie.value = None
+                else:
+                    del self.slots[c] # Remove the node
             else:
                 del trie[key[1:]]
+        else:
+            raise KeyError(key)
                 
     def __getitem__(self, key):
         if key == None:            
             raise ValueError('Key may not be None')
         if len(key) == 0:
-            # All of the original key's chars have ben nibbled away
-            return self.value
+            if self.key == '':
+                # All of the original key's chars have ben nibbled away
+                return self.value
+            else:
+                raise KeyError(key)
         c = key[0]        
         if c in self.slots:
             trie = self.slots[c]
@@ -143,8 +155,7 @@ class Trie(object):
         (note: the return value will always start with the specified prefix)
         """
         return self._longestCommonPrefix(prefix, '')
-    
-    
+
     def _longestCommonPrefix(self, key, prefix):
         if len(key) == 0:
             if self.key != None:
@@ -158,15 +169,15 @@ class Trie(object):
                     return prefix
         elif self.key != None:
             if self.key.startswith(key):
-                return self.key
+                return prefix + self.key
             else:
-                return prefix
+                return '' # nothing starts with the specified prefix
         else:
             c = key[0]
             if c in self.slots:
                 return self.slots[c]._longestCommonPrefix(key[1:], prefix + c)
             else:
-                return prefix
+                return '' # nothing starts with the specified prefix
     
     def __iter__(self):
         for k in list(self.keys()):

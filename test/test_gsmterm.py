@@ -5,6 +5,7 @@
 import sys, unittest
 
 from . import compat # For Python 2.6 compatibility
+from django.template.defaultfilters import default
 try:
     import gsmtermlib.trie
 except ImportError:
@@ -30,7 +31,35 @@ class TestTrie(unittest.TestCase):
         self.assertEqual(self.trie['hallo'], 'daar')
         self.assertEqual(len(self.trie), 1)
         self.assertRaises(KeyError, self.trie.__getitem__, 'abc')
-        
+        # Set/get None key
+        self.assertRaises(ValueError, self.trie.__setitem__, None, 'someValue')        
+        self.assertRaises(ValueError, self.trie.__getitem__, None)
+        # Store zero-length key
+        self.assertRaises(KeyError, self.trie.__getitem__, '')
+        self.trie[''] = '123'
+        self.assertEqual(self.trie[''], '123')
+        self.assertEqual(len(self.trie), 2)
+    
+    def test_deleteSingle(self):
+        """ Tests deleting single key/value pair """        
+        self.trie['hallo'] = 'daar'        
+        self.assertEqual(self.trie['hallo'], 'daar')
+        self.assertEqual(len(self.trie), 1)
+        del self.trie['hallo']
+        self.assertRaises(KeyError, self.trie.__getitem__, 'hallo')
+        self.assertEqual(len(self.trie), 0)
+        # Delete None key
+        self.assertRaises(ValueError, self.trie.__delitem__, None)
+        # Delete unknown key
+        self.assertRaises(KeyError, self.trie.__delitem__, 'unknown key')
+        # Delete zero-length unknown key
+        self.assertRaises(KeyError, self.trie.__delitem__, '')
+        # Delete zero-lenght known key
+        self.trie[''] = '123'
+        self.assertEqual(len(self.trie), 1)
+        del self.trie['']
+        self.assertEqual(len(self.trie), 0)
+    
     def test_storeRetrieveMultiple(self):
         n = 0
         for key, value in self.keyValuePairs:
@@ -40,7 +69,19 @@ class TestTrie(unittest.TestCase):
             # Make sure nothing was lost
             for oldKey, oldValue in self.keyValuePairs[:n-1]:
                 self.assertEqual(self.trie[oldKey], oldValue)
-    
+                
+    def test_storeDeleteMultiple(self):
+        self.assertEqual(len(self.trie), 0)
+        for key, value in self.keyValuePairs:
+            self.trie[key] = value
+        self.assertEqual(len(self.trie), len(self.keyValuePairs))
+        n = len(self.trie)
+        for key, value in self.keyValuePairs:
+            n -= 1
+            del self.trie[key]
+            self.assertEqual(len(self.trie), n)
+        self.assertEqual(len(self.trie), 0)
+
     def test_len(self):
         n = 0
         for key, value in self.keyValuePairs:
@@ -48,6 +89,22 @@ class TestTrie(unittest.TestCase):
             self.trie[key] = value
             self.assertEqual(len(self.trie), n, 'Incorrect trie length. Expected {0}, got {1}. Last entry: {2}: {3}'.format(n, len(self.trie), key, value))
     
+    def test_contains(self):
+        for key, value in self.keyValuePairs:
+            self.assertFalse(key in self.trie)
+            self.trie[key] = value
+            self.assertTrue(key in self.trie)
+            
+    def test_getMethod(self):
+        # Test invalid None key
+        self.assertRaises(ValueError, self.trie.get, None)
+        # Test unknown key
+        self.assertEqual(self.trie.get('abc'), None) # no default
+        self.assertEqual(self.trie.get('abc', default='def'), 'def') # with default
+        self.trie['abc'] = '123'
+        self.assertEqual(self.trie.get('abc'), '123') # no default
+        self.assertEqual(self.trie.get('abc', default='def'), '123') # with default 
+
     def test_keys(self):
         """ Test the "keys" method of the trie """
         localKeys = []
@@ -107,6 +164,10 @@ class TestTrie(unittest.TestCase):
         self.assertEqual(self.trie.longestCommonPrefix('ab'), 'abc')
         self.assertEqual(self.trie.longestCommonPrefix('abc'), 'abc')
         self.assertEqual(self.trie.longestCommonPrefix('abcD'), 'abcD')
+        self.assertEqual(self.trie.longestCommonPrefix('abcDz'), '')
+        self.assertEqual(self.trie.longestCommonPrefix('abcDE'), 'abcDEF')
+        self.assertEqual(self.trie.longestCommonPrefix('abcDEF'), 'abcDEF')
+        self.assertEqual(self.trie.longestCommonPrefix('abcDEz'), '')
         keys = ('ATD', 'ATDL')
         for key in keys:
             self.trie[key] = 1
@@ -114,7 +175,21 @@ class TestTrie(unittest.TestCase):
         self.assertEqual(self.trie.longestCommonPrefix('A'), 'ATD')
         self.assertEqual(self.trie.longestCommonPrefix('AT'), 'ATD')
         self.assertEqual(self.trie.longestCommonPrefix('ATD'), 'ATD')
-        
+    
+    def test_iter(self):
+        for key, value in self.keyValuePairs:
+            self.trie[key] = value
+        n = 0
+        a = iter(self.trie)
+        while True:
+            try:
+                a.next()
+            except StopIteration:
+                break
+            else:
+                n += 1
+        self.assertEqual(n, len(self.trie))
+
 
 class TestAtCommands(unittest.TestCase):
     """ Test suite for the AT Commands data structure """
