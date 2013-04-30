@@ -340,7 +340,7 @@ class GsmModem(SerialComms):
         if self._smsTextMode:
             if self.CMGR_SM_DELIVER_REGEX_TEXT == None:
                 self.CMGR_SM_DELIVER_REGEX_TEXT = re.compile(r'^\+CMGR: "([^"]+)","([^"]+)",[^,]*,"([^"]+)"$')
-                self.CMGR_SM_REPORT_REGEXT_TEXT = re.compile(r'^\+CMGR: "([^"]+)",\d+,(\d+),"{0,1}([^"]*)"{0,1},\d*,"([^"]+)","([^"]+)",(\d+)$')
+                self.CMGR_SM_REPORT_REGEXT_TEXT = re.compile(r'^\+CMGR: ([^,]*),\d+,(\d+),"{0,1}([^"]*)"{0,1},\d*,"([^"]+)","([^"]+)",(\d+)$')
         elif self.CMGR_REGEX_PDU == None:
             self.CMGR_REGEX_PDU = re.compile(r'^\+CMGR: (\d+),(\d*),(\d+)$')
             
@@ -652,20 +652,24 @@ class GsmModem(SerialComms):
                 cmgrMatch = self.CMGR_SM_REPORT_REGEXT_TEXT.match(msgData[0])
                 if cmgrMatch:
                     msgStatus, reference, number, sentTime, deliverTime, deliverStatus = cmgrMatch.groups()
+                    if msgStatus.startswith('"'):
+                        msgStatus = msgStatus[1:-1]                    
+                    if len(msgStatus) == 0:
+                        msgStatus = "REC UNREAD"
                     # Parse date/time
                     timeStr = sentTime[:-3]
                     tzOffsetHours = int(sentTime[-3:])
                     parsedSentTime = datetime.strptime(timeStr, '%y/%m/%d,%H:%M:%S').replace(tzinfo=SimpleOffsetTzInfo(tzOffsetHours))
-                    timeStr = sentTime[:-3]
-                    tzOffsetHours = int(sentTime[-3:])
+                    timeStr = deliverTime[:-3]
+                    tzOffsetHours = int(deliverTime[-3:])
                     parsedDeliveryTime = datetime.strptime(timeStr, '%y/%m/%d,%H:%M:%S').replace(tzinfo=SimpleOffsetTzInfo(tzOffsetHours))
                     return StatusReport(self, Sms.TEXT_MODE_STATUS_MAP[msgStatus], int(reference), number, parsedSentTime, parsedDeliveryTime, int(deliverStatus))
                 else:
-                    raise CommandError('Failed to parse the SMS message +CMGR response: {0}'.format(msgData))
+                    raise CommandError('Failed to parse text-mode SMS message +CMGR response: {0}'.format(msgData))
         else:
             cmgrMatch = self.CMGR_REGEX_PDU.match(msgData[0])
             if not cmgrMatch:
-                raise CommandError('Failed to parse the SMS message +CMGR response: {0}'.format(msgData))
+                raise CommandError('Failed to parse PDU-mode SMS message +CMGR response: {0}'.format(msgData))
             stat, alpha, length = cmgrMatch.groups()
             pdu = msgData[1]
             smsDict = decodeSmsPdu(pdu)

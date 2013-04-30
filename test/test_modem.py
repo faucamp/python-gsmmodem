@@ -10,6 +10,7 @@ from copy import copy
 
 from . import compat # For Python 2.6 compatibility
 from gsmmodem.exceptions import PinRequiredError
+from gsmmodem.modem import StatusReport, Sms
 PYTHON_VERSION = sys.version_info[0]
 
 import gsmmodem.serial_comms
@@ -608,6 +609,74 @@ class TestSms(unittest.TestCase):
             while callbackInfo[0] == False:
                 time.sleep(0.1)
         self.modem.close()
+
+
+class TestSmsStatusReports(unittest.TestCase):
+    """ Tests receiving SMS status reports """
+        
+    def initModem(self, smsStatusReportCallback):
+        # Override the pyserial import        
+        self.mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = self.mockSerial
+        self.modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --', smsStatusReportCallback=smsStatusReportCallback)        
+        self.modem.connect()
+    
+    def test_receiveSmsTextMode(self):
+        """ Tests receiving SMS status reports in text mode """
+        
+        
+        tests = ((57, '"SR"',
+                  '+CMGR: ,6,20,"0870000000",129,"13/04/29,19:58:00+04","13/04/29,19:59:00+04",0',
+                  Sms.STATUS_RECEIVED_UNREAD, # message read status 
+                  '0870000000', # number
+                  20, # reference
+                  datetime(2013, 4, 29, 19, 58, 0, tzinfo=SimpleOffsetTzInfo(4)), # sentTime
+                  datetime(2013, 4, 29, 19, 59, 0, tzinfo=SimpleOffsetTzInfo(4)), # deliverTime
+                  StatusReport.DELIVERED), # delivery status
+                 )
+        
+        callbackDone = [False]
+        
+        for index, mem, notification, msgStatus, number, reference, sentTime, deliverTime, deliveryStatus in tests:            
+            def smsStatusReportCallbackFuncText(sms):
+                try:
+                    self.assertIsInstance(sms, gsmmodem.modem.StatusReport)
+                    self.assertEqual(sms.status, msgStatus, 'Status report read status incorrect. Expected: "{0}", got: "{1}"'.format(msgStatus, sms.status))
+                    self.assertEqual(sms.number, number, 'SMS sender number incorrect. Expected: "{0}", got: "{1}"'.format(number, sms.number))                    
+                    self.assertEqual(sms.reference, reference, 'Status report SMS reference number incorrect. Expected: "{0}", got: "{1}"'.format(reference, sms.reference))
+                    self.assertIsInstance(sms.timeSent, datetime, 'SMS sent time type invalid. Expected: datetime.datetime, got: {0}"'.format(type(sms.timeSent)))
+                    self.assertEqual(sms.timeSent, sentTime, 'SMS sent time incorrect. Expected: "{0}", got: "{1}"'.format(sentTime, sms.timeSent))
+                    self.assertIsInstance(sms.timeFinalized, datetime, 'SMS finalized time type invalid. Expected: datetime.datetime, got: {0}"'.format(type(sms.timeFinalized)))
+                    self.assertEqual(sms.timeFinalized, deliverTime, 'SMS finalized time incorrect. Expected: "{0}", got: "{1}"'.format(deliverTime, sms.timeFinalized))
+                    self.assertEqual(sms.deliveryStatus, deliveryStatus, 'SMS delivery status incorrect. Expected: "{0}", got: "{1}"'.format(deliveryStatus, sms.deliveryStatus))                
+                    self.assertEqual(sms.smsc, None, 'Text-mode SMS should not have any SMSC information')
+                finally:
+                    callbackDone[0] = True
+            self.initModem(smsStatusReportCallback=smsStatusReportCallbackFuncText)
+            self.modem.smsTextMode = True
+            def writeCallbackFunc(data):
+                def writeCallbackFunc2(data):                    
+                    self.assertEqual('AT+CMGR={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGR={0}'.format(index), data))
+                    self.modem.serial.responseSequence = ['{0}\r\n'.format(notification), 'OK\r\n']
+                    def writeCallbackFunc3(data):
+                        self.assertEqual('AT+CMGD={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(index), data))
+                    self.modem.serial.writeCallbackFunc = writeCallbackFunc3
+                if self.modem._smsMemReadDelete != mem:
+                    self.assertEqual('AT+CPMS={0}\r'.format(mem), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CPMS={0}'.format(mem), data))
+                    self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+                else:
+                    # Modem does not need to change read memory
+                    writeCallbackFunc2(data)
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            # Fake a "new status report" notification
+            self.modem.serial.responseSequence = ['+CDSI: {0},{1}\r\n'.format(mem, index)]
+            # Wait for the handler function to finish
+            while callbackDone[0] == False:
+                time.sleep(0.1)
+        self.modem.close()
+        
+    def test_receiveSmsPduMode(self):
+        """ Tests receiving SMS status reports in PDU mode """
 
 
 if __name__ == "__main__":
