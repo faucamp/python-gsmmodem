@@ -13,6 +13,7 @@ class FakeModem(object):
         self._pinLock = False
         self.defaultResponse = ['OK\r\n']
         self.pinRequiredErrorResponse = ['+CME ERROR: 11\r\n']
+        self.smscNumber = None
     
     def getResponse(self, cmd):
         if self._pinLock and not cmd.startswith('AT+CPIN'):
@@ -25,7 +26,12 @@ class FakeModem(object):
                 return copy(self.pinRequiredErrorResponse)
         else:
             if cmd.startswith('AT+CPIN="'):
-                self.pinLock = False            
+                self.pinLock = False
+            elif cmd == 'AT+CSCA?\r':
+                if self.smscNumber != None:
+                    return ['+CSCA: "{0}",145\r\n'.format(self.smscNumber), 'OK\r\n']
+                else:
+                    return ['OK\r\n']
             if cmd in self.responses:
                 return copy(self.responses[cmd])
             else:
@@ -227,6 +233,9 @@ class QualcommM6280(FakeModem):
             else:
                 return super(QualcommM6280, self).getResponse(cmd)
         else:
+            if cmd.startswith('AT+CSMP='):
+                # Clear the SMSC number (this behaviour was reported in issue #8 on github)
+                self.smscNumber = None
             return super(QualcommM6280, self).getResponse(cmd)
 
     def getAtdResponse(self, number):

@@ -229,7 +229,7 @@ class TestGsmModemGeneralApi(unittest.TestCase):
                 self.modem.serial.responseSequence = ['OK\r\n']
             self.assertEqual(test, self.modem.smsc)
         # Reset SMSC number internally
-        self.modem._smscNumber = None        
+        self.modem._smscNumber = None
         self.assertEqual(self.modem.smsc, None)
         # Now test setting the SMSC number
         for test in tests:
@@ -242,9 +242,32 @@ class TestGsmModemGeneralApi(unittest.TestCase):
             self.assertEqual(test, self.modem.smsc)
 
 
+class TestModemGeneralApiEdgeCases(unittest.TestCase):
+    """ Edge-case testing; some modems do funny things during seemingly normal operations """
+    
+    def test_smscPreloaded(self):
+        """ Tests reading the SMSC number if it was pre-loaded on the SIM (some modems delete the number during connect()) """
+        tests = [None, '+12345678']
+        global FAKE_MODEM
+        for test in tests:
+            for fakeModem in fakemodems.createModems():
+                # Init modem and preload SMSC number
+                fakeModem.smscNumber = test
+                FAKE_MODEM = fakeModem
+                mockSerial = MockSerialPackage()
+                gsmmodem.serial_comms.serial = mockSerial        
+                modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')
+                modem.connect()
+                # Make sure SMSC number was prevented from being deleted (some modems do this when setting text-mode paramters AT+CSMP)
+                self.assertEqual(test, modem.smsc, 'SMSC number was changed/deleted during connect()')
+                modem.close()
+        FAKE_MODEM = None
+
+
 class TestGsmModemDial(unittest.TestCase):
     
     def tearDown(self):
+        self.modem.close()
         global FAKE_MODEM
         FAKE_MODEM = None
     
@@ -360,6 +383,7 @@ class TestGsmModemPinConnect(unittest.TestCase):
             modem.pinLock = True
             self.init_modem(modem)
             self.assertRaises(PinRequiredError, self.modem.connect)
+            self.modem.close()
     
     def test_connectPinLockedWithPin(self):
         """ Test connecting to the modem with a SIM PIN code - PIN specified"""
@@ -371,12 +395,15 @@ class TestGsmModemPinConnect(unittest.TestCase):
                 self.modem.connect(pin='1234')
             except PinRequiredError:
                 self.fail("Pin required exception thrown for modem {0}".format(modem))
+            finally:
+                self.modem.close()
 
 class TestIncomingCall(unittest.TestCase):
     
     def tearDown(self):
         global FAKE_MODEM
         FAKE_MODEM = None
+        self.modem.close()
     
     def init_modem(self, modem, incomingCallCallbackFunc):
         global FAKE_MODEM
