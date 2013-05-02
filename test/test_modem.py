@@ -22,6 +22,8 @@ from . import fakemodems
 
 # The fake modem to use (if any)
 FAKE_MODEM = None
+# Write callback to use during Serial.__init__() - usually None, but useful for setting write callbacks during modem.connect()
+SERIAL_WRITE_CALLBACK_FUNC = None
 
 class MockSerialPackage(object):
     """ Fake serial package for the GsmModem/SerialComms classes to import during tests """
@@ -39,7 +41,8 @@ class MockSerialPackage(object):
             self.writeQueue = []
             self._alive = True
             self._readQueue = []
-            self.writeCallbackFunc = None
+            global SERIAL_WRITE_CALLBACK_FUNC
+            self.writeCallbackFunc = SERIAL_WRITE_CALLBACK_FUNC
             global FAKE_MODEM
             # Pre-determined responses to specific commands - used for imitating specific modems
             if FAKE_MODEM != None:
@@ -242,7 +245,7 @@ class TestGsmModemGeneralApi(unittest.TestCase):
             self.assertEqual(test, self.modem.smsc)
 
 
-class TestModemGeneralApiEdgeCases(unittest.TestCase):
+class TestEdgeCases(unittest.TestCase):
     """ Edge-case testing; some modems do funny things during seemingly normal operations """
     
     def test_smscPreloaded(self):
@@ -261,6 +264,49 @@ class TestModemGeneralApiEdgeCases(unittest.TestCase):
                 # Make sure SMSC number was prevented from being deleted (some modems do this when setting text-mode paramters AT+CSMP)
                 self.assertEqual(test, modem.smsc, 'SMSC number was changed/deleted during connect()')
                 modem.close()
+        FAKE_MODEM = None
+    
+    def test_cfun0(self):
+        """ Tests case where a modem's functionality setting is 0 at startup """
+        global FAKE_MODEM            
+        FAKE_MODEM = fakemodems.GenericTestModem()
+        FAKE_MODEM.responses['AT+CFUN?\r'] = ['+CFUN: 0\r\n', 'OK\r\n']
+        # This should pass without any problem, and AT+CFUN=1 should be set during connect()
+        cfunWritten = [False]
+        def writeCallbackFunc(data):
+            if data == 'AT+CFUN=1\r':
+                cfunWritten[0] = True
+        global SERIAL_WRITE_CALLBACK_FUNC
+        SERIAL_WRITE_CALLBACK_FUNC = writeCallbackFunc         
+        mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = mockSerial
+        modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')        
+        modem.connect()
+        SERIAL_WRITE_CALLBACK_FUNC = None
+        self.assertTrue(cfunWritten[0], 'Modem CFUN setting not set to 1 during connect()')
+        modem.close()
+        FAKE_MODEM = None
+    
+    def test_cfunNotSupported(self):
+        """ Tests case where a modem does not support the AT+CFUN command """
+        global FAKE_MODEM            
+        FAKE_MODEM = fakemodems.GenericTestModem()
+        FAKE_MODEM.responses['AT+CFUN?\r'] = ['ERROR\r\n']
+        FAKE_MODEM.responses['AT+CFUN=1\r'] = ['ERROR\r\n']
+        # This should pass without any problem, and AT+CFUN? should at least have been checked during connect()
+        cfunWritten = [False]
+        def writeCallbackFunc(data):
+            if data == 'AT+CFUN?\r':
+                cfunWritten[0] = True
+        global SERIAL_WRITE_CALLBACK_FUNC
+        SERIAL_WRITE_CALLBACK_FUNC = writeCallbackFunc         
+        mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = mockSerial
+        modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')        
+        modem.connect()
+        SERIAL_WRITE_CALLBACK_FUNC = None
+        self.assertTrue(cfunWritten[0], 'Modem CFUN setting not set to 1 during connect()')
+        modem.close()
         FAKE_MODEM = None
 
 
@@ -379,7 +425,8 @@ class TestGsmModemPinConnect(unittest.TestCase):
         
     def test_connectPinLockedNoPin(self):
         """ Test connecting to the modem with a SIM PIN code - no PIN specified"""
-        for modem in fakemodems.createModems():
+        testModems = fakemodems.createModems()
+        for modem in testModems:
             modem.pinLock = True
             self.init_modem(modem)
             self.assertRaises(PinRequiredError, self.modem.connect)
@@ -387,7 +434,12 @@ class TestGsmModemPinConnect(unittest.TestCase):
     
     def test_connectPinLockedWithPin(self):
         """ Test connecting to the modem with a SIM PIN code - PIN specified"""
-        for modem in fakemodems.createModems():
+        testModems = fakemodems.createModems()
+        # Also test a modem that allows only CMEE commands before PIN is entered
+        edgeCaseModem = fakemodems.GenericTestModem()
+        edgeCaseModem.commandsNoPinRequired = ['AT+CMEE=1\r']
+        testModems.append(edgeCaseModem)
+        for modem in testModems:
             modem.pinLock = True
             self.init_modem(modem)
             # This should succeed
