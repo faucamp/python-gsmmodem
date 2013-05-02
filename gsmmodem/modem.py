@@ -171,8 +171,10 @@ class GsmModem(SerialComms):
         self._compileSmsRegexes()
         if self._smscNumber != None:
             self.write('AT+CSCA="{0}"'.format(self._smscNumber)) # Set default SMSC number
+            currentSmscNumber = self._smscNumber
+        else:
+            currentSmscNumber = self.smsc
         # Some modems delete the SMSC number when setting text-mode SMS parameters; preserve it if needed
-        currentSmscNumber = self.smsc
         if currentSmscNumber != None:
             self._smscNumber = None # clear cache
         self.write('AT+CSMP=49,167,0,0', parseError=False) # Enable delivery reports
