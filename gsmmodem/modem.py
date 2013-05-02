@@ -279,7 +279,13 @@ class GsmModem(SerialComms):
 
     @property
     def signalStrength(self):
-        """ @return: The network signal strength as an integer between 0 and 99, or -1 if it is unknown """
+        """ Checks the modem's cellular network signal strength
+        
+        @raise CommandError: if an error occurs
+        
+        @return: The network signal strength as an integer between 0 and 99, or -1 if it is unknown
+        @rtype: int
+        """
         csq = self.CSQ_REGEX.match(self.write('AT+CSQ')[0])
         if csq:
             ss = int(csq.group(1))
@@ -386,7 +392,8 @@ class GsmModem(SerialComms):
         
         @raise TimeoutException: if a timeout was specified and reached
         
-        @return: the current signal strength as an integer
+        @return: the current signal strength
+        @rtype: int
         """
         block = [True]
         if timeout != None:
@@ -398,7 +405,7 @@ class GsmModem(SerialComms):
         ss = -1
         while block[0]:
             ss = self.signalStrength
-            if ss:
+            if ss > 0:
                 return ss
             time.sleep(1)
         else:

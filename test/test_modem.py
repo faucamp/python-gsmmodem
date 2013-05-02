@@ -9,7 +9,7 @@ from datetime import datetime
 from copy import copy
 
 from . import compat # For Python 2.6 compatibility
-from gsmmodem.exceptions import PinRequiredError
+from gsmmodem.exceptions import PinRequiredError, CommandError
 from gsmmodem.modem import StatusReport, Sms
 PYTHON_VERSION = sys.version_info[0]
 
@@ -243,6 +243,43 @@ class TestGsmModemGeneralApi(unittest.TestCase):
             self.modem.serial.writeCallbackFunc = writeCallbackFunc2
             self.modem.smsc = test
             self.assertEqual(test, self.modem.smsc)
+    
+    def test_signalStrength(self):
+        """ Tests reading signal strength from the modem """
+        def writeCallbackFunc(data):
+            self.assertEqual('AT+CSQ\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSQ', data))
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc
+        tests = (('+CSQ: 18,99', 18),
+                 ('+CSQ:4,0', 4),
+                 ('+CSQ: 99,99', -1))
+        for response, expected in tests:
+            self.modem.serial.responseSequence = ['{0}\r\n'.format(response), 'OK\r\n']
+            self.assertEqual(expected, self.modem.signalStrength)
+        # Test error condition (unparseable response)
+        self.modem.serial.responseSequence = ['OK\r\n']
+        try:
+            self.modem.signalStrength
+        except CommandError:
+            pass
+        else:
+            self.fail('CommandError not raised on error condition')
+
+    def test_waitForNetorkCoverage(self):
+        """ Tests waiting for network coverage """
+        tests = ((82,),
+                 (99, 99, 47),)
+        for seq in tests:
+            items = iter(seq)
+            def writeCallbackFunc(data):
+                if data == 'AT+CSQ\r':
+                    try:
+                        self.modem.serial.responseSequence = ['+CSQ: {0},99\r\n'.format(next(items)), 'OK\r\n']
+                    except StopIteration:
+                        self.fail("Too many AT+CSQ writes issued")                
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc            
+            signalStrength = self.modem.waitForNetworkCoverage()
+            self.assertNotEqual(signalStrength, -1, '"Unknown" signal strength returned - should still have blocked')
+            self.assertEqual(seq[-1], signalStrength, 'Incorrect signal strength returned')
 
 
 class TestEdgeCases(unittest.TestCase):

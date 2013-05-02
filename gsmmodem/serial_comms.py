@@ -22,7 +22,12 @@ class SerialComms(object):
     # Default timeout for serial port reads (in seconds)
     timeout = 1
         
-    def __init__(self, port, baudrate=115200, notifyCallbackFunc=None, *args, **kwargs):        
+    def __init__(self, port, baudrate=115200, notifyCallbackFunc=None, fatalErrorCallbackFunc=None, *args, **kwargs):
+        """ Constructor
+         
+        @param fatalErrorCallbackFunc: function to call if a fatal error occurs in the serial device reading thread
+        @type fatalErrorCallbackFunc: func
+        """     
         self.alive = False
         self.port = port
         self.baudrate = baudrate
@@ -35,6 +40,7 @@ class SerialComms(object):
         self._txLock = threading.RLock()
         
         self.notifyCallback = notifyCallbackFunc or self._placeholderCallback        
+        self.fatalErrorCallback = fatalErrorCallbackFunc or self._placeholderCallback
         
     def connect(self):
         """ Connects to the device and starts the read thread """                
@@ -104,7 +110,12 @@ class SerialComms(object):
                 #' <RX timeout>'
         except serial.SerialException as e:
             self.alive = False
-            raise
+            try:
+                self.serial.close()
+            except Exception: #pragma: no cover
+                pass
+            # Notify the fatal error handler
+            self.fatalErrorCallback(e)
         
     def write(self, data, waitForResponse=True, timeout=5, expectedResponseTermSeq=None):
         with self._txLock:            

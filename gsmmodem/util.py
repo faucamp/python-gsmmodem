@@ -9,11 +9,11 @@ class SimpleOffsetTzInfo(tzinfo):
     """ Very simple implementation of datetime.tzinfo offering set timezone offset for datetime instances """
     
     def __init__(self, offsetInHours=None):
-        if offsetInHours != None:
+        if offsetInHours != None: #pragma: no cover
             self.offsetInHours = offsetInHours        
     
     def utcoffset(self, dt):
         return timedelta(hours=self.offsetInHours)
     
-    def dst(self, dt):        
+    def dst(self, dt):
         return timedelta(0)
