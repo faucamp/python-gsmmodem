@@ -176,13 +176,15 @@ class TestTrie(unittest.TestCase):
         self.assertEqual(self.trie.longestCommonPrefix('ATD'), 'ATD')
     
     def test_iter(self):
+        localKeys = []
         for key, value in self.keyValuePairs:
+            localKeys.append(key)
             self.trie[key] = value
         n = 0
         a = iter(self.trie)
         while True:
             try:
-                a.next()
+                self.assertIn(next(a), localKeys)
             except StopIteration:
                 break
             else:
