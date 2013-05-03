@@ -629,6 +629,41 @@ class TestSms(unittest.TestCase):
             self.assertIsInstance(sms.reference, int, 'Sent SMS reference type incorrect. Expected "{0}", got "{1}"'.format(int, type(sms.reference)))
             self.assertEqual(sms.reference, ref, 'Sent SMS reference incorrect. Expected "{0}", got "{1}"'.format(ref, sms.reference))
         self.modem.close()
+        
+    def test_sendSmsResponseMixedWithUnsolictedMessages(self):
+        """ Tests sending a SMS messages (PDU mode), but with unsolicted messages mixed into the modem responses
+        - the only difference here is that the modem's responseSequence contains unsolicted messages
+        taken from github issue #11
+        """
+        self.initModem(None)
+        self.modem.smsTextMode = False # Set modem to PDU mode        
+        for number, message, index, smsTime, smsc, pdu, sms_deliver_tpdu_length, ref, mem in self.tests:
+            self.modem._smsRef = ref
+            calcPdu, tpdu_length = gsmmodem.pdu.encodeSmsSubmitPdu(number, message, ref)
+            pduHex = codecs.encode(compat.str(calcPdu), 'hex_codec').upper()
+            if PYTHON_VERSION >= 3:
+                pduHex = str(pduHex, 'ascii')
+            
+            def writeCallbackFunc(data):
+                def writeCallbackFunc2(data):
+                    self.assertEqual('{0}{1}'.format(pduHex, chr(26)), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('{0}{1}'.format(pduHex, chr(26)), data))
+                    # Note thee +ZDONR and +ZPASR unsolicted messages in the "response"
+                    self.modem.serial.responseSequence =  ['+ZDONR: "METEOR",272,3,"CS_ONLY","ROAM_OFF"\r\n', '+ZPASR: "UMTS"\r\n', '+ZDONR: "METEOR",272,3,"CS_PS","ROAM_OFF"\r\n', '+ZPASR: "UMTS"\r\n', '+CMGS: {0}\r\n'.format(ref), 'OK\r\n']
+                self.assertEqual('AT+CMGS={0}\r'.format(tpdu_length), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS={0}'.format(tpdu_length), data))
+                self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            self.modem.serial.flushResponseSequence = True
+            
+            # Note thee +ZDONR and +ZPASR unsolicted messages in the "response"
+            self.modem.serial.responseSequence = ['+ZDONR: "METEOR",272,3,"CS_ONLY","ROAM_OFF"\r\n', '+ZPASR: "UMTS"\r\n', '> \r\n']
+                        
+            sms = self.modem.sendSms(number, message)
+            self.assertIsInstance(sms, gsmmodem.modem.SentSms)
+            self.assertEqual(sms.number, number, 'Sent SMS has invalid number. Expected "{0}", got "{1}"'.format(number, sms.number))
+            self.assertEqual(sms.text, message, 'Sent SMS has invalid text. Expected "{0}", got "{1}"'.format(message, sms.text))
+            self.assertIsInstance(sms.reference, int, 'Sent SMS reference type incorrect. Expected "{0}", got "{1}"'.format(int, type(sms.reference)))
+            self.assertEqual(sms.reference, ref, 'Sent SMS reference incorrect. Expected "{0}", got "{1}"'.format(ref, sms.reference))
+        self.modem.close()
     
     def test_receiveSmsTextMode(self):
         """ Tests receiving SMS messages in text mode """

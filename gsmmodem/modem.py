@@ -8,7 +8,7 @@ from datetime import datetime
 from .serial_comms import SerialComms
 from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException, TimeoutException, PinRequiredError, IncorrectPinError, SmscNumberUnknownError
 from .pdu import encodeSmsSubmitPdu, decodeSmsPdu
-from .util import SimpleOffsetTzInfo
+from .util import SimpleOffsetTzInfo, lineStartingWith
 
 from . import compat # For Python 2.6 compatibility
 PYTHON_VERSION = sys.version_info[0]
@@ -414,7 +414,7 @@ class GsmModem(SerialComms):
         global PYTHON_VERSION
         if self._smsTextMode:
             self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq='> ')
-            result = self.write(text, timeout=15, writeTerm=chr(26))[0]
+            result = lineStartingWith('+CMGS:', self.write(text, timeout=15, writeTerm=chr(26)))
         else:
             smsPdu, tpduLength = encodeSmsSubmitPdu(destination, text, reference=self._smsRef)
             if PYTHON_VERSION < 3:
@@ -422,7 +422,7 @@ class GsmModem(SerialComms):
             else:
                 smsPduHex = str(codecs.encode(smsPdu, 'hex_codec'), 'ascii').upper()
             self.write('AT+CMGS={0}'.format(tpduLength), timeout=3, expectedResponseTermSeq='> ')
-            result = self.write(smsPduHex, timeout=15, writeTerm=chr(26))[0] # example: +CMGS: xx
+            result = lineStartingWith('+CMGS:', self.write(smsPduHex, timeout=15, writeTerm=chr(26))) # example: +CMGS: xx
         reference = int(result[7:])
         self._smsRef = reference + 1
         if self._smsRef > 255:
