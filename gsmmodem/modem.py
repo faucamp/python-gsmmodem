@@ -251,12 +251,12 @@ class GsmModem(SerialComms):
                         # 14 means "SIM busy"
                         self._writeWait += 0.2 # Increase waiting period temporarily
                         # Retry the command after waiting a bit
-                        self.log.debug('515 error detected; self._writeWait adjusted to %ds', self._writeWait)
+                        self.log.debug('Device/SIM busy error detected; self._writeWait adjusted to %fs', self._writeWait)
                         time.sleep(self._writeWait)
                         result = self.write(data, waitForResponse, timeout, parseError, writeTerm, expectedResponseTermSeq)
-                        self.log.debug('self_writeWait set to 0.1 because of recovering from 515 error')
+                        self.log.debug('self_writeWait set to 0.1 because of recovering from device busy (515) error')
                         if errorCode == 515:
-                            self._writeWait = 0.1 # Set this to something sane for further commands
+                            self._writeWait = 0.1 # Set this to something sane for further commands (slow modem)
                         else:
                             self._writeWait = 0 # The modem was just waiting for the SIM card
                         return result

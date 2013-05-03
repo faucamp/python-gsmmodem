@@ -10,32 +10,39 @@ class FakeModem(object):
     def __init__(self):
         self.responses = {}
         self.commandsNoPinRequired = []
+        self.commandsSimBusy = [] # Commands that may trigger "SIM busy" errors
         self._pinLock = False
         self.defaultResponse = ['OK\r\n']
         self.pinRequiredErrorResponse = ['+CME ERROR: 11\r\n']
         self.smscNumber = None
+        self.simBusyErrorCounter = 0 # Number of times to issue a "SIM busy" error
+        self.deviceBusyErrorCounter = 0 # Number of times to issue a "Device busy" error
+        self.cfun = 1 # +CFUN value to report back
     
     def getResponse(self, cmd):
+        if self.deviceBusyErrorCounter > 0:
+            self.deviceBusyErrorCounter -= 1
+            return ['+CME ERROR: 515\r\n']
         if self._pinLock and not cmd.startswith('AT+CPIN'):
-            if cmd in self.commandsNoPinRequired:
-                if cmd in self.responses:
-                    return self.responses[cmd]
-                else:
-                    return copy(self.defaultResponse)
-            else:
+            if cmd not in self.commandsNoPinRequired:                
                 return copy(self.pinRequiredErrorResponse)
-        else:
-            if cmd.startswith('AT+CPIN="'):
-                self.pinLock = False
-            elif cmd == 'AT+CSCA?\r':
-                if self.smscNumber != None:
-                    return ['+CSCA: "{0}",145\r\n'.format(self.smscNumber), 'OK\r\n']
-                else:
-                    return ['OK\r\n']
-            if cmd in self.responses:
-                return copy(self.responses[cmd])
+
+        if cmd.startswith('AT+CPIN="'):
+            self.pinLock = False
+        elif self.simBusyErrorCounter > 0 and cmd in self.commandsSimBusy:
+            self.simBusyErrorCounter -= 1
+            return ['+CME ERROR: 14\r\n']
+        if cmd == 'AT+CFUN?\r' and self.cfun != -1:
+            return ['+CFUN: {0}\r\n'.format(self.cfun), 'OK\r\n']
+        elif cmd == 'AT+CSCA?\r':                
+            if self.smscNumber != None:
+                return ['+CSCA: "{0}",145\r\n'.format(self.smscNumber), 'OK\r\n']
             else:
-                return copy(self.defaultResponse)
+                return ['OK\r\n']
+        if cmd in self.responses:
+            return copy(self.responses[cmd])
+        else:
+            return copy(self.defaultResponse)
 
     @property
     def pinLock(self):
@@ -80,7 +87,6 @@ class GenericTestModem(FakeModem):
         super(GenericTestModem, self).__init__()
         self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
         self.responses = {'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
-                          'AT+CFUN?\r': ['+CFUN: 1\r\n', 'OK\r\n'],
                           'AT+WIND?\r': ['ERROR\r\n'],
                           'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']} 
     
@@ -111,8 +117,7 @@ class WavecomMultiband900E1800(FakeModem):
                  'AT+CGMM\r': [' MULTIBAND  900E  1800\r\n', 'OK\r\n'],
                  'AT+CGMR\r': ['ERROR\r\n'],
                  'AT+CIMI\r': ['111111111111111\r\n', 'OK\r\n'],
-                 'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],
-                 'AT+CFUN?\r': ['+CFUN: 1\r\n', 'OK\r\n'],
+                 'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],                 
                  'AT+CLAC\r': ['ERROR\r\n'],
                  'AT+WIND?\r': ['+WIND: 0\r\n', 'OK\r\n'],
                  'AT+WIND=50\r': ['OK\r\n'],
@@ -123,7 +128,13 @@ class WavecomMultiband900E1800(FakeModem):
                  'AT+CVHU=0\r': ['ERROR\r\n'],
                  'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
         self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
-        
+    
+    def getResponse(self, cmd):
+        if cmd == 'AT+CFUN=1\r':
+            self.deviceBusyErrorCounter = 2 # This modem takes quite a while to recover from this
+            return ['OK\r\n']
+        return super(WavecomMultiband900E1800, self).getResponse(cmd)
+    
     def getAtdResponse(self, number):
         return []
     
@@ -155,8 +166,7 @@ class HuaweiK3715(FakeModem):
                  'AT+CGMM\r': ['K3715\r\n', 'OK\r\n'],
                  'AT+CGMR\r': ['11.104.05.00.00\r\n', 'OK\r\n'],
                  'AT+CIMI\r': ['111111111111111\r\n', 'OK\r\n'],
-                 'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],
-                 'AT+CFUN?\r': ['+CFUN: 1\r\n', 'OK\r\n'],
+                 'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],                 
                  'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
                  'AT+WIND?\r': ['ERROR\r\n'],
                  'AT+WIND=50\r': ['ERROR\r\n'],
@@ -208,12 +218,12 @@ class QualcommM6280(FakeModem):
         self._callNumber = None
         self._callId = None
         self.commandsNoPinRequired = [] # This modem requires the CPIN command to be issued first
+        self.commandsSimBusy = ['AT+CSCA?\r'] # Issue #10 on github        
         self.responses = {'AT+CGMI\r': ['QUALCOMM INCORPORATED\r\n', 'OK\r\n'],
                  'AT+CGMM\r': ['M6280\r\n', 'OK\r\n'],
                  'AT+CGMR\r': ['M6280_V1.0.0 M6280_V1.0.0 1 [Sep 4 2008 12:00:00]\r\n', 'OK\r\n'],
                  'AT+CIMI\r': ['111111111111111\r\n', 'OK\r\n'],
                  'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],
-                 'AT+CFUN?\r': ['+CFUN: 1\r\n', 'OK\r\n'],
                  'AT+CLAC\r': ['ERROR\r\n'],
                  'AT+WIND?\r': ['ERROR\r\n'],
                  'AT+WIND=50\r': ['ERROR\r\n'],

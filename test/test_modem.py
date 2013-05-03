@@ -293,6 +293,7 @@ class TestEdgeCases(unittest.TestCase):
             for fakeModem in fakemodems.createModems():
                 # Init modem and preload SMSC number
                 fakeModem.smscNumber = test
+                fakeModem.simBusyErrorCounter = 3 # Enable "SIM busy" errors for modem for more accurate testing
                 FAKE_MODEM = fakeModem
                 mockSerial = MockSerialPackage()
                 gsmmodem.serial_comms.serial = mockSerial        
@@ -305,29 +306,31 @@ class TestEdgeCases(unittest.TestCase):
     
     def test_cfun0(self):
         """ Tests case where a modem's functionality setting is 0 at startup """
-        global FAKE_MODEM            
-        FAKE_MODEM = fakemodems.GenericTestModem()
-        FAKE_MODEM.responses['AT+CFUN?\r'] = ['+CFUN: 0\r\n', 'OK\r\n']
-        # This should pass without any problem, and AT+CFUN=1 should be set during connect()
-        cfunWritten = [False]
-        def writeCallbackFunc(data):
-            if data == 'AT+CFUN=1\r':
-                cfunWritten[0] = True
-        global SERIAL_WRITE_CALLBACK_FUNC
-        SERIAL_WRITE_CALLBACK_FUNC = writeCallbackFunc         
-        mockSerial = MockSerialPackage()
-        gsmmodem.serial_comms.serial = mockSerial
-        modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')        
-        modem.connect()
-        SERIAL_WRITE_CALLBACK_FUNC = None
-        self.assertTrue(cfunWritten[0], 'Modem CFUN setting not set to 1 during connect()')
-        modem.close()
-        FAKE_MODEM = None
+        global FAKE_MODEM
+        for fakeModem in fakemodems.createModems():
+            fakeModem.cfun = 0
+            FAKE_MODEM = fakeModem        
+            # This should pass without any problem, and AT+CFUN=1 should be set during connect()
+            cfunWritten = [False]
+            def writeCallbackFunc(data):
+                if data == 'AT+CFUN=1\r':
+                    cfunWritten[0] = True
+            global SERIAL_WRITE_CALLBACK_FUNC
+            SERIAL_WRITE_CALLBACK_FUNC = writeCallbackFunc         
+            mockSerial = MockSerialPackage()
+            gsmmodem.serial_comms.serial = mockSerial
+            modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')        
+            modem.connect()
+            SERIAL_WRITE_CALLBACK_FUNC = None
+            self.assertTrue(cfunWritten[0], 'Modem CFUN setting not set to 1 during connect()')
+            modem.close()
+            FAKE_MODEM = None
     
     def test_cfunNotSupported(self):
         """ Tests case where a modem does not support the AT+CFUN command """
         global FAKE_MODEM            
         FAKE_MODEM = fakemodems.GenericTestModem()
+        FAKE_MODEM.cfun = -1 # disable
         FAKE_MODEM.responses['AT+CFUN?\r'] = ['ERROR\r\n']
         FAKE_MODEM.responses['AT+CFUN=1\r'] = ['ERROR\r\n']
         # This should pass without any problem, and AT+CFUN? should at least have been checked during connect()
@@ -341,7 +344,7 @@ class TestEdgeCases(unittest.TestCase):
         gsmmodem.serial_comms.serial = mockSerial
         modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')        
         modem.connect()
-        SERIAL_WRITE_CALLBACK_FUNC = None
+        SERIAL_WRITE_CALLBACK_FUNC = None        
         self.assertTrue(cfunWritten[0], 'Modem CFUN setting not set to 1 during connect()')
         modem.close()
         FAKE_MODEM = None
