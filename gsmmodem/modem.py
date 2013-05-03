@@ -82,19 +82,13 @@ class GsmModem(SerialComms):
         self.log.info('Connecting to modem on port %s at %dbps', self.port, self.baudrate)        
         super(GsmModem, self).connect()
         # Send some initialization commands to the modem
-        detailedErrorsActivated = False
         try:        
             self.write('ATZ') # reset configuration
         except CommandError:
             # Some modems require a SIM PIN at this stage already; unlock it now
             # Attempt to enable detailed error messages (to catch incorrect PIN error)
             # but ignore if it fails
-            try:
-                self.write('AT+CMEE=1')
-            except CommandError:
-                detailedErrorsActivated = False
-            else:
-                detailedErrorsActivated = True
+            self.write('AT+CMEE=1', parseError=False)            
             self._unlockSim(pin)
             pinCheckComplete = True
             self.write('ATZ') # reset configuration        
@@ -107,9 +101,8 @@ class GsmModem(SerialComms):
                 self.write('AT+CFUN=1')
         except CommandError:
             pass # just ignore if the +CFUN command isn't supported
-        
-        if not detailedErrorsActivated:
-            self.write('AT+CMEE=1') # enable detailed error messages
+                
+        self.write('AT+CMEE=1') # enable detailed error messages (even if it has already been set - ATZ may reset this)
         if not pinCheckComplete:
             self._unlockSim(pin)
 
