@@ -283,7 +283,7 @@ class TestGsmModemGeneralApi(unittest.TestCase):
 
     def test_waitForNetorkCoverage(self):
         """ Tests waiting for network coverage (normal) """
-        tests = (('0,1', '0,1', '0,2', 82),
+        tests = (('0,2', '0,2', '0,1', 82),
                  ('0,5', 47),)
         for seq in tests:
             items = iter(seq)

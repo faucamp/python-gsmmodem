@@ -414,8 +414,8 @@ class GsmModem(SerialComms):
                 cregResult = lineMatching(r'^\+CREG:\s*(\d),(\d)$', self.write('AT+CREG?', parseError=False)) # example result: +CREG: 0,1
                 if cregResult:
                     status = int(cregResult.group(2))
-                    if status in (2, 5):
-                        # 2: registered, home network, 5: registered, roaming
+                    if status in (1, 5):
+                        # 1: registered, home network, 5: registered, roaming
                         # Now simply check and return network signal strength
                         checkCreg = False
                     elif status == 3:
