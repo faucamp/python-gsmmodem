@@ -32,7 +32,10 @@ def lineStartingWith(string, lines):
 def lineMatching(regexStr, lines):
     """ Searches through the specified list of strings and returns the regular expression 
     match for the first line that matches the specified regex, or None if no match was found
-    """    
+
+    @return: the regular expression match for the first line that matches the specified regex, or None if no match was found
+    @rtype: re.Match
+    """
     regex = re.compile(regexStr)
     for line in lines:
         m = regex.match(line)

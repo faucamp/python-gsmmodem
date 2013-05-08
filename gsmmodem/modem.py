@@ -11,6 +11,7 @@ from .pdu import encodeSmsSubmitPdu, decodeSmsPdu
 from .util import SimpleOffsetTzInfo, lineStartingWith
 
 from . import compat # For Python 2.6 compatibility
+from gsmmodem.util import lineMatching
 PYTHON_VERSION = sys.version_info[0]
 if PYTHON_VERSION >= 3:
     xrange = range
@@ -96,7 +97,7 @@ class GsmModem(SerialComms):
             pinCheckComplete = False
         self.write('ATE0') # echo off
         try:
-            cfun = int(self.write('AT+CFUN?')[0][7:]) # example response: +CFUN: 1
+            cfun = int(lineStartingWith('+CFUN:', self.write('AT+CFUN?'))[7:]) # example response: +CFUN: 1
             if cfun != 1:
                 self.write('AT+CFUN=1')
         except CommandError:
@@ -124,7 +125,7 @@ class GsmModem(SerialComms):
             
         # Enable general notifications on Wavecom-like devices - also use result to select the type of call status updates we will receive
         try:
-            wind = self.write('AT+WIND?')[0] # Check current WIND value; example response: +WIND: 63            
+            wind = lineStartingWith('+WIND:', self.write('AT+WIND?')) # Check current WIND value; example response: +WIND: 63            
             if int(wind[7:]) != 50:
                 self.write('AT+WIND=50') # Enabled notifications for call setup, hangup, etc
         except CommandError:
@@ -176,8 +177,8 @@ class GsmModem(SerialComms):
             self.smsc = currentSmscNumber
 
         # Set message storage, but first check what the modem supports - example response: +CPMS: (("SM","BM","SR"),("SM"))
-        lines = self.write('AT+CPMS=?')        
-        cpmsSupport = lines[0].split(' ', 1)[1].split('),(')
+        cpmsLine = lineStartingWith('+CPMS', self.write('AT+CPMS=?'))
+        cpmsSupport = cpmsLine.split(' ', 1)[1].split('),(')
         preferredMemoryTypes = ('"ME"', '"SM"', '"SR"')
         cpmsItems = [''] * len(cpmsSupport)
         for i in xrange(len(cpmsSupport)):
@@ -187,7 +188,9 @@ class GsmModem(SerialComms):
                         self._smsMemReadDelete = memType
                     cpmsItems[i] = memType
                     break
-        self.write('AT+CPMS={0}'.format(','.join(cpmsItems))) # Set message storage        
+        self.write('AT+CPMS={0}'.format(','.join(cpmsItems))) # Set message storage
+        del cpmsSupport
+        del cpmsLine
         
         self.write('AT+CNMI=2,1,0,2') # Set message notifications
         
@@ -226,14 +229,23 @@ class GsmModem(SerialComms):
         writes it to the modem
         
         @param data: Command/data to be written to the modem
+        @type data: str
         @param waitForResponse: Whether this method should block and return the response from the modem or not
+        @type waitForResponse: bool
         @param timeout: Maximum amount of time in seconds to wait for a response from the modem
-        @param parseError: If True, a CommandError is raised if the modem responds with an error (otherwise the response is returned as-is) 
+        @type timeout: int
+        @param parseError: If True, a CommandError is raised if the modem responds with an error (otherwise the response is returned as-is)
+        @type parseError: bool
+        @param writeTerm: The terminating sequence to append to the written data
+        @type writeTerm: str
+        @param expectedResponseTermSeq: The expected terminating sequence that marks the end of the modem's response (defaults to '\r\n')
+        @type expectedResponseTermSeq: str
 
         @raise CommandError: if the command returns an error (only if parseError parameter is True)
         @raise TimeoutException: if no response to the command was received from the modem
         
         @return: A list containing the response lines from the modem, or None if waitForResponse is False
+        @rtype: list
         """
         self.log.debug('write: %s', data)
         responseLines = SerialComms.write(self, data + writeTerm, waitForResponse=waitForResponse, timeout=timeout, expectedResponseTermSeq=expectedResponseTermSeq)
@@ -317,8 +329,7 @@ class GsmModem(SerialComms):
     @property
     def networkName(self):
         """ @return: the name of the GSM Network Operator to which the modem is connected """
-        response = self.write('AT+COPS?')[0] # response format: +COPS: mode,format,"operator_name",x
-        copsMatch = re.match(r'^\+COPS: (\d),(\d),"(.+)",\d$', response[0])
+        copsMatch = lineMatching(r'^\+COPS: (\d),(\d),"(.+)",\d$', self.write('AT+COPS?')) # response format: +COPS: mode,format,"operator_name",x
         if copsMatch:
             return copsMatch.group(3)
 
@@ -361,10 +372,9 @@ class GsmModem(SerialComms):
             except SmscNumberUnknownError:
                 pass # Some modems return a CMS 330 error if the value isn't set
             else:
-                if len(readSmsc) == 2:
-                    cscaMatch = re.match(r'\+CSCA:\s*"([^,]+)",(\d+)$', readSmsc[0])
-                    if cscaMatch:
-                        self._smscNumber = cscaMatch.group(1)
+                cscaMatch = lineMatching(r'\+CSCA:\s*"([^,]+)",(\d+)$', readSmsc)
+                if cscaMatch:
+                    self._smscNumber = cscaMatch.group(1)
         return self._smscNumber
     @smsc.setter
     def smsc(self, smscNumber):
@@ -382,9 +392,11 @@ class GsmModem(SerialComms):
         if a timeout was specified
         
         @param timeout: Maximum time to wait for network coverage, in seconds
-        
+        @type timeout: int or float
+
         @raise TimeoutException: if a timeout was specified and reached
-        
+        @raise InvalidStateException: if the modem is not going to receive network coverage (SIM blocked, etc)
+
         @return: the current signal strength
         @rtype: int
         """
@@ -396,10 +408,29 @@ class GsmModem(SerialComms):
             t = threading.Timer(timeout, _cancelBlock)
             t.start()
         ss = -1
+        checkCreg = True
         while block[0]:
-            ss = self.signalStrength
-            if ss > 0:
-                return ss
+            if checkCreg:
+                cregResult = lineMatching(r'^\+CREG:\s*(\d),(\d)$', self.write('AT+CREG?', parseError=False)) # example result: +CREG: 0,1
+                if cregResult:
+                    status = int(cregResult.group(2))
+                    if status in (2, 5):
+                        # 2: registered, home network, 5: registered, roaming
+                        # Now simply check and return network signal strength
+                        checkCreg = False
+                    elif status == 3:
+                        raise InvalidStateException('Network registration denied')
+                    elif status == 0:
+                        raise InvalidStateException('Device not searching for network operator')
+                else:
+                    # Disable network registration check; only use signal strength
+                    self.log.info('+CREG check disabled due to invalid response or unsupported command')
+                    checkCreg = False
+            else:
+                # Check signal strength
+                ss = self.signalStrength
+                if ss > 0:
+                    return ss
             time.sleep(1)
         else:
             # If this is reached, the timer task has triggered
@@ -643,7 +674,7 @@ class GsmModem(SerialComms):
         # Switch to the correct memory type if required
         if memory != None and memory != self._smsMemReadDelete:
             self.write('AT+CPMS={0}'.format(memory))
-            self._smsMemReadDelete = memory        
+            self._smsMemReadDelete = memory
         msgData = self.write('AT+CMGR={0}'.format(index))
         # Parse meta information
         if self._smsTextMode:

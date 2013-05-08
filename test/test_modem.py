@@ -9,7 +9,7 @@ from datetime import datetime
 from copy import copy
 
 from . import compat # For Python 2.6 compatibility
-from gsmmodem.exceptions import PinRequiredError, CommandError
+from gsmmodem.exceptions import PinRequiredError, CommandError, InvalidStateException, TimeoutException
 from gsmmodem.modem import StatusReport, Sms
 PYTHON_VERSION = sys.version_info[0]
 
@@ -264,8 +264,8 @@ class TestGsmModemGeneralApi(unittest.TestCase):
         else:
             self.fail('CommandError not raised on error condition')
 
-    def test_waitForNetorkCoverage(self):
-        """ Tests waiting for network coverage """
+    def test_waitForNetorkCoverageNoCreg(self):
+        """ Tests waiting for network coverage (no AT+CREG support) """
         tests = ((82,),
                  (99, 99, 47),)
         for seq in tests:
@@ -280,6 +280,41 @@ class TestGsmModemGeneralApi(unittest.TestCase):
             signalStrength = self.modem.waitForNetworkCoverage()
             self.assertNotEqual(signalStrength, -1, '"Unknown" signal strength returned - should still have blocked')
             self.assertEqual(seq[-1], signalStrength, 'Incorrect signal strength returned')
+
+    def test_waitForNetorkCoverage(self):
+        """ Tests waiting for network coverage (normal) """
+        tests = (('0,1', '0,1', '0,2', 82),
+                 ('0,5', 47),)
+        for seq in tests:
+            items = iter(seq)
+            def writeCallbackFunc(data):
+                if data == 'AT+CSQ\r':
+                    try:
+                        self.modem.serial.responseSequence = ['+CSQ: {0},99\r\n'.format(next(items)), 'OK\r\n']
+                    except StopIteration:
+                        self.fail("Too many writes issued")
+                elif data == 'AT+CREG?\r':
+                    try:
+                        self.modem.serial.responseSequence = ['+CREG: {0}\r\n'.format(next(items)), 'OK\r\n']
+                    except StopIteration:
+                        self.fail("Too many writes issued")
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            signalStrength = self.modem.waitForNetworkCoverage()
+            self.assertNotEqual(signalStrength, -1, '"Unknown" signal strength returned - should still have blocked')
+            self.assertEqual(seq[-1], signalStrength, 'Incorrect signal strength returned')
+        # Test InvalidStateException
+        tests = ('0,3', '0,0') # 0,3: network registration denied. 0,0: SIM not searching for network
+        for result in tests:
+            def writeCallbackFunc(data):
+                if data == 'AT+CREG?\r':
+                    self.modem.serial.responseSequence = ['+CREG: {0}\r\n'.format(result), 'OK\r\n']
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            self.assertRaises(InvalidStateException, self.modem.waitForNetworkCoverage)
+        # Test TimeoutException
+        def writeCallbackFunc(data):
+            self.modem.serial.responseSequence = ['+CREG: 0,1\r\n'.format(result), 'OK\r\n']
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc
+        self.assertRaises(TimeoutException, self.modem.waitForNetworkCoverage, timeout=1)
 
 
 class TestEdgeCases(unittest.TestCase):
