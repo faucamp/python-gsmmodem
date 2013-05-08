@@ -472,6 +472,8 @@ class TestGsmModemDial(unittest.TestCase):
                     time.sleep(0.05)
                 if self.modem._mustPollCallStatus:
                     time.sleep(0.5) # Ensure polling picks up event
+                elif not self.modem._waitForCallInitUpdate:
+                    time.sleep(0.1) # Ensure event is picked up
                 self.assertTrue(call.answered, 'Remote call answer was not detected. Modem: {0}'.format(modem))
                 self.assertIn(call.id, self.modem.activeCalls)
                 self.assertEqual(len(self.modem.activeCalls), 1)
