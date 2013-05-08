@@ -405,7 +405,9 @@ class TestGsmModemDial(unittest.TestCase):
         tests = (['0123456789', '1', '0'],)
         
         global MODEMS
-        for fakeModem in fakemodems.createModems():            
+        testModems = fakemodems.createModems()
+        testModems.append(fakemodems.GenericTestModem()) # Test polling only
+        for fakeModem in testModems:
             self.init_modem(fakeModem)
             
             modem = self.modem.serial.modem # load the copy()-ed modem instance
@@ -541,7 +543,7 @@ class TestIncomingCall(unittest.TestCase):
         self.modem.connect()
     
     def test_incomingCallAnswer(self):
-        
+
         for modem in fakemodems.createModems():
             callReceived = [False, 'VOICE', '']
             def incomingCallCallbackFunc(call):

@@ -81,35 +81,61 @@ class FakeModem(object):
 
 
 class GenericTestModem(FakeModem):
-    """ Not a "real" modem - simply used for general tests """
+    """ Not based on a real modem - simply used for general tests. Uses polling for call status updates """
     
     def __init__(self):
         super(GenericTestModem, self).__init__()
+        self._callState = 2
+        self._callNumber = None
+        self._callId = None
         self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
         self.responses = {'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
+                          'AT+CLAC\r': ['ERROR\r\n'],
                           'AT+WIND?\r': ['ERROR\r\n'],
+                          'AT+WIND=50\r': ['ERROR\r\n'],
+                          'AT+ZPAS?\r': ['ERROR\r\n'],
                           'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']} 
-    
+
+    def getResponse(self, cmd):
+        if not self._pinLock and cmd == 'AT+CLCC\r':
+            if self._callNumber:
+                if self._callState == 0:
+                    return ['+CLCC: 1,0,2,0,0,"{0}",129\r\n'.format(self._callNumber), 'OK\r\n']
+                elif self._callState == 1:
+                    return ['+CLCC: 1,0,0,0,0,"{0}",129\r\n'.format(self._callNumber), 'OK\r\n']
+                else:
+                    return ['OK\r\n']
+            else:
+                return super(GenericTestModem, self).getResponse(cmd)
+        else:
+            return super(GenericTestModem, self).getResponse(cmd)
+
     def getAtdResponse(self, number):
-        raise NotImplementedError()
+        self._callNumber = number
+        self._callState = 0
+        return ['OK\r\n']
 
     def getPreCallInitWaitSequence(self):
-        raise NotImplementedError()
-    
+        return [0.1]
+
     def getCallInitNotification(self, callId, callType):
-        raise NotImplementedError()
-    
+        return []
+
     def getRemoteAnsweredNotification(self, callId, callType):
-        raise NotImplementedError()
-    
+        self._callState = 1
+        return []
+
     def getRemoteHangupNotification(self, callId, callType):
-        raise NotImplementedError()
+        self._callState = 2
+        self._callNumber = None
+        return []
 
     def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
-        raise NotImplementedError()
+        return ['+CRING: {0}\r\n'.format(callType), '+CLIP: "{1}",{2},,,,0\r\n'.format(callType, callerNumber, ton)]
 
 
 class WavecomMultiband900E1800(FakeModem):
+    """ Family of old Wavecom serial modems """
 
     def __init__(self):
         super(WavecomMultiband900E1800, self).__init__()
@@ -121,6 +147,7 @@ class WavecomMultiband900E1800(FakeModem):
                  'AT+CLAC\r': ['ERROR\r\n'],
                  'AT+WIND?\r': ['+WIND: 0\r\n', 'OK\r\n'],
                  'AT+WIND=50\r': ['OK\r\n'],
+                 'AT+ZPAS?\r': ['ERROR\r\n'],
                  'AT+CPMS="SM","SM","SR"\r': ['ERROR\r\n'],                 
                  'AT+CPMS=?\r': ['+CPMS: (("SM","BM","SR"),("SM"))\r\n', 'OK\r\n'],
                  'AT+CPMS="SM","SM"\r': ['+CPMS: 14,50,14,50\r\n', 'OK\r\n'],
@@ -160,6 +187,8 @@ class WavecomMultiband900E1800(FakeModem):
 
 
 class HuaweiK3715(FakeModem):
+    """ Huawei K3715 modem (commonly used by Vodafone) """
+
     def __init__(self):
         super(HuaweiK3715, self).__init__()
         self.responses = {'AT+CGMI\r': ['huawei\r\n', 'OK\r\n'],
@@ -170,6 +199,7 @@ class HuaweiK3715(FakeModem):
                  'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
                  'AT+WIND?\r': ['ERROR\r\n'],
                  'AT+WIND=50\r': ['ERROR\r\n'],
+                 'AT+ZPAS?\r': ['ERROR\r\n'],
                  'AT+CLAC\r': ['+CLAC:&C,&D,&E,&F,&S,&V,&W,E,I,L,M,Q,V,X,Z,T,P,\S,\V,\
 %V,D,A,H,O,S0,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S30,S103,S104,+FCLASS,+ICF,+IFC,+IPR,+GMI,\
 +GMM,+GMR,+GCAP,+GSN,+DR,+DS,+WS46,+CLAC,+CCLK,+CBST,+CRLP,+CV120,+CHSN,+CSSN,+CREG,+CGREG,\
@@ -211,6 +241,7 @@ $QCPDPLT,$QCPWRDN,$QCDGEN,$BREW,$QCSYSMODE,^CVOICE,^DDSETEX,^pcmrecord,^SYSINFO,
 
 
 class QualcommM6280(FakeModem):
+    """ ZTE modem information provided by davidphiliplee on github """
 
     def __init__(self):
         super(QualcommM6280, self).__init__()
@@ -218,7 +249,7 @@ class QualcommM6280(FakeModem):
         self._callNumber = None
         self._callId = None
         self.commandsNoPinRequired = [] # This modem requires the CPIN command to be issued first
-        self.commandsSimBusy = ['AT+CSCA?\r'] # Issue #10 on github        
+        self.commandsSimBusy = ['AT+CSCA?\r'] # Issue #10 on github
         self.responses = {'AT+CGMI\r': ['QUALCOMM INCORPORATED\r\n', 'OK\r\n'],
                  'AT+CGMM\r': ['M6280\r\n', 'OK\r\n'],
                  'AT+CGMR\r': ['M6280_V1.0.0 M6280_V1.0.0 1 [Sep 4 2008 12:00:00]\r\n', 'OK\r\n'],
@@ -227,31 +258,32 @@ class QualcommM6280(FakeModem):
                  'AT+CLAC\r': ['ERROR\r\n'],
                  'AT+WIND?\r': ['ERROR\r\n'],
                  'AT+WIND=50\r': ['ERROR\r\n'],
+                 'AT+ZPAS?\r':  ['+BEARTYPE: "UMTS","CS_PS"\r\n', 'OK\r\n'],
                  'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
                  'AT+CVHU=0\r': ['+CVHU: (0-1)\r\n', 'OK\r\n'],
                  'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
 
     def getResponse(self, cmd):
-        if not self._pinLock and cmd == 'AT+CLCC\r':
-            if self._callNumber:
-                if self._callState == 0:                    
-                    return ['+CLCC: 1,0,2,0,0,"{0}",129\r\n'.format(self._callNumber), 'OK\r\n']
-                elif self._callState == 1:
-                    return ['+CLCC: 1,0,0,0,0,"{0}",129\r\n'.format(self._callNumber), 'OK\r\n']
-                else:
-                    return ['OK\r\n']
-            else:
-                return super(QualcommM6280, self).getResponse(cmd)
-        else:
+        if not self._pinLock:
             if cmd.startswith('AT+CSMP='):
                 # Clear the SMSC number (this behaviour was reported in issue #8 on github)
                 self.smscNumber = None
+            elif cmd == 'AT+CLCC\r':
+                if self._callNumber:
+                    if self._callState == 0:
+                        return ['+CLCC: 1,0,2,0,0,"{0}",129\r\n'.format(self._callNumber), 'OK\r\n']
+                    elif self._callState == 1:
+                        return ['+CLCC: 1,0,0,0,0,"{0}",129\r\n'.format(self._callNumber), 'OK\r\n']
+                    else:
+                        return ['OK\r\n']
+            return super(QualcommM6280, self).getResponse(cmd)
+        else:
             return super(QualcommM6280, self).getResponse(cmd)
 
     def getAtdResponse(self, number):
         self._callNumber = number
         self._callState = 0
-        return ['OK\r\n']
+        return []
     
     def getPreCallInitWaitSequence(self):
         return [0.1]
@@ -260,19 +292,18 @@ class QualcommM6280(FakeModem):
         return []
     
     def getRemoteAnsweredNotification(self, callId, callType):
-        self._callState = 1
-        return []
+        return ['CONNECT\r\n']
     
     def getRemoteHangupNotification(self, callId, callType):
         self._callState = 2
         self._callNumber = None
-        return []
+        return ['HANGUP\r\n']
         
     def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
         return ['+CRING: {0}\r\n'.format(callType), '+CLIP: "{1}",{2},,,,0\r\n'.format(callType, callerNumber, ton)]
     
     def __str__(self):
-        return 'QUALCOMM INCORPORATED'
+        return 'ZTE modem (QUALCOMM INCORPORATED)'
 
 
 modemClasses = [HuaweiK3715, WavecomMultiband900E1800, QualcommM6280]

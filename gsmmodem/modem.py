@@ -65,6 +65,7 @@ class GsmModem(SerialComms):
         self._callStatusUpdates = [] # populated during connect() - contains regexes and handlers for detecting/handling call status updates
         self._mustPollCallStatus = False # whether or not the modem must be polled for outgoing call status updates
         self._pollCallStatusRegex = None # Regular expression used when polling outgoing call status
+        self._pollCallStatusUntil = 2 # Controls up to what state outgoing calls should be polled (for modems have partial unsolicited message update support)
         self._writeWait = 0 # Time (in seconds to wait after writing a command (adjusted when 515 errors are detected)
         self._smsTextMode = False # Storage variable for the smsTextMode property
         self._smscNumber = None # Default SMSC number
@@ -112,6 +113,7 @@ class GsmModem(SerialComms):
 
         # Device-specific settings
         callUpdateTableHint = 0 # unknown modem
+        enableWind = False
         if commands != None:
             if '^CVOICE' in commands:
                 self.write('AT^CVOICE=0', parseError=False) # Enable voice calls
@@ -119,44 +121,79 @@ class GsmModem(SerialComms):
                 Call.dtmfSupport = True
             elif '^DTMF' in commands:
                 # Huawei modems use ^DTMF to send DTMF tones; use that instead
-                callUpdateTableHint = 1 # huawei
+                callUpdateTableHint = 1 # Huawei
                 Call.DTMF_COMMAND_BASE = '^DTMF=1,'
                 Call.dtmfSupport = True
-            
-        # Enable general notifications on Wavecom-like devices - also use result to select the type of call status updates we will receive
-        try:
-            wind = lineStartingWith('+WIND:', self.write('AT+WIND?')) # Check current WIND value; example response: +WIND: 63            
-            if int(wind[7:]) != 50:
-                self.write('AT+WIND=50') # Enabled notifications for call setup, hangup, etc
-        except CommandError:
-            # Modem does not support +WIND notifications. See if we can detect other known call update notifications
-            if callUpdateTableHint == 0:
-                if self.manufacturer.lower() == 'huawei':
-                    callUpdateTableHint = 1 # huawei
-            if callUpdateTableHint == 1:
-                # Use Hauwei's ^NOTIFICATIONs
-                self.log.info('Loading Huawei call state update table')
-                self._callStatusUpdates = ((re.compile(r'^\^ORIG:(\d),(\d)$'), self._handleCallInitiated),
-                                          (re.compile(r'^\^CONN:(\d),(\d)$'), self._handleCallAnswered),
-                                          (re.compile(r'^\^CEND:(\d),(\d),(\d)+,(\d)+$'), self._handleCallEnded))
-                self._mustPollCallStatus = False
-            else:
-                # Unknown modem - we do not know what its call updates look like. Use polling instead
-                self.log.info('Unknown modem type - will use polling for call state updates')
-                self._mustPollCallStatus = True
-                self._pollCallStatusRegex = re.compile('^\+CLCC:\s+(\d+),(\d),(\d),(\d),([^,]),"([^,]*)",(\d+)$')
-            self._waitForAtdResponse = True # Most modems return OK immediately after issuing ATD            
+            if '+WIND' in commands:
+                callUpdateTableHint = 2 # Wavecom
+                enableWind = True
+            elif '+ZPAS' in commands:
+                callUpdateTableHint = 3 # ZTE
         else:
-            # +WIND notifications supported
+            # Try to enable general notifications on Wavecom-like device
+            enableWind = True
+
+        if enableWind:
+            try:
+                wind = lineStartingWith('+WIND:', self.write('AT+WIND?')) # Check current WIND value; example response: +WIND: 63
+            except CommandError:
+                # Modem does not support +WIND notifications. See if we can detect other known call update notifications
+                pass
+            else:
+                # Enable notifications for call setup, hangup, etc
+                if int(wind[7:]) != 50:
+                    self.write('AT+WIND=50')
+                callUpdateTableHint = 2 # Wavecom
+
+        # Attempt to identify modem type directly (if not already) - for outgoing call status updates
+        if callUpdateTableHint == 0:
+            if self.manufacturer.lower() == 'huawei':
+                callUpdateTableHint = 1 # huawei
+            else:
+                # See if this is a ZTE modem that has not yet been identified based on supported commands
+                try:
+                    self.write('AT+ZPAS?')
+                except CommandError:
+                    pass # Not a ZTE modem
+                else:
+                    callUpdateTableHint = 3 # ZTE
+        # Load outgoing call status updates based on identified modem features
+        if callUpdateTableHint == 1:
+             # Use Hauwei's ^NOTIFICATIONs
+            self.log.info('Loading Huawei call state update table')
+            self._callStatusUpdates = ((re.compile(r'^\^ORIG:(\d),(\d)$'), self._handleCallInitiated),
+                                       (re.compile(r'^\^CONN:(\d),(\d)$'), self._handleCallAnswered),
+                                       (re.compile(r'^\^CEND:(\d),(\d),(\d)+,(\d)+$'), self._handleCallEnded))
+            self._mustPollCallStatus = False
+        elif callUpdateTableHint == 2:
+            # Wavecom modem: +WIND notifications supported
             self.log.info('Loading Wavecom call state update table')
             self._callStatusUpdates = ((re.compile(r'^\+WIND: 5,(\d)$'), self._handleCallInitiated),
                                       (re.compile(r'^OK$'), self._handleCallAnswered),
-                                      (re.compile(r'^\+WIND: 6,(\d)$'), self._handleCallEnded))            
+                                      (re.compile(r'^\+WIND: 6,(\d)$'), self._handleCallEnded))
             self._waitForAtdResponse = False # Wavecom modems return OK only when the call is answered
             self._mustPollCallStatus = False
             if commands == None: # older modem, assume it has standard DTMF support
                 Call.dtmfSupport = True
-        
+        elif callUpdateTableHint == 3: # ZTE
+            # Use ZTE notifications ("CONNECT"/"HANGUP", but no "call initiated" notification)
+            self.log.info('Loading ZTE call state update table')
+            self._callStatusUpdates = ((re.compile(r'^CONNECT$'), self._handleCallAnswered),
+                                       (re.compile(r'^HANGUP$'), self._handleCallEnded))
+            self._waitForAtdResponse = False # ZTE modems do not return an immediate  OK only when the call is answered
+            self._pollCallStatusUntil = 0 # The ZTE modem reported on github provides no "initiating" update message, so use polling for that
+            self._mustPollCallStatus = True
+            self._pollCallStatusRegex = re.compile('^\+CLCC:\s+(\d+),(\d),(\d),(\d),([^,]),"([^,]*)",(\d+)$')
+            if commands == None: # ZTE uses standard +VTS for DTMF
+                Call.dtmfSupport = True
+        else:
+            # Unknown modem - we do not know what its call updates look like. Use polling instead
+            self.log.info('Unknown modem type - will use polling for call state updates')
+            self._mustPollCallStatus = True
+            self._pollCallStatusUntil = 2 # Full call state polling
+            self._pollCallStatusRegex = re.compile('^\+CLCC:\s+(\d+),(\d),(\d),(\d),([^,]),"([^,]*)",(\d+)$')
+            self._waitForAtdResponse = True # Most modems return OK immediately after issuing ATD
+
         # General meta-information setup
         self.write('AT+COPS=3,0', parseError=False) # Use long alphanumeric name format
                 
@@ -511,8 +548,8 @@ class GsmModem(SerialComms):
             self.activeCalls[callId] = call
             return call
         else: # Call establishing timed out
-            self._dialEvent = None            
-            raise TimeoutException()                    
+            self._dialEvent = None
+            raise TimeoutException()
 
 
     def _handleModemNotification(self, lines):
@@ -614,7 +651,7 @@ class GsmModem(SerialComms):
                 callId = int(groups[0])
                 self.activeCalls[callId].answered = True
             else:
-                # Call ID not available for this notificaiton - check for the first outgoing call that has not been answered
+                # Call ID not available for this notificition - check for the first outgoing call that has not been answered
                 for call in dictValuesIter(self.activeCalls):
                     if call.answered == False and type(call) == Call:
                         call.answered = True
@@ -625,8 +662,16 @@ class GsmModem(SerialComms):
 
     def _handleCallEnded(self, regexMatch, callId=None):
         if regexMatch:
-            callId = int(regexMatch.group(1))
-        if callId in self.activeCalls:
+            groups = regexMatch.groups()
+            if len(groups) > 0:
+                callId = int(groups[0])
+            else:
+                # Call ID not available for this notification - check for the first outgoing call that is active
+                for call in dictValuesIter(self.activeCalls):
+                    if type(call) == Call:
+                        callId = call.id
+                        break
+        if callId and callId in self.activeCalls:
             self.activeCalls[callId].answered = False
             del self.activeCalls[callId]
     
@@ -752,6 +797,9 @@ class GsmModem(SerialComms):
             time.sleep(0.5)
             if expectedState == 0: # Only call initializing can timeout
                 timeLeft -= 0.5
+            elif expectedState > self._pollCallStatusUntil:
+                # Partial call state polling (rest of call states will be handled by unsolicited messages)
+                return
             clcc = self._pollCallStatusRegex.match(self.write('AT+CLCC')[0])
             if clcc:
                 # Determine call state        
