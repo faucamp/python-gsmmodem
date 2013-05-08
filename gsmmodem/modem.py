@@ -62,10 +62,10 @@ class GsmModem(SerialComms):
         self._dialEvent = None # threading.Event
         self._dialResponse = None # gsmmodem.modem.Call
         self._waitForAtdResponse = True # Flag that controls if we should wait for an immediate response to ATD, or not
+        self._waitForCallInitUpdate = True # Flag that controls if we should wait for a ATD "call initiated" message
         self._callStatusUpdates = [] # populated during connect() - contains regexes and handlers for detecting/handling call status updates
         self._mustPollCallStatus = False # whether or not the modem must be polled for outgoing call status updates
         self._pollCallStatusRegex = None # Regular expression used when polling outgoing call status
-        self._pollCallStatusUntil = 2 # Controls up to what state outgoing calls should be polled (for modems have partial unsolicited message update support)
         self._writeWait = 0 # Time (in seconds to wait after writing a command (adjusted when 515 errors are detected)
         self._smsTextMode = False # Storage variable for the smsTextMode property
         self._smscNumber = None # Default SMSC number
@@ -179,18 +179,16 @@ class GsmModem(SerialComms):
             # Use ZTE notifications ("CONNECT"/"HANGUP", but no "call initiated" notification)
             self.log.info('Loading ZTE call state update table')
             self._callStatusUpdates = ((re.compile(r'^CONNECT$'), self._handleCallAnswered),
-                                       (re.compile(r'^HANGUP$'), self._handleCallEnded))
+                                       (re.compile(r'^HANGUP:\s*(\d+)$'), self._handleCallEnded))
             self._waitForAtdResponse = False # ZTE modems do not return an immediate  OK only when the call is answered
-            self._pollCallStatusUntil = 0 # The ZTE modem reported on github provides no "initiating" update message, so use polling for that
-            self._mustPollCallStatus = True
-            self._pollCallStatusRegex = re.compile('^\+CLCC:\s+(\d+),(\d),(\d),(\d),([^,]),"([^,]*)",(\d+)$')
+            self._mustPollCallStatus = False
+            self._waitForCallInitUpdate = False # ZTE modems do not provide "call initiated" updates
             if commands == None: # ZTE uses standard +VTS for DTMF
                 Call.dtmfSupport = True
         else:
             # Unknown modem - we do not know what its call updates look like. Use polling instead
             self.log.info('Unknown modem type - will use polling for call state updates')
             self._mustPollCallStatus = True
-            self._pollCallStatusUntil = 2 # Full call state polling
             self._pollCallStatusRegex = re.compile('^\+CLCC:\s+(\d+),(\d),(\d),(\d),([^,]),"([^,]*)",(\d+)$')
             self._waitForAtdResponse = True # Most modems return OK immediately after issuing ATD
 
@@ -536,6 +534,13 @@ class GsmModem(SerialComms):
         @param timeout: Maximum time to wait for the call to be established
         """
         self.write('ATD{0};'.format(number), waitForResponse=self._waitForAtdResponse)
+        if not self._waitForCallInitUpdate:
+            # Don't wait for a call init update - base the call ID on the number of active calls
+            callId = len(self.activeCalls) + 1
+            callType = 0 # Assume voice
+            call = Call(self, callId, callType, number)
+            self.activeCalls[callId] = call
+            return call
         if self._mustPollCallStatus:
             # Fake a call notification by polling call status until the status indicates that the call is being dialed
             threading.Thread(target=self._pollCallStatus, kwargs={'expectedState': 0, 'timeout': timeout}).start()            
@@ -797,9 +802,6 @@ class GsmModem(SerialComms):
             time.sleep(0.5)
             if expectedState == 0: # Only call initializing can timeout
                 timeLeft -= 0.5
-            elif expectedState > self._pollCallStatusUntil:
-                # Partial call state polling (rest of call states will be handled by unsolicited messages)
-                return
             clcc = self._pollCallStatusRegex.match(self.write('AT+CLCC')[0])
             if clcc:
                 # Determine call state        

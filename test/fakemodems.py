@@ -297,7 +297,7 @@ class QualcommM6280(FakeModem):
     def getRemoteHangupNotification(self, callId, callType):
         self._callState = 2
         self._callNumber = None
-        return ['HANGUP\r\n']
+        return ['HANGUP: {0}\r\n'.format(callId)]
         
     def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
         return ['+CRING: {0}\r\n'.format(callType), '+CLIP: "{1}",{2},,,,0\r\n'.format(callType, callerNumber, ton)]

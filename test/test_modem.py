@@ -435,13 +435,15 @@ class TestGsmModemDial(unittest.TestCase):
                 self.assertFalse(call.answered, 'Call state invalid: should not yet be answered. Modem: {0}'.format(modem))            
                 self.assertIn(call.id, self.modem.activeCalls)
                 self.assertEqual(len(self.modem.activeCalls), 1)
-                # Fake an answer                
+                # Fake an answer
                 self.modem.serial.responseSequence = modem.getRemoteAnsweredNotification(callId, callType)
                 # Wait a bit for the event to be picked up
                 while len(self.modem.serial._readQueue) > 0 or len(self.modem.serial.responseSequence) > 0:                    
                     time.sleep(0.05)
                 if self.modem._mustPollCallStatus:
                     time.sleep(0.6) # Ensure polling picks up event
+                elif not self.modem._waitForCallInitUpdate:
+                    time.sleep(0.1) # Ensure event is picked up
                 self.assertTrue(call.answered, 'Remote call answer was not detected. Modem: {0}'.format(modem))
                 def hangupCallback(data):
                     if self.modem._mustPollCallStatus and data.startswith('AT+CLCC'):
