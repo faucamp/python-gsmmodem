@@ -536,12 +536,13 @@ class GsmModem(SerialComms):
         self.write('ATD{0};'.format(number), waitForResponse=self._waitForAtdResponse)
         if not self._waitForCallInitUpdate:
             # Don't wait for a call init update - base the call ID on the number of active calls
+            self.log.debug("Not waiting for outgoing call init update message")
             callId = len(self.activeCalls) + 1
             callType = 0 # Assume voice
             call = Call(self, callId, callType, number)
             self.activeCalls[callId] = call
             return call
-        if self._mustPollCallStatus:
+        elif self._mustPollCallStatus:
             # Fake a call notification by polling call status until the status indicates that the call is being dialed
             threading.Thread(target=self._pollCallStatus, kwargs={'expectedState': 0, 'timeout': timeout}).start()            
         # Wait for the "call originated" notification message
