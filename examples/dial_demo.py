@@ -58,8 +58,10 @@ def main():
     print('Dialing number: {0}'.format(NUMBER))
     call = modem.dial(NUMBER)
     print('Waiting for call to be answered/rejected')
+    wasAnswered = False
     while call.active:
         if call.answered:
+            wasAnswered = True
             print('Call has been answered. Playing DTMF tones...')
             # Wait for a bit - some older modems struggle to send DTMF tone immediately after answering a call
             time.sleep(2.0)
@@ -76,6 +78,11 @@ def main():
                     call.hangup()
                 else: # Call is no longer active (remote party ended it)
                     print('Call has been ended by remote party')
+        else:
+            # Wait a bit and check again
+            time.sleep(0.5)
+    if not wasAnswered:
+        print('Call was not answered by remote party')
     print('Done.')
     modem.close()
 
