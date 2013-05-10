@@ -679,6 +679,7 @@ class GsmModem(SerialComms):
                         break
         if callId and callId in self.activeCalls:
             self.activeCalls[callId].answered = False
+            self.activeCalls[callId].active = False
             del self.activeCalls[callId]
     
     def _handleSmsReceived(self, notificationLine):
@@ -847,7 +848,10 @@ class Call(object):
         # The remote number of this call (destination or origin)
         self.number = number                
         # Flag indicating whether the call has been answered or not
-        self.answered = False        
+        self.answered = False
+        # Flag indicating whether or not the call is active
+        # (meaning it may be ringing or answered, but not ended because of a hangup event)
+        self.active = True
     
     def sendDtmfTone(self, tones):
         """ Send one or more DTMF tones to the remote party (only allowed for an answered call) 
@@ -883,6 +887,7 @@ class Call(object):
         """ End the phone call. """
         self._gsmModem.write('ATH')
         self.answered = False
+        self.active = False
         if self.id in self._gsmModem.activeCalls:
             del self._gsmModem.activeCalls[self.id]
 

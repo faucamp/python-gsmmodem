@@ -424,6 +424,7 @@ class TestGsmModemDial(unittest.TestCase):
                 # Fake call initiated notification
                 self.modem.serial.responseSequence.extend(modem.getCallInitNotification(callId, callType))
                 call = self.modem.dial(number)
+                self.assertTrue(call.active, 'Call state invalid: should be active. Modem: {0}'.format(modem))
                 # Wait for the read buffer to clear
                 while len(self.modem.serial._readQueue) > 0 or len(self.modem.serial.responseSequence) > 0:
                     time.sleep(0.05)
@@ -445,13 +446,15 @@ class TestGsmModemDial(unittest.TestCase):
                 elif not self.modem._waitForCallInitUpdate:
                     time.sleep(0.1) # Ensure event is picked up
                 self.assertTrue(call.answered, 'Remote call answer was not detected. Modem: {0}'.format(modem))
+                self.assertTrue(call.active, 'Call state invalid: should be active. Modem: {0}'.format(modem))
                 def hangupCallback(data):
                     if self.modem._mustPollCallStatus and data.startswith('AT+CLCC'):
                         return # Can happen due to polling
                     self.assertEqual('ATH\r'.format(number), data, 'Invalid data written to modem; expected "{0}", got: "{1}". Modem: {2}'.format('ATH'.format(number), data[:-1] if data[-1] == '\r' else data, modem))
                 self.modem.serial.writeCallbackFunc = hangupCallback
                 call.hangup()
-                self.assertFalse(call.answered, 'Hangup call did not change call state. Modem: {0}'.format(modem))
+                self.assertFalse(call.answered, 'Hangup call did not change answered state. Modem: {0}'.format(modem))
+                self.assertFalse(call.active, 'Call state invalid: should not be active (local hangup). Modem: {0}'.format(modem))
                 self.assertNotIn(call.id, self.modem.activeCalls)
                 self.assertEqual(len(self.modem.activeCalls), 0)
                 # Check remote hangup detection
@@ -461,6 +464,7 @@ class TestGsmModemDial(unittest.TestCase):
                 # Fake call initiated notification
                 self.modem.serial.responseSequence.extend(modem.getCallInitNotification(callId, callType))                
                 call = self.modem.dial(number)
+                self.assertTrue(call.active, 'Call state invalid: should be active. Modem: {0}'.format(modem))
                 # Wait a bit for the event to be picked up
                 while len(self.modem.serial._readQueue) > 0 or len(self.modem.serial.responseSequence) > 0:
                     time.sleep(0.05)
@@ -485,6 +489,7 @@ class TestGsmModemDial(unittest.TestCase):
                 if self.modem._mustPollCallStatus:
                     time.sleep(0.6) # Ensure polling picks up event
                 self.assertFalse(call.answered, 'Remote hangup was not detected. Modem: {0}'.format(modem))
+                self.assertFalse(call.active, 'Call state invalid: should not be active (remote hangup). Modem: {0}'.format(modem))
                 self.assertNotIn(call.id, self.modem.activeCalls)
                 self.assertEqual(len(self.modem.activeCalls), 0)
             self.modem.close()
