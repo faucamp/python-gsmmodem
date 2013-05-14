@@ -47,7 +47,7 @@ def main():
                 # Call was ended during playback
                 print('DTMF playback interrupted: {0} ({1} Error {2})'.format(e, e.cause.type, e.cause.code))
             except CommandError as e:
-                print('DTMF playback failed: {0} ({1} Error {2})'.format(e, e.cause.type, e.cause.code))
+                print('DTMF playback failed: {0}'.format(e))
             finally:
                 if call.active: # Call is still active
                     print('Hanging up call...')
