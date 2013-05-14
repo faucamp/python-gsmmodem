@@ -27,7 +27,7 @@ def main():
         sys.exit(1)
     print('Initializing modem...')
     #logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
-    modem = GsmModem(PORT, BAUDRATE, incomingCallCallbackFunc=handleIncomingCall)
+    modem = GsmModem(PORT, BAUDRATE)
     modem.connect(PIN)
     print('Waiting for network coverage...')
     modem.waitForNetworkCoverage(30)
