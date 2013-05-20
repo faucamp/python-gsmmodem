@@ -74,6 +74,10 @@ class FakeModem(object):
     @abc.abstractmethod
     def getRemoteHangupNotification(self, callId, callType):
         return ['NO CARRIER\r\n', '+WIND: 6,1\r\n']
+
+    def getRemoteRejectCallNotification(self, callId, callType):
+        # For a lot of modems, this is the same as a hangup notification - override this if necessary!
+        return self.getRemoteHangupNotification(callId, callType)
     
     @abc.abstractmethod
     def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
@@ -241,7 +245,7 @@ $QCPDPLT,$QCPWRDN,$QCDGEN,$BREW,$QCSYSMODE,^CVOICE,^DDSETEX,^pcmrecord,^SYSINFO,
 
 
 class QualcommM6280(FakeModem):
-    """ ZTE modem information provided by davidphiliplee on github """
+    """ Qualcomm/ZTE modem information provided by davidphiliplee on github """
 
     def __init__(self):
         super(QualcommM6280, self).__init__()
@@ -298,15 +302,112 @@ class QualcommM6280(FakeModem):
         self._callState = 2
         self._callNumber = None
         return ['HANGUP: {0}\r\n'.format(callId)]
-        
+
     def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
         return ['+CRING: {0}\r\n'.format(callType), '+CLIP: "{1}",{2},,,,0\r\n'.format(callType, callerNumber, ton)]
     
     def __str__(self):
-        return 'ZTE modem (QUALCOMM INCORPORATED)'
+        return 'QUALCOMM M6280 (ZTE modem)'
 
 
-modemClasses = [HuaweiK3715, WavecomMultiband900E1800, QualcommM6280]
+class ZteK3565Z(FakeModem):
+    """ ZTE K3565-Z (Vodafone branded) """
+
+    def __init__(self):
+        super(ZteK3565Z, self).__init__()
+        self._callState = 2
+        self._callNumber = None
+        self._callId = None
+        self.commandsNoPinRequired = [] # This modem requires the CPIN command to be issued first
+        self.responses = {'AT+CGMI\r': ['ZTE INCORPORATED\r\n', 'OK\r\n'],
+                 'AT+CGMM\r': ['K3565-Z\r\n', 'OK\r\n'],
+                 'AT+CGMR\r': ['BD_P673A2V1.0.0B09\r\n', 'OK\r\n'],
+                 'AT+CFUN?\r': ['+CFUN: (0-1,4-7),(0-1)\r\n', 'OK\r\n'],
+                 'AT+CIMI\r': ['111111111111111\r\n', 'OK\r\n'],
+                 'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],
+                 # Note that AT+CLAC does NOT respond in the standard "+CLAC:" format
+                 'AT+CLAC\r': ['&C\r\n', '&D\r\n', '&E\r\n', '&F\r\n', '&S\r\n', '&V\r\n', '&W\r\n', 'E\r\n', 'I\r\n',
+                               'L\r\n', 'M\r\n', 'Q\r\n', 'V\r\n', 'X\r\n', 'Z\r\n', 'T\r\n', 'P\r\n', '\\Q\r\n', '\\S\r\n',
+                               '\\V\r\n', '%V\r\n', 'D\r\n', 'A\r\n', 'H\r\n', 'O\r\n', 'S0\r\n', 'S2\r\n', 'S3\r\n', 'S4\r\n',
+                               'S5\r\n', 'S6\r\n', 'S7\r\n', 'S8\r\n', 'S9\r\n', 'S10\r\n', 'S11\r\n', 'S30\r\n', 'S103\r\n',
+                               'S104\r\n', '+FCLASS\r\n', '+ICF\r\n', '+IFC\r\n', '+IPR\r\n', '+GMI\r\n', '+GMM\r\n',
+                               '+GMR\r\n', '+GCAP\r\n', '+GSN\r\n', '+DR\r\n', '+DS\r\n', '+WS46\r\n', '+CBST\r\n', '+CRLP\r\n',
+                               '+CV120\r\n', '+CHSN\r\n', '+CSSN\r\n', '+CREG\r\n', '+CGREG\r\n', '+CFUN\r\n', '+GCAP\r\n',
+                               '+CSCS\r\n', '+CSTA\r\n', '+CR\r\n', '+CEER\r\n', '+CRC\r\n', '+CMEE\r\n', '+CGDCONT\r\n',
+                               '+CGDSCONT\r\n', '+CGTFT\r\n', '+CGEQREQ\r\n', '+CGEQMIN\r\n', '+CGQREQ\r\n', '+CGQMIN\r\n',
+                               '+CGEREP\r\n', '+CGPADDR\r\n', '+CGDATA\r\n', '+CGCLASS\r\n', '+CGSMS\r\n', '+CSMS\r\n',
+                               '+CMGF\r\n', '+CSAS\r\n', '+CRES\r\n', '+CSCA\r\n', '+CSMP\r\n', '+CSDH\r\n', '+CSCB\r\n',
+                               '+FDD\r\n', '+FAR\r\n', '+FCL\r\n', '+FIT\r\n', '+ES\r\n', '+ESA\r\n', '+CMOD\r\n', '+CVHU\r\n',
+                               '+CSQ\r\n', '+ZRSSI\r\n', '+CBC\r\n', '+CPAS\r\n', '+CPIN\r\n', '+CMEC\r\n', '+CKPD\r\n',
+                               '+CGATT\r\n', '+CGACT\r\n', '+CGCMOD\r\n', '+CPBS\r\n', '+CPBR\r\n', '+ZCPBR\r\n',
+                               '+ZUSIM\r\n', '+CPBF\r\n', '+CPBW\r\n', '+ZCPBW\r\n', '+CPMS\r\n', '+CNMI\r\n',
+                               '+CMGL\r\n', '+CMGR\r\n', '+CMGS\r\n', '+CMSS\r\n', '+CMGW\r\n', '+CMGD\r\n', '+CMGC\r\n',
+                               '+CNMA\r\n', '+CMMS\r\n', '+CHUP\r\n', '+CCFC\r\n', '+CCUG\r\n', '+COPS\r\n', '+CLCK\r\n',
+                               '+CPWD\r\n', '+CUSD\r\n', '+CAOC\r\n', '+CACM\r\n', '+CAMM\r\n', '+CPUC\r\n', '+CCWA\r\n',
+                               '+CHLD\r\n', '+CIMI\r\n', '+CGMI\r\n', '+CGMM\r\n', '+CGMR\r\n', '+CGSN\r\n', '+CNUM\r\n',
+                               '+CSIM\r\n', '+CRSM\r\n', '+CCLK\r\n', '+CLVL\r\n', '+CMUT\r\n', '+CLCC\r\n', '+COPN\r\n',
+                               '+CPOL\r\n', '+CPLS\r\n', '+CTZR\r\n', '+CTZU\r\n', '+CLAC\r\n', '+CLIP\r\n', '+COLP\r\n',
+                               '+CDIP\r\n', '+CTFR\r\n', '+CLIR\r\n', '$QCSIMSTAT\r\n', '$QCCNMI\r\n', '$QCCLR\r\n',
+                               '$QCDMG\r\n', '$QCDMR\r\n', '$QCDNSP\r\n', '$QCDNSS\r\n', '$QCTER\r\n', '$QCSLOT\r\n',
+                               '$QCPINSTAT\r\n', '$QCPDPP\r\n', '$QCPDPLT\r\n', '$QCPWRDN\r\n', '$QCDGEN\r\n',
+                               '$BREW\r\n', '$QCSYSMODE\r\n', 'OK\r\n'],
+                 'AT+WIND?\r': ['ERROR\r\n'],
+                 'AT+WIND=50\r': ['ERROR\r\n'],
+                 'AT+ZPAS?\r':  ['+BEARTYPE: "UMTS","CS_PS"\r\n', 'OK\r\n'],
+                 'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
+                 'AT+CVHU=0\r': ['+CVHU: (0-1)\r\n', 'OK\r\n'],
+                 'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
+
+    def getResponse(self, cmd):
+        if not self._pinLock:
+            if cmd.startswith('AT+CSMP='):
+                # Clear the SMSC number (this behaviour was reported in issue #8 on github)
+                self.smscNumber = None
+            elif cmd == 'AT+CLCC\r':
+                if self._callNumber:
+                    if self._callState == 0:
+                        return ['+CLCC: 1,0,2,0,0,"{0}",129\r\n'.format(self._callNumber), 'OK\r\n']
+                    elif self._callState == 1:
+                        return ['+CLCC: 1,0,0,0,0,"{0}",129\r\n'.format(self._callNumber), 'OK\r\n']
+                    else:
+                        return ['OK\r\n']
+            return super(ZteK3565Z, self).getResponse(cmd)
+        else:
+            return super(ZteK3565Z, self).getResponse(cmd)
+
+    def getAtdResponse(self, number):
+        self._callNumber = number
+        self._callState = 0
+        return []
+
+    def getPreCallInitWaitSequence(self):
+        return [0.1]
+
+    def getCallInitNotification(self, callId, callType):
+        return []
+
+    def getRemoteAnsweredNotification(self, callId, callType):
+        return ['CONNECT\r\n']
+
+    def getRemoteHangupNotification(self, callId, callType):
+        self._callState = 2
+        self._callNumber = None
+        return ['HANGUP: {0}\r\n'.format(callId)]
+
+    def getRemoteRejectCallNotification(self, callId, callType):
+        self._callState = 2
+        self._callNumber = None
+        return ["OK\r\n"]
+
+    def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
+        return ['+CRING: {0}\r\n'.format(callType), '+CLIP: "{1}",{2},,,,0\r\n'.format(callType, callerNumber, ton)]
+
+    def __str__(self):
+        return 'ZTE K3565-Z'
+
+
+
+modemClasses = [HuaweiK3715, WavecomMultiband900E1800, QualcommM6280, ZteK3565Z]
 
 def createModems():
     return [modem() for modem in modemClasses]

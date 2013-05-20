@@ -208,14 +208,20 @@ class TestGsmModemGeneralApi(unittest.TestCase):
         def writeCallbackFunc(data):
             self.assertEqual('AT+CLAC\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CLAC\r', data))
         self.modem.serial.writeCallbackFunc = writeCallbackFunc
-        tests = (('&C,D,E,\S,+CGMM,^DTMF', ['&C', 'D', 'E', '\S', '+CGMM', '^DTMF']),
-                 ('Z', ['Z']))
-        for test in tests:
-            self.modem.serial.responseSequence = ['+CLAC:{0}\r\n'.format(test[0]), 'OK\r\n']            
+        tests = ((['+CLAC:&C,D,E,\S,+CGMM,^DTMF\r\n', 'OK\r\n'], ['&C', 'D', 'E', '\S', '+CGMM', '^DTMF']),
+                 (['+CLAC:Z\r\n', 'OK\r\n'], ['Z']),
+                 # ZTE-like response: do not start with +CLAC, and use multiple lines
+                 (['A\r\n', 'BCD\r\n', 'EFGH\r\n', 'OK\r\n'], ['A', 'BCD', 'EFGH']))
+        for responseSequence, expected in tests:
+            self.modem.serial.responseSequence = responseSequence
             commands = self.modem.supportedCommands
-            self.assertListEqual(commands, test[1])
+            self.assertEqual(commands, expected)
         # Fake a modem that does not support this command
         self.modem.serial.modem.defaultResponse = ['ERROR\r\n']
+        commands = self.modem.supportedCommands
+        self.assertEqual(commands, None)
+        # Test unhandled response format
+        self.modem.serial.modem.defaultResponse = ['OK\r\n']
         commands = self.modem.supportedCommands
         self.assertEqual(commands, None)
         
@@ -386,7 +392,7 @@ class TestEdgeCases(unittest.TestCase):
 
 
 class TestGsmModemDial(unittest.TestCase):
-    
+
     def tearDown(self):
         self.modem.close()
         global FAKE_MODEM
@@ -457,7 +463,8 @@ class TestGsmModemDial(unittest.TestCase):
                 self.assertFalse(call.active, 'Call state invalid: should not be active (local hangup). Modem: {0}'.format(modem))
                 self.assertNotIn(call.id, self.modem.activeCalls)
                 self.assertEqual(len(self.modem.activeCalls), 0)
-                # Check remote hangup detection
+
+                ############## Check remote hangup detection ###############
                 self.modem.serial.writeCallbackFunc = writeCallbackFunc
                 self.modem.serial.responseSequence = modem.getAtdResponse(number)
                 self.modem.serial.responseSequence.extend(modem.getPreCallInitWaitSequence())
@@ -492,8 +499,36 @@ class TestGsmModemDial(unittest.TestCase):
                 self.assertFalse(call.active, 'Call state invalid: should not be active (remote hangup). Modem: {0}'.format(modem))
                 self.assertNotIn(call.id, self.modem.activeCalls)
                 self.assertEqual(len(self.modem.activeCalls), 0)
-            self.modem.close()
 
+                ############## Check remote call rejection (hangup before answering) ###############
+                self.modem.serial.writeCallbackFunc = writeCallbackFunc
+                self.modem.serial.responseSequence = modem.getAtdResponse(number)
+                self.modem.serial.responseSequence.extend(modem.getPreCallInitWaitSequence())
+                # Fake call initiated notification
+                self.modem.serial.responseSequence.extend(modem.getCallInitNotification(callId, callType))
+                call = self.modem.dial(number)
+                self.assertTrue(call.active, 'Call state invalid: should be active. Modem: {0}'.format(modem))
+                # Wait a bit for the event to be picked up
+                while len(self.modem.serial._readQueue) > 0 or len(self.modem.serial.responseSequence) > 0:
+                    time.sleep(0.05)
+                if self.modem._mustPollCallStatus:
+                    time.sleep(0.6) # Ensure polling picks up event
+                self.assertFalse(call.answered, 'Call should not have been in "answered" state. Modem: {0}'.format(modem))
+                self.assertIn(call.id, self.modem.activeCalls)
+                self.assertEqual(len(self.modem.activeCalls), 1)
+                # Now reject the call
+                self.modem.serial.responseSequence = modem.getRemoteRejectCallNotification(callId, callType)
+                # Wait a bit for the event to be picked up
+                while len(self.modem.serial._readQueue) > 0 or len(self.modem.serial.responseSequence) > 0:
+                    time.sleep(0.05)
+                if self.modem._mustPollCallStatus:
+                    time.sleep(0.6) # Ensure polling picks up event
+                time.sleep(0.05)
+                self.assertFalse(call.answered, 'Call state invalid: should not be answered (remote call rejection). Modem: {0}'.format(modem))
+                self.assertFalse(call.active, 'Call state invalid: should not be active (remote rejection). Modem: {0}'.format(modem))
+                self.assertNotIn(call.id, self.modem.activeCalls)
+                self.assertEqual(len(self.modem.activeCalls), 0)
+            self.modem.close()
 
 class TestGsmModemPinConnect(unittest.TestCase):
     """ Tests PIN unlocking and connect() method of GsmModem class (excluding connect/close) """

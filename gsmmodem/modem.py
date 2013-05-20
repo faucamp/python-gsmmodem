@@ -179,7 +179,8 @@ class GsmModem(SerialComms):
             # Use ZTE notifications ("CONNECT"/"HANGUP", but no "call initiated" notification)
             self.log.info('Loading ZTE call state update table')
             self._callStatusUpdates = ((re.compile(r'^CONNECT$'), self._handleCallAnswered),
-                                       (re.compile(r'^HANGUP:\s*(\d+)$'), self._handleCallEnded))
+                                       (re.compile(r'^HANGUP:\s*(\d+)$'), self._handleCallEnded),
+                                       (re.compile(r'^OK$'), self._handleCallRejected))
             self._waitForAtdResponse = False # ZTE modems do not return an immediate  OK only when the call is answered
             self._mustPollCallStatus = False
             self._waitForCallInitUpdate = False # ZTE modems do not provide "call initiated" updates
@@ -372,7 +373,19 @@ class GsmModem(SerialComms):
     def supportedCommands(self):
         """ @return: list of AT commands supported by this modem (without the AT prefix). Returns None if not known """
         try:
-            return self.write('AT+CLAC')[0][6:].split(',') # remove the +CLAC: prefix before splitting
+            # AT+CLAC responses differ between modems. Most respond with +CLAC: and then a comma-separated list of commands
+            # while others simply return each command on a new line, with no +CLAC: prefix
+            response = self.write('AT+CLAC')
+            if len(response) == 2: # Single-line response, comma separated
+                commands = response[0]
+                if commands.startswith('+CLAC'):
+                    commands = commands[6:] # remove the +CLAC: prefix before splitting
+                return commands.split(',')
+            elif len(response) > 2: # Multi-line response
+                return response[:-1]
+            else:
+                self.log.debug('Unhandled +CLAC response: {0}'.format(response))
+                return None
         except CommandError:
             return None
 
@@ -666,7 +679,7 @@ class GsmModem(SerialComms):
             # Use supplied values
             self.activeCalls[callId].answered = True
 
-    def _handleCallEnded(self, regexMatch, callId=None):
+    def _handleCallEnded(self, regexMatch, callId=None, filterUnanswered=False):
         if regexMatch:
             groups = regexMatch.groups()
             if len(groups) > 0:
@@ -675,13 +688,22 @@ class GsmModem(SerialComms):
                 # Call ID not available for this notification - check for the first outgoing call that is active
                 for call in dictValuesIter(self.activeCalls):
                     if type(call) == Call:
-                        callId = call.id
-                        break
+                        if not filterUnanswered or (filterUnanswered == True and call.answered == False):
+                            callId = call.id
+                            break
         if callId and callId in self.activeCalls:
             self.activeCalls[callId].answered = False
             self.activeCalls[callId].active = False
             del self.activeCalls[callId]
-    
+
+    def _handleCallRejected(self, regexMatch, callId=None):
+        """ Handler for rejected (unanswered calls being ended)
+
+        Most modems use _handleCallEnded for handling both call rejections and remote hangups.
+        This method does the same, but filters for unanswered calls only.
+        """
+        return self._handleCallEnded(regexMatch, callId, True)
+
     def _handleSmsReceived(self, notificationLine):
         """ Handler for "new SMS" unsolicited notification line """
         self.log.debug('SMS message received')
@@ -816,15 +838,19 @@ class GsmModem(SerialComms):
                             callType = int(clcc.group(4))
                             self._handleCallInitiated(None, callId, callType) # if self_dialEvent is None, this does nothing
                             expectedState = 1 # Now wait for call answer
-                    elif expectedState == 1: # waiting for call answered
+                    elif expectedState == 1: # waiting for call to be answered
                         if stat == 0: # Call active
                             callId = int(clcc.group(1))
                             self._handleCallAnswered(None, callId)
                             expectedState = 2 # Now wait for call hangup                            
-            elif expectedState == 2: # waiting for remote hangup
+            elif expectedState == 2 : # waiting for remote hangup
                 # Since there was no +CLCC response, the call is no longer active
                 callDone = True
                 self._handleCallEnded(None, callId=callId)
+            elif expectedState == 1: # waiting for call to be answered
+                # Call was rejected
+                callDone = True
+                self._handleCallRejected(None, callId=callId)
         if timeLeft <= 0:
             raise TimeoutException()
 
