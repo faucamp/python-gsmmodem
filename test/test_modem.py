@@ -407,6 +407,7 @@ class TestGsmModemDial(unittest.TestCase):
         self.modem.connect()
     
     def test_dial(self):
+        """ Tests dialing without specifying a callback function """
         
         tests = (['0123456789', '1', '0'],)
         
@@ -418,7 +419,7 @@ class TestGsmModemDial(unittest.TestCase):
             
             modem = self.modem.serial.modem # load the copy()-ed modem instance
             
-            for number, callId, callType in tests:                
+            for number, callId, callType in tests:
                 def writeCallbackFunc(data):
                     if self.modem._mustPollCallStatus and data.startswith('AT+CLCC'):
                         return # Can happen due to polling
@@ -430,15 +431,15 @@ class TestGsmModemDial(unittest.TestCase):
                 # Fake call initiated notification
                 self.modem.serial.responseSequence.extend(modem.getCallInitNotification(callId, callType))
                 call = self.modem.dial(number)
-                self.assertTrue(call.active, 'Call state invalid: should be active. Modem: {0}'.format(modem))
                 # Wait for the read buffer to clear
                 while len(self.modem.serial._readQueue) > 0 or len(self.modem.serial.responseSequence) > 0:
                     time.sleep(0.05)
                 if self.modem._mustPollCallStatus:
-                    time.sleep(0.6)                
-                # Check status
+                    time.sleep(0.6)
                 self.assertIsInstance(call, gsmmodem.modem.Call)
                 self.assertIs(call.number, number)
+                # Check status
+                self.assertTrue(call.active, 'Call state invalid: should be active. Modem: {0}'.format(modem))
                 self.assertFalse(call.answered, 'Call state invalid: should not yet be answered. Modem: {0}'.format(modem))            
                 self.assertIn(call.id, self.modem.activeCalls)
                 self.assertEqual(len(self.modem.activeCalls), 1)
@@ -529,6 +530,61 @@ class TestGsmModemDial(unittest.TestCase):
                 self.assertNotIn(call.id, self.modem.activeCalls)
                 self.assertEqual(len(self.modem.activeCalls), 0)
             self.modem.close()
+
+        def test_dialCallback(self):
+            """ Tests the dial method's callback mechanism """
+            tests = (['12345678', '1', '0'],)
+
+            global MODEMS
+            testModems = fakemodems.createModems()
+            testModems.append(fakemodems.GenericTestModem()) # Test polling only
+            for fakeModem in testModems:
+                self.init_modem(fakeModem)
+
+                modem = self.modem.serial.modem # load the copy()-ed modem instance
+
+                for number, callId, callType in tests:
+
+                    callbackVars = [None, False, 0]
+
+                    def callUpdateCallbackFunc1(call):
+                        self.assertIsInstance(call, gsmmodem.modem.Call)
+                        self.assertEqual(call, callbackVars[0])
+                        # Check call status
+                        if callbackVars[2] == 0: # Expected "answer" event
+                            self.assertTrue(call.active, 'Call state invalid: should be active. Modem: {0}'.format(modem))
+                            self.assertTrue(call.answered, 'Call state invalid: should have been answered. Modem: {0}'.format(modem))
+                        elif callbackVars[2] == 1: # Expected "hangup" event
+                            self.assertFalse(call.answered, 'Call state invalid: "answered" should be false after hangup. Modem: {0}'.format(modem))
+                            self.assertFalse(call.active, 'Call state invalid: should be inactive. Modem: {0}'.format(modem))
+                        callbackVars[1] = True # set "callback called" flag
+
+                    call = self.modem.dial(number, callStatusUpdateCallbackFunc=callUpdateCallbackFunc1)
+                    self.assertIsInstance(call, gsmmodem.modem.Call)
+                    callbackVars[0] = call
+                    self.assertTrue(call.active, 'Call state invalid: should be active. Modem: {0}'.format(modem))
+                    self.assertFalse(call.answered, 'Call state invalid: should not yet be answered. Modem: {0}'.format(modem))
+                    # Fake an answer...
+                    self.modem.serial.responseSequence = modem.getRemoteAnsweredNotification(callId, callType)
+                    # ...and wait for the callback to be called
+                    while not callbackVars[1]:
+                        time.sleep(0.05)
+                    # Double check local call variable
+                    self.assertTrue(call.active, 'Call state invalid: should be active. Modem: {0}'.format(modem))
+                    self.assertTrue(call.answered, 'Call state invalid: should have been answered. Modem: {0}'.format(modem))
+                    # Fake remote hangup...
+                    callbackVars[1] = False
+                    callbackVars[2] = 1
+                    self.modem.serial.responseSequence = modem.getRemoteAnsweredNotification(callId, callType)
+                    # ...and wait for the callback to be called
+                    while not callbackVars[1]:
+                        time.sleep(0.05)
+                    # Double check local call variable
+                    self.assertFalse(call.answered, 'Call state invalid: "answered" should be false after hangup. Modem: {0}'.format(modem))
+                    self.assertFalse(call.active, 'Call state invalid: should be inactive. Modem: {0}'.format(modem))
+
+            self.modem.close()
+
 
 class TestGsmModemPinConnect(unittest.TestCase):
     """ Tests PIN unlocking and connect() method of GsmModem class (excluding connect/close) """

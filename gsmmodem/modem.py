@@ -540,11 +540,16 @@ class GsmModem(SerialComms):
             self._ussdSessionEvent = None            
             raise TimeoutException()
     
-    def dial(self, number, timeout=5):
+    def dial(self, number, timeout=5, callStatusUpdateCallbackFunc=None):
         """ Calls the specified phone number using a voice phone call
-        
+
         @param number: The phone number to dial
         @param timeout: Maximum time to wait for the call to be established
+        @param callStatusUpdateCallbackFunc: Callback function that is executed if the call's status changes due to
+               remote events (i.e. when it is answered, the call is ended by the remote party)
+
+        @return: The outgoing call
+        @rtype: gsmmodem.modem.Call
         """
         self.write('ATD{0};'.format(number), waitForResponse=self._waitForAtdResponse)
         if not self._waitForCallInitUpdate:
@@ -552,7 +557,7 @@ class GsmModem(SerialComms):
             self.log.debug("Not waiting for outgoing call init update message")
             callId = len(self.activeCalls) + 1
             callType = 0 # Assume voice
-            call = Call(self, callId, callType, number)
+            call = Call(self, callId, callType, number, callStatusUpdateCallbackFunc)
             self.activeCalls[callId] = call
             return call
         elif self._mustPollCallStatus:
@@ -563,7 +568,7 @@ class GsmModem(SerialComms):
         if self._dialEvent.wait(timeout):
             self._dialEvent = None
             callId, callType = self._dialResponse
-            call = Call(self, callId, callType, number)
+            call = Call(self, callId, callType, number, callStatusUpdateCallbackFunc)
             self.activeCalls[callId] = call
             return call
         else: # Call establishing timed out
@@ -861,23 +866,33 @@ class Call(object):
     DTMF_COMMAND_BASE = '+VTS='    
     dtmfSupport = False # Indicates whether or not DTMF tones can be sent in calls
     
-    def __init__(self, gsmModem, callId, callType, number):
+    def __init__(self, gsmModem, callId, callType, number, callStatusUpdateCallbackFunc=None):
         """
         @param gsmModem: GsmModem instance that created this object
         @param number: The number that is being called        
         """
         self._gsmModem = weakref.proxy(gsmModem)
+        self._callStatusUpdateCallbackFunc = callStatusUpdateCallbackFunc
         # Unique ID of this call
         self.id = callId
         # Call type (VOICE == 0, etc)
         self.type = callType        
         # The remote number of this call (destination or origin)
         self.number = number                
-        # Flag indicating whether the call has been answered or not
-        self.answered = False
+        # Flag indicating whether the call has been answered or not (backing field for "answered" property)
+        self._answered = False
         # Flag indicating whether or not the call is active
         # (meaning it may be ringing or answered, but not ended because of a hangup event)
         self.active = True
+
+    @property
+    def answered(self):
+        return self._answered
+    @answered.setter
+    def answered(self, answered):
+        self._answered = answered
+        if self._callStatusUpdateCallbackFunc:
+            self._callStatusUpdateCallbackFunc(self)
     
     def sendDtmfTone(self, tones):
         """ Send one or more DTMF tones to the remote party (only allowed for an answered call) 
@@ -960,7 +975,7 @@ class IncomingCall(Call):
 class Sms(object):
     """ Abstract SMS message base class """
     __metaclass__ = abc.ABCMeta
-    
+
     # Some constants to ease handling SMS statuses
     STATUS_RECEIVED_UNREAD = 0
     STATUS_RECEIVED_READ = 1
