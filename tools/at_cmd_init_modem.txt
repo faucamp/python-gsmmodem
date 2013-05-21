@@ -6,6 +6,9 @@ AT+CFUN=1
 AT+CMEE=1
 AT+WIND=0
 
+# Network-related settings
+AT+COPS=3,0
+
 # Setup incoming calls
 AT+CLIP=1
 AT+CRC=1
@@ -13,6 +16,6 @@ AT+CVHU=0
 
 # Setup SMS
 AT+CMGF=1
-AT+CSMP=49,167
-AT+CPMS="SM","SM","SR"
+AT+CSMP=49,167,0,0
+AT+CPMS="ME","ME","ME"
 AT+CNMI=2,1,0,2

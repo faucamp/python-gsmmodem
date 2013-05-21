@@ -1,3 +1,11 @@
+* Tue May 21 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.8
+- Support added for ZTE modems
+- Improved support for Huawei modems
+- Outgoing call status can now be tracked via polling (for unknown modems)
+- SMSC property added
+- Fixes for SMS sending and receiving on different modems
+- Added callback mechanism for outoging call status updates
+
 * Fri Apr 19 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.7
 - Support added for tracking SMS status reports
 - PIN unlock support
