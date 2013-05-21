@@ -551,20 +551,28 @@ class GsmModem(SerialComms):
         @return: The outgoing call
         @rtype: gsmmodem.modem.Call
         """
-        self.write('ATD{0};'.format(number), waitForResponse=self._waitForAtdResponse)
-        if not self._waitForCallInitUpdate:
+        if self._waitForCallInitUpdate:
+            # Wait for the "call originated" notification message
+            self._dialEvent = threading.Event()
+            try:
+                self.write('ATD{0};'.format(number), waitForResponse=self._waitForAtdResponse)
+            except Exception:
+                self._dialEvent = None # Cancel the thread sync lock
+                raise
+        else:
             # Don't wait for a call init update - base the call ID on the number of active calls
+            self.write('ATD{0};'.format(number), waitForResponse=self._waitForAtdResponse)
             self.log.debug("Not waiting for outgoing call init update message")
             callId = len(self.activeCalls) + 1
             callType = 0 # Assume voice
             call = Call(self, callId, callType, number, callStatusUpdateCallbackFunc)
             self.activeCalls[callId] = call
             return call
-        elif self._mustPollCallStatus:
+
+        if self._mustPollCallStatus:
             # Fake a call notification by polling call status until the status indicates that the call is being dialed
-            threading.Thread(target=self._pollCallStatus, kwargs={'expectedState': 0, 'timeout': timeout}).start()            
-        # Wait for the "call originated" notification message
-        self._dialEvent = threading.Event()
+            threading.Thread(target=self._pollCallStatus, kwargs={'expectedState': 0, 'timeout': timeout}).start()
+
         if self._dialEvent.wait(timeout):
             self._dialEvent = None
             callId, callType = self._dialResponse
@@ -659,7 +667,7 @@ class GsmModem(SerialComms):
             if regexMatch:
                 groups = regexMatch.groups()
                 # Set self._dialReponse to (callId, callType)
-                if len(groups) >= 2:                
+                if len(groups) >= 2:
                     self._dialResponse = (int(groups[0]) , int(groups[1]))
                 else:
                     self._dialResponse = (int(groups[0]), 1) # assume call type: VOICE
@@ -909,7 +917,7 @@ class Call(object):
             if len(tones) > 1:
                 cmd = ('AT{0}{1};{0}' + ';{0}'.join(tones[1:])).format(self.DTMF_COMMAND_BASE, tones[0])                
             else:
-                cmd = 'AT+VTS={0}'.format(tones)
+                cmd = 'AT{0}={0}'.format(self.DTMF_COMMAND_BASE, tones)
             try:
                 self._gsmModem.write(cmd, timeout=(5 + toneLen))
             except CmeError as e:

@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
 """\
-Demo: dial a number
+Demo: dial a number (simple example using polling to check call status)
 
 Simple demo app that makes a voice call and plays sone DTMF tones (if supported by modem)
 when the call is answered, and hangs up the call.
+It polls the call status to see if the call has been answered
 
 Note: you need to modify the NUMBER variable for this to work
 """
@@ -38,11 +39,13 @@ def main():
     while call.active:
         if call.answered:
             wasAnswered = True
-            print('Call has been answered. Playing DTMF tones...')
+            print('Call has been answered; waiting a while...')
             # Wait for a bit - some older modems struggle to send DTMF tone immediately after answering a call
-            time.sleep(2.0)
+            time.sleep(3.0)
+            print('Playing DTMF tones...')
             try:
-                call.sendDtmfTone('9515999955951')
+                if call.active: # Call could have been ended by remote party while we waited in the time.sleep() call
+                    call.sendDtmfTone('9515999955951')
             except InterruptedException as e:
                 # Call was ended during playback
                 print('DTMF playback interrupted: {0} ({1} Error {2})'.format(e, e.cause.type, e.cause.code))
