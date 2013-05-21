@@ -289,33 +289,36 @@ class GsmModem(SerialComms):
             time.sleep(self._writeWait)
         if waitForResponse:
             cmdStatusLine = responseLines[-1]
-            if parseError and 'ERROR' in cmdStatusLine:
-                cmErrorMatch = self.CM_ERROR_REGEX.match(cmdStatusLine)
-                if cmErrorMatch:
-                    errorType = cmErrorMatch.group(1)
-                    errorCode = int(cmErrorMatch.group(2))
-                    if errorCode == 515 or errorCode == 14:
-                        # 515 means: "Please wait, init or command processing in progress."
-                        # 14 means "SIM busy"
-                        self._writeWait += 0.2 # Increase waiting period temporarily
-                        # Retry the command after waiting a bit
-                        self.log.debug('Device/SIM busy error detected; self._writeWait adjusted to %fs', self._writeWait)
-                        time.sleep(self._writeWait)
-                        result = self.write(data, waitForResponse, timeout, parseError, writeTerm, expectedResponseTermSeq)
-                        self.log.debug('self_writeWait set to 0.1 because of recovering from device busy (515) error')
-                        if errorCode == 515:
-                            self._writeWait = 0.1 # Set this to something sane for further commands (slow modem)
+            if parseError:
+                if 'ERROR' in cmdStatusLine:
+                    cmErrorMatch = self.CM_ERROR_REGEX.match(cmdStatusLine)
+                    if cmErrorMatch:
+                        errorType = cmErrorMatch.group(1)
+                        errorCode = int(cmErrorMatch.group(2))
+                        if errorCode == 515 or errorCode == 14:
+                            # 515 means: "Please wait, init or command processing in progress."
+                            # 14 means "SIM busy"
+                            self._writeWait += 0.2 # Increase waiting period temporarily
+                            # Retry the command after waiting a bit
+                            self.log.debug('Device/SIM busy error detected; self._writeWait adjusted to %fs', self._writeWait)
+                            time.sleep(self._writeWait)
+                            result = self.write(data, waitForResponse, timeout, parseError, writeTerm, expectedResponseTermSeq)
+                            self.log.debug('self_writeWait set to 0.1 because of recovering from device busy (515) error')
+                            if errorCode == 515:
+                                self._writeWait = 0.1 # Set this to something sane for further commands (slow modem)
+                            else:
+                                self._writeWait = 0 # The modem was just waiting for the SIM card
+                            return result
+                        if errorType == 'CME':
+                            raise CmeError(data, int(errorCode))
+                        elif errorType == 'CMS':
+                            raise CmsError(data, int(errorCode))
                         else:
-                            self._writeWait = 0 # The modem was just waiting for the SIM card
-                        return result
-                    if errorType == 'CME':
-                        raise CmeError(data, int(errorCode))
-                    elif errorType == 'CMS':
-                        raise CmsError(data, int(errorCode))
+                            raise CommandError(data, errorType, int(errorCode))
                     else:
-                        raise CommandError(data, errorType, int(errorCode))
-                else:
-                    raise CommandError(data)
+                        raise CommandError(data)
+                elif cmdStatusLine == 'COMMAND NOT SUPPORT': # Some Huawei modems respond with this for unknown commands
+                    raise CommandError(data + '({0})'.format(cmdStatusLine))
             return responseLines
 
     @property
@@ -382,7 +385,7 @@ class GsmModem(SerialComms):
                     commands = commands[6:] # remove the +CLAC: prefix before splitting
                 return commands.split(',')
             elif len(response) > 2: # Multi-line response
-                return response[:-1]
+                return [cmd.strip() for cmd in response[:-1]]
             else:
                 self.log.debug('Unhandled +CLAC response: {0}'.format(response))
                 return None

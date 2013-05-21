@@ -211,7 +211,9 @@ class TestGsmModemGeneralApi(unittest.TestCase):
         tests = ((['+CLAC:&C,D,E,\S,+CGMM,^DTMF\r\n', 'OK\r\n'], ['&C', 'D', 'E', '\S', '+CGMM', '^DTMF']),
                  (['+CLAC:Z\r\n', 'OK\r\n'], ['Z']),
                  # ZTE-like response: do not start with +CLAC, and use multiple lines
-                 (['A\r\n', 'BCD\r\n', 'EFGH\r\n', 'OK\r\n'], ['A', 'BCD', 'EFGH']))
+                 (['A\r\n', 'BCD\r\n', 'EFGH\r\n', 'OK\r\n'], ['A', 'BCD', 'EFGH']),
+                 # Some Huawei modems have a ZTE-like response, but add an addition \r character at the end of each listed command
+                 (['Q\r\r\n', 'QWERTY\r\r\n', '^DTMF\r\r\n', 'OK\r\n'], ['Q', 'QWERTY', '^DTMF']))
         for responseSequence, expected in tests:
             self.modem.serial.responseSequence = responseSequence
             commands = self.modem.supportedCommands
@@ -325,7 +327,7 @@ class TestGsmModemGeneralApi(unittest.TestCase):
 
 class TestEdgeCases(unittest.TestCase):
     """ Edge-case testing; some modems do funny things during seemingly normal operations """
-    
+
     def test_smscPreloaded(self):
         """ Tests reading the SMSC number if it was pre-loaded on the SIM (some modems delete the number during connect()) """
         tests = [None, '+12345678']
@@ -387,6 +389,19 @@ class TestEdgeCases(unittest.TestCase):
         modem.connect()
         SERIAL_WRITE_CALLBACK_FUNC = None        
         self.assertTrue(cfunWritten[0], 'Modem CFUN setting not set to 1 during connect()')
+        modem.close()
+        FAKE_MODEM = None
+
+    def test_commandNotSupported(self):
+        """ Some Huawei modems response with "COMMAND NOT SUPPORT" instead of "ERROR" or "OK"; ensure we detect this """
+        global FAKE_MODEM
+        FAKE_MODEM = fakemodems.GenericTestModem()
+        FAKE_MODEM.responses['AT+WIND?\r'] = ['COMMAND NOT SUPPORT\r\n']
+        mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = mockSerial
+        modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')
+        modem.connect()
+        self.assertRaises(CommandError, modem.write, 'AT+WIND?')
         modem.close()
         FAKE_MODEM = None
 

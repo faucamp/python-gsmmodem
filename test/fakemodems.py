@@ -244,6 +244,96 @@ $QCPDPLT,$QCPWRDN,$QCDGEN,$BREW,$QCSYSMODE,^CVOICE,^DDSETEX,^pcmrecord,^SYSINFO,
         return 'Huawei K3715'
 
 
+class HuaweiE1752(FakeModem):
+    """ Huawei E1752 modem (used by Cell C in South Africa)
+    This modem issues "COMMAND NOT SUPPORT" non-standard error messages
+    """
+
+    def __init__(self):
+        super(HuaweiE1752, self).__init__()
+        self.responses = {'AT+CGMI\r': ['huawei\r\n', 'OK\r\n'],
+                 'AT+CGMM\r': ['E1752\r\n', 'OK\r\n'],
+                 'AT+CGMR\r': ['11.126.13.00.00\r\n', 'OK\r\n'],
+                 'AT+CIMI\r': ['111111111111111\r\n', 'OK\r\n'],
+                 'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],
+                 'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
+                 # Note the non-standard "COMMAND NOT SUPPORT" error message
+                 'AT+WIND?\r': ['COMMAND NOT SUPPORT\r\n'],
+                 'AT+WIND=50\r': ['COMMAND NOT SUPPORT\r\n'],
+                 'AT+ZPAS?\r': ['COMMAND NOT SUPPORT\r\n'],
+                 # Modem has non-standard +CLAC response (does not start with +CLAC:, and extra \r added to each line (i.e. as part of the command name)
+                 'AT+CLAC\r': ['&C\r\r\n', '&D\r\r\n', '&F\r\r\n', '&V\r\r\n', 'E\r\r\n', 'I\r\r\n', 'L\r\r\n', 'M\r\r\n',
+                               'Q\r\r\n', 'V\r\r\n', 'X\r\r\n', 'Z\r\r\n', 'T\r\r\n', 'P\r\r\n', 'D\r\r\n', 'A\r\r\n',
+                               'H\r\r\n', 'O\r\r\n', 'S0\r\r\n', 'S2\r\r\n', 'S3\r\r\n', 'S4\r\r\n', 'S5\r\r\n', 'S6\r\r\n',
+                               'S7\r\r\n', 'S8\r\r\n', 'S9\r\r\n', 'S10\r\r\n', 'S11\r\r\n', 'S30\r\r\n', 'S103\r\r\n',
+                               'S104\r\r\n', '+FCLASS\r\r\n', '+ICF\r\r\n', '+IFC\r\r\n', '+IPR\r\r\n', '+GMI\r\r\n',
+                               '+GMM\r\r\n', '+GMR\r\r\n', '+GCAP\r\r\n', '+GSN\r\r\n', '+DR\r\r\n', '+DS\r\r\n',
+                               '+WS46\r\r\n', '+CLAC\r\r\n', '+CCLK\r\r\n', '+CBST\r\r\n', '+CRLP\r\r\n', '+CV120\r\r\n',
+                               '+CHSN\r\r\n', '+CSSN\r\r\n', '+CREG\r\r\n', '+CGREG\r\r\n', '+CFUN\r\r\n', '+GCAP\r\r\n',
+                               '+CSCS\r\r\n', '+CSTA\r\r\n', '+CR\r\r\n', '+CEER\r\r\n', '+CRC\r\r\n', '+CMEE\r\r\n',
+                               '+CGDCONT\r\r\n', '+CGDSCONT\r\r\n', '+CGTFT\r\r\n', '+CGEQREQ\r\r\n', '+CGEQMIN\r\r\n',
+                               '+CGQREQ\r\r\n', '+CGQMIN\r\r\n', '+CGEQNEG\r\r\n', '+CGEREP\r\r\n', '+CGPADDR\r\r\n',
+                               '+CGCLASS\r\r\n', '+CGSMS\r\r\n', '+CSMS\r\r\n', '+CMGF\r\r\n', '+CSAS\r\r\n', '+CRES\r\r\n',
+                               '+CSCA\r\r\n', '+CSMP\r\r\n', '+CSDH\r\r\n', '+CSCB\r\r\n', '+FDD\r\r\n', '+FAR\r\r\n',
+                               '+FCL\r\r\n', '+FIT\r\r\n', '+ES\r\r\n', '+ESA\r\r\n', '+CMOD\r\r\n', '+CVHU\r\r\n',
+                               '+CGDATA\r\r\n', '+CSQ\r\r\n', '+CBC\r\r\n', '+CPAS\r\r\n', '+CPIN\r\r\n', '+CMEC\r\r\n',
+                               '+CKPD\r\r\n', '+CIND\r\r\n', '+CMER\r\r\n', '+CGATT\r\r\n', '+CGACT\r\r\n', '+CGCMOD\r\r\n',
+                               '+CPBS\r\r\n', '+CPBR\r\r\n', '+CPBF\r\r\n', '+CPBW\r\r\n', '+CPMS\r\r\n', '+CNMI\r\r\n',
+                               '+CMGL\r\r\n', '+CMGR\r\r\n', '+CMGS\r\r\n', '+CMSS\r\r\n', '+CMGW\r\r\n', '+CMGD\r\r\n',
+                               '+CMGC\r\r\n', '+CNMA\r\r\n', '+CMMS\r\r\n', '+FTS\r\r\n', '+FRS\r\r\n', '+FTH\r\r\n',
+                               '+FRH\r\r\n', '+FTM\r\r\n', '+FRM\r\r\n', '+CHUP\r\r\n', '+CCFC\r\r\n', '+CCUG\r\r\n',
+                               '+COPS\r\r\n', '+CLCK\r\r\n', '+CPWD\r\r\n', '+CUSD\r\r\n', '+CAOC\r\r\n', '+CACM\r\r\n',
+                               '+CAMM\r\r\n', '+CPUC\r\r\n', '+CCWA\r\r\n', '+CHLD\r\r\n', '+CIMI\r\r\n', '+CGMI\r\r\n',
+                               '+CGMM\r\r\n', '+CGMR\r\r\n', '+CGSN\r\r\n', '+CNUM\r\r\n', '+CSIM\r\r\n', '+CRSM\r\r\n',
+                               '+CCLK\r\r\n', '+CLVL\r\r\n', '+CMUT\r\r\n', '+CLCC\r\r\n', '+COPN\r\r\n', '+CPOL\r\r\n',
+                               '+CPLS\r\r\n', '+CTZR\r\r\n', '+CTZU\r\r\n', '+CLAC\r\r\n', '+CLIP\r\r\n', '+COLP\r\r\n',
+                               '+CDIP\r\r\n', '+CTFR\r\r\n', '+CLIR\r\r\n', '$QCSIMSTAT\r\r\n', '$QCCNMI\r\r\n',
+                               '$QCCLR\r\r\n', '$QCDMG\r\r\n', '$QCDMR\r\r\n', '$QCDNSP\r\r\n', '$QCDNSS\r\r\n',
+                               '$QCTER\r\r\n', '$QCSLOT\r\r\n', '$QCPINSTAT\r\r\n', '$QCPDPP\r\r\n', '$QCPDPLT\r\r\n',
+                               '$QCPWRDN\r\r\n', '$QCDGEN\r\r\n', '$BREW\r\r\n', '$QCSYSMODE\r\r\n', '$QCCTM\r\r\n',
+                               '^RFSWITCH\r\r\n', '^SOFTSWITCH\r\r\n', '^FLIGHTMODESAVE\r\r\n', '^IMSICHG\r\r\n',
+                               '^STSF\r\r\n', '^STGI\r\r\n', '^STGR\r\r\n', '^CELLMODE\r\r\n', '^SYSINFO\r\r\n',
+                               '^DIALMODE\r\r\n', '^SYSCFG\r\r\n', '^SYSCONFIG\r\r\n', '^HS\r\r\n', '^DTMF\r\r\n',
+                               '^CPBR\r\r\n', '^CPBW\r\r\n', '^HWVER\r\r\n', '^HVER\r\r\n', '^DSFLOWCLR\r\r\n',
+                               '^DSFLOWQRY\r\r\n', '^DSFLOWRPT\r\r\n', '^SPN\r\r\n', '^PORTSEL\r\r\n', '^CPIN\r\r\n',
+                               '^SN\r\r\n', '^EARST\r\r\n', '^CARDLOCK\r\r\n', '^CARDUNLOCK\r\r\n', '^ATRECORD\r\r\n',
+                               '^CDUR\r\r\n', '^BOOT\r\r\n', '^FHVER\r\r\n', '^CURC\r\r\n', '^FREQLOCK\r\r\n',
+                               '^FREQPREF\r\r\n', '^HSPA\r\r\n', '^HSUPA\r\r\n', '^GPSTYPE\r\r\n', '^HSDPA\r\r\n',
+                               '^GLASTERR\r\r\n', '^CARDMODE\r\r\n', '^U2DIAG\r\r\n', '^RSTRIGGER\r\r\n', '^SETPID\r\r\n',
+                               '^SCSITIMEOUT\r\r\n', '^CQI\r\r\n', '^GETPORTMODE\r\r\n', '^CVOICE\r\r\n', '^DDSETEX\r\r\n',
+                               '^pcmrecord\r\r\n', '^CSNR\r\r\n', '^CMSR\r\r\n', '^CMMT\r\r\n', '^CMGI\r\r\n', '^RDCUST\r\r\n',
+                               '^OPWORD\r\r\n', '^CPWORD\r\r\n', '^DISLOG\r\r\n', '^FPLMN\r\r\n', '^FPLMNCTRL\r\r\n',
+                               '^ANQUERY\r\r\n', '^RSCPCFG\r\r\n', '^ECIOCFG\r\r\n', '^IMSICHECK\r\r\n', '^USSDMODE\r\r\n',
+                               '^SLOTCFG\r\r\n', '^YJCX\r\r\n', '^NDISDUP\r\r\n', '^DHCP\r\r\n', '^AUTHDATA\r\r\n',
+                               '^CRPN\r\r\n', '^ICCID\r\r\n', '^NVMBN\r\r\n', '^RXDIV\r\r\n', '^DNSP\r\r\n', '^DNSS\r\r\n',
+                               '^WPDST\r\r\n', '^WPDOM\r\r\n', '^WPDFR\r\r\n', '^WPQOS\r\r\n', '^WPDSC\r\r\n', '^WPDGP\r\r\n',
+                               '^WPEND\r\r\n', '^WNICT\r\r\n', '^SOCKETCONT\r\r\n', '^WPURL\r\r\n', '^WMOLR\r\r\n',
+                               '^SECTIME\r\r\n', '^WPDNP\r\r\n', '^WPDDL\r\r\n', '^WPDCP\r\r\n', 'OK\r\n'],
+                 'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
+        self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
+
+    def getAtdResponse(self, number):
+        return ['OK\r\n']
+
+    def getPreCallInitWaitSequence(self):
+        return [0.1]
+
+    def getCallInitNotification(self, callId, callType):
+        return ['^ORIG:{0},{1}\r\n'.format(callId, callType), 0.2, '^CONF:{0}\r\n'.format(callId)]
+
+    def getRemoteAnsweredNotification(self, callId, callType):
+        return ['^CONN:{0},{1}\r\n'.format(callId, callType)]
+
+    def getRemoteHangupNotification(self, callId, callType):
+            return ['^CEND:{0},5,29,16\r\n'.format(callId)]
+
+    def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
+        return ['+CRING: {0}\r\n'.format(callType), '+CLIP: "{1}",{2},,,,0\r\n'.format(callType, callerNumber, ton)]
+
+    def __str__(self):
+        return 'Huawei E1752'
+
+
 class QualcommM6280(FakeModem):
     """ Qualcomm/ZTE modem information provided by davidphiliplee on github """
 
@@ -407,7 +497,7 @@ class ZteK3565Z(FakeModem):
 
 
 
-modemClasses = [HuaweiK3715, WavecomMultiband900E1800, QualcommM6280, ZteK3565Z]
+modemClasses = [HuaweiK3715, HuaweiE1752, WavecomMultiband900E1800, QualcommM6280, ZteK3565Z]
 
 def createModems():
     return [modem() for modem in modemClasses]

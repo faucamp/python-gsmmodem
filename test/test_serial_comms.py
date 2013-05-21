@@ -182,7 +182,9 @@ class TestWrite(unittest.TestCase):
         """ Tests basic writing operations """
         tests = ((['OK\r\n'], ['OK']),
                  (['ERROR\r\n'], ['ERROR']),
-                 (['first line\r\n', 'second line\r\n', 'OK\r\n'], ['first line', 'second line', 'OK']))
+                 (['first line\r\n', 'second line\r\n', 'OK\r\n'], ['first line', 'second line', 'OK']),
+                 # Some Huawei modems issue this response instead of ERROR for unknown commands; ensure we detect it correctly
+                 (['COMMAND NOT SUPPORT\r\n'], ['COMMAND NOT SUPPORT']))
         for actual, expected in tests:
             self.serialComms.serial.responseSequence = actual
             self.serialComms.serial.flushResponseSequence = True
