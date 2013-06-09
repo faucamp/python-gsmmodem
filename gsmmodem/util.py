@@ -31,7 +31,12 @@ def lineStartingWith(string, lines):
 
 def lineMatching(regexStr, lines):
     """ Searches through the specified list of strings and returns the regular expression 
-    match for the first line that matches the specified regex, or None if no match was found
+    match for the first line that matches the specified regex string, or None if no match was found
+
+    Note: if you have a pre-compiled regex pattern, use lineMatchingPattern() instead
+
+    @type regexStr: Regular expression string to use
+    @type lines: List of lines to search
 
     @return: the regular expression match for the first line that matches the specified regex, or None if no match was found
     @rtype: re.Match
@@ -39,6 +44,25 @@ def lineMatching(regexStr, lines):
     regex = re.compile(regexStr)
     for line in lines:
         m = regex.match(line)
+        if m:
+            return m
+    else:
+        return None
+
+def lineMatchingPattern(pattern, lines):
+    """ Searches through the specified list of strings and returns the regular expression 
+    match for the first line that matches the specified pre-compiled regex pattern, or None if no match was found
+
+    Note: if you are using a regex pattern string (i.e. not already compiled), use lineMatching() instead
+
+    @type pattern: Compiled regular expression pattern to use
+    @type lines: List of lines to search
+
+    @return: the regular expression match for the first line that matches the specified regex, or None if no match was found
+    @rtype: re.Match
+    """
+    for line in lines:
+        m = pattern.match(line)
         if m:
             return m
     else:

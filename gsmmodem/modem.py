@@ -8,7 +8,7 @@ from datetime import datetime
 from .serial_comms import SerialComms
 from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException, TimeoutException, PinRequiredError, IncorrectPinError, SmscNumberUnknownError
 from .pdu import encodeSmsSubmitPdu, decodeSmsPdu
-from .util import SimpleOffsetTzInfo, lineStartingWith
+from .util import SimpleOffsetTzInfo, lineStartingWith, lineMatchingPattern
 
 from . import compat # For Python 2.6 compatibility
 from gsmmodem.util import lineMatching
@@ -533,9 +533,20 @@ class GsmModem(SerialComms):
         @return: The USSD response message/session (as a Ussd object)
         @rtype: gsmmodem.modem.Ussd
         """
-        self.write('AT+CUSD=1,"{0}",15'.format(ussdString)) # responds with "OK"
-        # Wait for the +CUSD notification message
         self._ussdSessionEvent = threading.Event()
+        try:
+            cusdResponse = self.write('AT+CUSD=1,"{0}",15'.format(ussdString)) # Should respond with "OK"
+        except Exception:
+            self._ussdSessionEvent = None # Cancel the thread sync lock
+            raise
+
+        # Some modems issue the +CUSD response before the acknowledgment "OK" - check for that
+        if len(cusdResponse) > 1:
+            cusdMatch = lineMatchingPattern(self.CUSD_REGEX, cusdResponse)
+            if cusdMatch:
+                self._ussdSessionEvent = None # Cancel thread sync lock
+                return Ussd(self, (cusdMatch.group(1) == '1'), cusdMatch.group(2))
+        # Wait for the +CUSD notification message
         if self._ussdSessionEvent.wait(responseTimeout):
             self._ussdSessionEvent = None
             return self._ussdResponse

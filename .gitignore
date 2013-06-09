@@ -10,6 +10,8 @@ build
 .project
 .pydevproject
 .settings
+# PyCharm project info
+.idea
 
 # Symlinks (if present)
 examples/gsmmodem

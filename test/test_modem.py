@@ -130,31 +130,6 @@ class TestGsmModemGeneralApi(unittest.TestCase):
     
     def tearDown(self):
         self.modem.close()
-    
-    def test_sendUssd(self):
-        # tests tuple format: (USSD_STRING_TO_WRITE, MODEM_WRITE, MODEM_RESPONSE, USSD_MESSAGE, USSD_SESSION_ACTIVE)
-        tests = [('*101#', 'AT+CUSD=1,"*101#",15\r', '+CUSD: 0,"Available Balance: R 96.45 .",15\r\n', 'Available Balance: R 96.45 .', False),
-                 ('*120*500#', 'AT+CUSD=1,"*120*500#",15\r', '+CUSD: 1,"Hallo daar",15\r\n', 'Hallo daar', True),
-                 ('*130*111#', 'AT+CUSD=1,"*130*111#",15\r', '+CUSD: 2,"Totsiens",15\r\n', 'Totsiens', False),
-                 ('*111*502#', 'AT+CUSD=1,"*111*502#",15\r', '+CUSD: 2,"You have the following remaining balances:\n0 free minutes\n20 MORE Weekend minutes ",15\r\n', 'You have the following remaining balances:\n0 free minutes\n20 MORE Weekend minutes ', False)]
-                
-        for test in tests:            
-            def writeCallbackFunc(data):                
-                self.assertEqual(test[1], data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format(test[1], data))                            
-            self.modem.serial.responseSequence = ['OK\r\n', 0.3, test[2]]            
-            self.modem.serial.writeCallbackFunc = writeCallbackFunc
-            ussd = self.modem.sendUssd(test[0])
-            self.assertIsInstance(ussd, gsmmodem.modem.Ussd)
-            self.assertEqual(ussd.sessionActive, test[4], 'Session state is invalid for test case: {0}'.format(test))
-            self.assertEqual(ussd.message, test[3])
-            if ussd.sessionActive:
-                def writeCallbackFunc2(data):
-                    self.assertEqual('AT+CUSD=2\r', data, 'Invalid data written to modem; expected "AT+CUSD=2", got: "{0}"'.format(data))                    
-                self.modem.serial.writeCallbackFunc = writeCallbackFunc2                
-                ussd.cancel()
-            else:
-                ussd.cancel() # This call shouldn't do anything
-            del ussd
         
     def test_manufacturer(self):
         def writeCallbackFunc(data):
@@ -324,6 +299,66 @@ class TestGsmModemGeneralApi(unittest.TestCase):
         self.modem.serial.writeCallbackFunc = writeCallbackFunc
         self.assertRaises(TimeoutException, self.modem.waitForNetworkCoverage, timeout=1)
 
+
+class TestUssd(unittest.TestCase):
+    """ Tests USSD session handling """
+
+    def setUp(self):
+        self.tests = tests = [('*101#', 'AT+CUSD=1,"*101#",15\r', '+CUSD: 0,"Available Balance: R 96.45 .",15\r\n', 'Available Balance: R 96.45 .', False),
+                 ('*120*500#', 'AT+CUSD=1,"*120*500#",15\r', '+CUSD: 1,"Hallo daar",15\r\n', 'Hallo daar', True),
+                 ('*130*111#', 'AT+CUSD=1,"*130*111#",15\r', '+CUSD: 2,"Totsiens",15\r\n', 'Totsiens', False),
+                 ('*111*502#', 'AT+CUSD=1,"*111*502#",15\r', '+CUSD: 2,"You have the following remaining balances:\n0 free minutes\n20 MORE Weekend minutes ",15\r\n', 'You have the following remaining balances:\n0 free minutes\n20 MORE Weekend minutes ', False)]
+        # Override the pyserial import
+        self.mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = self.mockSerial
+        self.modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')
+        self.modem.connect()
+
+    def tearDown(self):
+        self.modem.close()
+
+    def test_sendUssd(self):
+        """ Standard USSD tests """
+        # tests tuple format: (USSD_STRING_TO_WRITE, MODEM_WRITE, MODEM_RESPONSE, USSD_MESSAGE, USSD_SESSION_ACTIVE)
+        for test in self.tests:
+            def writeCallbackFunc(data):
+                self.assertEqual(test[1], data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format(test[1], data))
+            self.modem.serial.responseSequence = ['OK\r\n', test[2]]
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            ussd = self.modem.sendUssd(test[0])
+            self.assertIsInstance(ussd, gsmmodem.modem.Ussd)
+            self.assertEqual(ussd.sessionActive, test[4], 'Session state is invalid for test case: {0}'.format(test))
+            self.assertEqual(ussd.message, test[3])
+            if ussd.sessionActive:
+                def writeCallbackFunc2(data):
+                    self.assertEqual('AT+CUSD=2\r', data, 'Invalid data written to modem; expected "AT+CUSD=2", got: "{0}"'.format(data))
+                self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+                ussd.cancel()
+            else:
+                ussd.cancel() # This call shouldn't do anything
+            del ussd
+
+    def test_sendUssdResponseBeforeOk(self):
+        """ Tests +CUSD responses that arrive before the +CUSD command's OK is issued (non-standard behaviour) - reported by user """
+        # tests tuple format: (USSD_STRING_TO_WRITE, MODEM_WRITE, MODEM_RESPONSE, USSD_MESSAGE, USSD_SESSION_ACTIVE)
+        for test in self.tests:
+            def writeCallbackFunc(data):
+                self.assertEqual(test[1], data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format(test[1], data))
+            # Note: The +CUSD response will now be sent before the command is acknowledged
+            self.modem.serial.responseSequence = [test[2], 'OK\r\n']
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            ussd = self.modem.sendUssd(test[0])
+            self.assertIsInstance(ussd, gsmmodem.modem.Ussd)
+            self.assertEqual(ussd.sessionActive, test[4], 'Session state is invalid for test case: {0}'.format(test))
+            self.assertEqual(ussd.message, test[3])
+            if ussd.sessionActive:
+                def writeCallbackFunc2(data):
+                    self.assertEqual('AT+CUSD=2\r', data, 'Invalid data written to modem; expected "AT+CUSD=2", got: "{0}"'.format(data))
+                self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+                ussd.cancel()
+            else:
+                ussd.cancel() # This call shouldn't do anything
+            del ussd
 
 class TestEdgeCases(unittest.TestCase):
     """ Edge-case testing; some modems do funny things during seemingly normal operations """
