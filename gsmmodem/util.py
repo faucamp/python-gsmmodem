@@ -67,3 +67,19 @@ def lineMatchingPattern(pattern, lines):
             return m
     else:
         return None
+    
+def allLinesMatchingPattern(pattern, lines):
+    """ Like lineMatchingPattern, but returns all lines that match the specified pattern
+
+    @type pattern: Compiled regular expression pattern to use
+    @type lines: List of lines to search
+
+    @return: list of re.Match objects for each line matched, or an empty list if none matched
+    @rtype: list
+    """
+    result = []
+    for line in lines:
+        m = pattern.match(line)
+        if m:
+            result.append(m)
+    return result

@@ -8,7 +8,7 @@ from datetime import datetime
 from .serial_comms import SerialComms
 from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException, TimeoutException, PinRequiredError, IncorrectPinError, SmscNumberUnknownError
 from .pdu import encodeSmsSubmitPdu, decodeSmsPdu
-from .util import SimpleOffsetTzInfo, lineStartingWith, lineMatchingPattern
+from .util import SimpleOffsetTzInfo, lineStartingWith, allLinesMatchingPattern
 
 from . import compat # For Python 2.6 compatibility
 from gsmmodem.util import lineMatching
@@ -71,7 +71,7 @@ class GsmModem(SerialComms):
         self._smscNumber = None # Default SMSC number
         self._smsRef = 0 # Sent SMS reference counter
         self._smsMemReadDelete = None # Preferred message storage memory for reads (<mem1> parameter used for +CPMS) 
-    
+
     def connect(self, pin=None):
         """ Opens the port and initializes the modem and SIM card
          
@@ -542,10 +542,11 @@ class GsmModem(SerialComms):
 
         # Some modems issue the +CUSD response before the acknowledgment "OK" - check for that
         if len(cusdResponse) > 1:
-            cusdMatch = lineMatchingPattern(self.CUSD_REGEX, cusdResponse)
-            if cusdMatch:
+            # Look for more than one +CUSD response because of certain modems' strange behaviour
+            cusdMatches = allLinesMatchingPattern(self.CUSD_REGEX, cusdResponse)
+            if len(cusdMatches) > 0:
                 self._ussdSessionEvent = None # Cancel thread sync lock
-                return Ussd(self, (cusdMatch.group(1) == '1'), cusdMatch.group(2))
+                return self._parseCusdResponse(cusdMatches)
         # Wait for the +CUSD notification message
         if self._ussdSessionEvent.wait(responseTimeout):
             self._ussdSessionEvent = None
@@ -624,7 +625,7 @@ class GsmModem(SerialComms):
                 return
             elif line.startswith('+CUSD'):
                 # USSD notification - either a response or a MT-USSD ("push USSD") message
-                self._handleUssd(line)
+                self._handleUssd(lines)
                 return
             elif line.startswith('+CDSI'):
                 # SMS status report
@@ -824,15 +825,40 @@ class GsmModem(SerialComms):
     def _deleteStoredMessage(self, msgIndex):
         self.write('AT+CMGD={0}'.format(msgIndex))
     
-    def _handleUssd(self, notificationLine):
-        """ Handler for USSD event notification line """
+    def _handleUssd(self, lines):
+        """ Handler for USSD event notification line(s) """
         if self._ussdSessionEvent:
             # A sendUssd() call is waiting for this response - parse it
-            cusdMatch = self.CUSD_REGEX.match(notificationLine)
-            if cusdMatch:                
-                self._ussdResponse = Ussd(self, (cusdMatch.group(1) == '1'), cusdMatch.group(2))                        
+            cusdMatches = allLinesMatchingPattern(self.CUSD_REGEX, lines)
+            if len(cusdMatches) > 0:
+                self._ussdResponse = self._parseCusdResponse(cusdMatches)
             # Notify waiting thread
             self._ussdSessionEvent.set()
+    
+    def _parseCusdResponse(self, cusdMatches):
+        """ Parses one or more +CUSD notification lines (for USSD)
+        @return: USSD response object
+        @rtype: gsmmodem.modem.Ussd
+        """
+        message = None
+        sessionActive = True
+        if len(cusdMatches) > 1:
+            self.log.debug('Multiple +CUSD responses received; filtering...')
+            # Some modems issue a non-standard "extra" +CUSD notification for releasing the session
+            for cusdMatch in cusdMatches:
+                if cusdMatch.group(1) == '2':
+                    # Set the session to inactive, but ignore the message
+                    self.log.debug('Ignoring "session release" message: %s', cusdMatch.group(2))
+                    sessionActive = False
+                else:
+                    # Not a "session release" message
+                    message = cusdMatch.group(2)
+                    if sessionActive and cusdMatch.group(1) != '1':
+                        sessionActive = False
+        else:
+            sessionActive = cusdMatches[0].group(1) == '1'
+            message = cusdMatches[0].group(2)
+        return Ussd(self, sessionActive, message)
 
     def _placeHolderCallback(self, *args):
         """ Does nothing """

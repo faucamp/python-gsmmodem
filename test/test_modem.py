@@ -304,6 +304,7 @@ class TestUssd(unittest.TestCase):
     """ Tests USSD session handling """
 
     def setUp(self):
+        #logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
         self.tests = tests = [('*101#', 'AT+CUSD=1,"*101#",15\r', '+CUSD: 0,"Available Balance: R 96.45 .",15\r\n', 'Available Balance: R 96.45 .', False),
                  ('*120*500#', 'AT+CUSD=1,"*120*500#",15\r', '+CUSD: 1,"Hallo daar",15\r\n', 'Hallo daar', True),
                  ('*130*111#', 'AT+CUSD=1,"*130*111#",15\r', '+CUSD: 2,"Totsiens",15\r\n', 'Totsiens', False),
@@ -359,6 +360,22 @@ class TestUssd(unittest.TestCase):
             else:
                 ussd.cancel() # This call shouldn't do anything
             del ussd
+    
+    def test_sendUssdExtraRelease(self):
+        """ Some modems send an extra +CUSD: 2 message when the USSD session is released - see issue #14 on github """
+        tests = (('*100#', 'Wrong order test message', ['+CUSD: 2,"Initiating Release",15\r\n', '+CUSD: 0,"Wrong order test message",15\r\n', 'OK\r\n']),
+                 ('*101#', 'Notifications test', ['OK\r\n', '+CUSD: 2,"Initiating Release",15\r\n', '+CUSD: 0,"Notifications test",15\r\n']))
+        for test in tests:            
+            self.modem.serial.responseSequence = test[2]
+            ussd = self.modem.sendUssd(test[0])
+            self.assertIsInstance(ussd, gsmmodem.modem.Ussd)
+            self.assertEqual(ussd.message, test[1], 'Invalid message received; expected "{0}", got "{1}"'.format(test[1], ussd.message))
+            self.assertEqual(ussd.sessionActive, False, 'Invalid session state - should be inactive')
+            # Make sure the next call does not include any of the USSD extras
+            atResponse = self.modem.write('AT')
+            self.assertEqual(len(atResponse), 1)
+            self.assertEqual(atResponse[0], 'OK')
+
 
 class TestEdgeCases(unittest.TestCase):
     """ Edge-case testing; some modems do funny things during seemingly normal operations """
