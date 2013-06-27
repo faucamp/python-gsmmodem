@@ -70,7 +70,8 @@ class GsmModem(SerialComms):
         self._smsTextMode = False # Storage variable for the smsTextMode property
         self._smscNumber = None # Default SMSC number
         self._smsRef = 0 # Sent SMS reference counter
-        self._smsMemReadDelete = None # Preferred message storage memory for reads (<mem1> parameter used for +CPMS) 
+        self._smsMemReadDelete = None # Preferred message storage memory for reads (<mem1> parameter used for +CPMS)
+        self._smsReadSupported = True # Whether or not reading SMS messages is supported via AT commands
 
     def connect(self, pin=None):
         """ Opens the port and initializes the modem and SIM card
@@ -159,7 +160,7 @@ class GsmModem(SerialComms):
                     callUpdateTableHint = 3 # ZTE
         # Load outgoing call status updates based on identified modem features
         if callUpdateTableHint == 1:
-             # Use Hauwei's ^NOTIFICATIONs
+            # Use Hauwei's ^NOTIFICATIONs
             self.log.info('Loading Huawei call state update table')
             self._callStatusUpdates = ((re.compile(r'^\^ORIG:(\d),(\d)$'), self._handleCallInitiated),
                                        (re.compile(r'^\^CONN:(\d),(\d)$'), self._handleCallAnswered),
@@ -188,7 +189,7 @@ class GsmModem(SerialComms):
                 Call.dtmfSupport = True
         else:
             # Unknown modem - we do not know what its call updates look like. Use polling instead
-            self.log.info('Unknown modem type - will use polling for call state updates')
+            self.log.info('Unknown/generic modem type - will use polling for call state updates')
             self._mustPollCallStatus = True
             self._pollCallStatusRegex = re.compile('^\+CLCC:\s+(\d+),(\d),(\d),(\d),([^,]),"([^,]*)",(\d+)$')
             self._waitForAtdResponse = True # Most modems return OK immediately after issuing ATD
@@ -213,22 +214,44 @@ class GsmModem(SerialComms):
             self.smsc = currentSmscNumber
 
         # Set message storage, but first check what the modem supports - example response: +CPMS: (("SM","BM","SR"),("SM"))
-        cpmsLine = lineStartingWith('+CPMS', self.write('AT+CPMS=?'))
-        cpmsSupport = cpmsLine.split(' ', 1)[1].split('),(')
-        preferredMemoryTypes = ('"ME"', '"SM"', '"SR"')
-        cpmsItems = [''] * len(cpmsSupport)
-        for i in xrange(len(cpmsSupport)):
-            for memType in preferredMemoryTypes:
-                if memType in cpmsSupport[i]:
-                    if i == 0:
-                        self._smsMemReadDelete = memType
-                    cpmsItems[i] = memType
+        try:
+            cpmsLine = lineStartingWith('+CPMS', self.write('AT+CPMS=?'))
+        except CommandError:
+            # Modem does not support AT+CPMS; SMS reading unavailable
+            self._smsReadSupported = False
+            self.log.warn('SMS preferred message storage query not supported by modem. SMS reading unavailable.')
+            del cpmsLine
+        else:
+            cpmsSupport = cpmsLine.split(' ', 1)[1].split('),(')
+            # Do a sanity check on the memory types returned - Nokia S60 devices return empty strings, for example
+            for memItem in cpmsSupport:
+                if len(memItem) == 0:
+                    # No support for reading stored SMS via AT commands - probably a Nokia S60
+                    self._smsReadSupported = False
+                    self.log.warn('Invalid SMS message storage support returned by modem. SMS reading unavailable. Response was: "%s"', cpmsLine)
                     break
-        self.write('AT+CPMS={0}'.format(','.join(cpmsItems))) # Set message storage
-        del cpmsSupport
-        del cpmsLine
+            else:
+                # Suppported memory types look fine, continue
+                preferredMemoryTypes = ('"ME"', '"SM"', '"SR"')
+                cpmsItems = [''] * len(cpmsSupport)
+                for i in xrange(len(cpmsSupport)):
+                    for memType in preferredMemoryTypes:
+                        if memType in cpmsSupport[i]:
+                            if i == 0:
+                                self._smsMemReadDelete = memType
+                            cpmsItems[i] = memType
+                            break
+                self.write('AT+CPMS={0}'.format(','.join(cpmsItems))) # Set message storage
+            del cpmsSupport
+            del cpmsLine
         
-        self.write('AT+CNMI=2,1,0,2') # Set message notifications
+        if self._smsReadSupported:
+            try:
+                self.write('AT+CNMI=2,1,0,2') # Set message notifications
+            except CommandError:
+                # Message notifications not supported
+                self._smsReadSupported = False
+                self.log.warn('Incoming SMS notifications not supported by modem. SMS receiving unavailable.')
         
         # Incoming call notification setup
         try:
@@ -770,6 +793,8 @@ class GsmModem(SerialComms):
         @param memory: The memory type to read from. If None, use the current default SMS read memory
         @type memory: str or None
         
+        @raise CommandError: if unable to read the stored message
+        
         @return: The SMS message
         @rtype: subclass of gsmmodem.modem.Sms (either ReceivedSms or StatusReport)
         """
@@ -879,11 +904,15 @@ class GsmModem(SerialComms):
             time.sleep(0.5)
             if expectedState == 0: # Only call initializing can timeout
                 timeLeft -= 0.5
-            clcc = self._pollCallStatusRegex.match(self.write('AT+CLCC')[0])
+            try:
+                clcc = self._pollCallStatusRegex.match(self.write('AT+CLCC')[0])
+            except TimeoutException as timeout:
+                # Can happend if the call was ended during our time.sleep() call
+                clcc = None
             if clcc:
-                # Determine call state        
                 direction = int(clcc.group(2))
                 if direction == 0: # Outgoing call
+                    # Determine call state
                     stat = int(clcc.group(3))
                     if expectedState == 0: # waiting for call initiated
                         if stat == 2 or stat == 3: # Dialing or ringing ("alerting")                            

@@ -378,7 +378,7 @@ class TestUssd(unittest.TestCase):
 
 
 class TestEdgeCases(unittest.TestCase):
-    """ Edge-case testing; some modems do funny things during seemingly normal operations """
+    """ Edge-case testing; some modems do funny things during seemingly normal operations """    
 
     def test_smscPreloaded(self):
         """ Tests reading the SMSC number if it was pre-loaded on the SIM (some modems delete the number during connect()) """

@@ -496,8 +496,44 @@ class ZteK3565Z(FakeModem):
         return 'ZTE K3565-Z'
 
 
+class NokiaN79(GenericTestModem):
+    """ Nokia Symbian S60-based modem (details taken from a Nokia N79) and
+    also from issue 15: https://github.com/faucamp/python-gsmmodem/issues/15 (Nokia N95)
+    
+    SMS reading is not supported on these devices via AT commands; thus
+    commands like AT+CNMI are not supported.
+    """
 
-modemClasses = [HuaweiK3715, HuaweiE1752, WavecomMultiband900E1800, QualcommM6280, ZteK3565Z]
+    def __init__(self):
+        super(NokiaN79, self).__init__()
+        self.responses = {'AT+CGMI\r': ['Nokia\r\n', 'OK\r\n'],
+                 'AT+CGMM\r': ['Nokia N79\r\n', 'OK\r\n'],
+                 'AT+CGMR\r': ['V ICPR72_08w44.1\r\n', '24-11-08\r\n', 'RM-348\r\n', '(c) Nokia\r\n', '11.049\r\n', 'OK\r\n'],
+                 'AT+CIMI\r': ['111111111111111\r\n', 'OK\r\n'],
+                 'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],
+                 'AT+CNMI=2,1,0,2\r': ['ERROR\r\n'], # SMS reading and notifications not supported
+                 'AT+CLAC\r': ['ERROR\r\n'],
+                 'AT+WIND?\r': ['ERROR\r\n'],
+                 'AT+WIND=50\r': ['ERROR\r\n'],
+                 'AT+ZPAS?\r': ['ERROR\r\n'],
+                 'AT+CPMS="SM","SM","SR"\r': ['ERROR\r\n'],                 
+                 'AT+CPMS=?\r': ['+CPMS: (),(),()\r\n', 'OK\r\n'], # not supported
+                 'AT+CPMS?\r': ['+CPMS: ,,,,,,,,\r\n', 'OK\r\n'], # not supported
+                 'AT+CPMS=,,\r': ['ERROR\r\n'],
+                 'AT+CPMS="SM","SM"\r': ['ERROR\r\n'], # not supported
+                 'AT+CSMP?\r': ['+CSMP: 49,167,0,0\r\n', 'OK\r\n'],
+                 'AT+GCAP\r': ['+GCAP: +CGSM,+DS,+W\r\n', 'OK\r\n'],
+                 'AT+CNMI=2,1,0,2\r': ['ERROR\r\n'], # not supported
+                 'AT+CVHU=0\r': ['OK\r\n'],
+                 'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
+        self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']    
+    
+    def __str__(self):
+        return 'Nokia N79'  
+
+
+modemClasses = [HuaweiK3715, HuaweiE1752, WavecomMultiband900E1800, QualcommM6280, ZteK3565Z, NokiaN79]
+
 
 def createModems():
     return [modem() for modem in modemClasses]
