@@ -20,6 +20,9 @@ from gsmmodem.util import SimpleOffsetTzInfo
 
 from . import fakemodems
 
+# Silence logging exceptions
+logging.raiseExceptions = False
+
 # The fake modem to use (if any)
 FAKE_MODEM = None
 # Write callback to use during Serial.__init__() - usually None, but useful for setting write callbacks during modem.connect()
