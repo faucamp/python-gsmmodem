@@ -384,14 +384,6 @@ def _encodeTimestamp(timestamp):
     dateStr = timestamp.strftime('%y%m%d%H%M%S%z')[-2]
     return encodeSemiOctets(dateStr)    
 
-def _decodeTagValueTriplet(byteIter):
-    """ Decodes a tag-value triplet (used for UDH fields) from the specified byte iterator """
-    iei = next(byteIter) # Information Element Identifier
-    ieLen = next(byteIter) # Information Element length
-    for i in xrange(ieLen):    
-        next(byteIter)
-    print 'UDH triplet. iei:',iei,'len:',ieLen
-    
 def _decodeDataCoding(octet):
     if octet & 0xC0 == 0:
         #compressed = octect & 0x20
@@ -568,7 +560,6 @@ def decodeGsm7(encodedText):
         encodedText = bytearray(encodedText)
     iterEncoded = iter(encodedText)
     for b in iterEncoded:
-        #print b
         if b == 0x1B: # ESC - switch to extended table
             c = chr(next(iterEncoded))
             for char, value in dictItemsIter(GSM7_EXTENDED):
@@ -576,7 +567,6 @@ def decodeGsm7(encodedText):
                     result.append(char)
                     break
         else:
-            #print 'appending:', GSM7_BASIC[b]
             result.append(GSM7_BASIC[b])
     return ''.join(result)
 
@@ -629,8 +619,6 @@ def unpackSeptets(septets, numberOfSeptets=None, prevOctet=None, shift=7):
         septets = iter(septets)    
     if numberOfSeptets == None:        
         numberOfSeptets = MAX_INT # Loop until StopIteration
-    #shift = 7
-    #prevOctet = None
     i = 0
     for octet in septets:
         i += 1
@@ -638,11 +626,9 @@ def unpackSeptets(septets, numberOfSeptets=None, prevOctet=None, shift=7):
             shift = 1
             if prevOctet != None:                
                 result.append(prevOctet >> 1)            
-            #if len(result) < numberOfSeptets:
             if i <= numberOfSeptets:
                 result.append(octet & 0x7F)
                 prevOctet = octet                
-            #if len(result) == numberOfSeptets:
             if i == numberOfSeptets:
                 break
             else:
@@ -652,7 +638,7 @@ def unpackSeptets(septets, numberOfSeptets=None, prevOctet=None, shift=7):
         prevOctet = octet        
         result.append(b)
         shift += 1
-        #if len(result) == numberOfSeptets:
+        
         if i == numberOfSeptets:
             break
     if shift == 7:
