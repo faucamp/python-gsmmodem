@@ -86,7 +86,10 @@ class InformationElement(object):
         thereof, to be created. If the IEI is recognized, a specific
         subclass of InformationElement is returned """
         targetClass = IEI_CLASS_MAP.get(iei, cls)
-        return super(InformationElement, targetClass).__new__(targetClass, iei, ieLen, ieData)
+        if targetClass != cls:
+            return super(InformationElement, targetClass).__new__(targetClass, iei, ieLen, ieData)
+        else:
+            return super(InformationElement, cls).__new__(cls)
     
     def __init__(self, iei, ieLen, ieData):
         self.id = iei # IEI
