@@ -230,7 +230,7 @@ class TestSmsPdu(unittest.TestCase):
                 self.assertIn(key, result)
                 if key == 'udh':
                     self.assertEqual(len(result[key]), len(value), 'Incorrect number of UDH information elements; expected {0}, got {1}'.format(len(result[key]), len(value)))
-                    for i in xrange(len(value)):
+                    for i in range(len(value)):
                         got = result[key][i]
                         expected = value[i]
                         self.assertIsInstance(got, expected.__class__)
