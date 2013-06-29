@@ -66,7 +66,106 @@ class SmsPduTzInfo(tzinfo):
     def dst(self, dt):
         """ We do not have enough info in the SMS PDU to implement DST """
         return timedelta(0)
+
+
+class InformationElement(object):
+    """ User Data Header (UDH) Information Element (IE) implementation
+     
+    This represents a single field ("information element") in the PDU's
+    User Data Header. The UDH itself contains one or more of these
+    information elements.
     
+    If the IEI (IE identifier) is recognized, the class will automatically
+    specialize into one of the subclasses of InformationElement, 
+    e.g. Concatenation or PortAddress, allowing the user to easily
+    access the specific (and useful) attributes of these special cases.
+    """
+    
+    def __new__(cls, iei, ieLen, ieData):
+        """ Causes a new InformationElement class, or subclass
+        thereof, to be created. If the IEI is recognized, a specific
+        subclass of InformationElement is returned """
+        targetClass = IEI_CLASS_MAP.get(iei, cls)
+        return super(InformationElement, targetClass).__new__(targetClass, iei, ieLen, ieData)
+    
+    def __init__(self, iei, ieLen, ieData):
+        self.id = iei # IEI
+        self.dataLength = ieLen # IE Length
+        self.data = ieData # raw IE data
+        
+    @classmethod
+    def decode(cls, byteIter):
+        """ Decodes a single IE at the current position in the specified
+        byte iterator 
+        
+        @return: An InformationElement (or subclass) instance for the decoded IE
+        @rtype: InformationElement, or subclass thereof
+        """
+        iei = next(byteIter)
+        ieLen = next(byteIter)
+        ieData = []
+        for i in xrange(ieLen):
+            ieData.append(next(byteIter))
+        return InformationElement(iei, ieLen, ieData)
+    
+    def __len__(self):
+        """ Exposes the IE's total length (including the IEI and IE length octet) in octets """
+        return self.dataLength + 2
+
+
+class Concatenation(InformationElement):
+    """ IE that indicates SMS concatenation.
+    
+    This implementation handles both 8-bit and 16-bit concatenation
+    indication, and exposes the specific useful details of this
+    IE as instance variables.
+    
+    Exposes:
+    reference: CSMS reference number, must be same for all the SMS parts in the CSMS
+    parts: total number of parts. The value shall remain constant for every short
+     message which makes up the concatenated short message. If the value is zero then 
+     the receiving entity shall ignore the whole information element
+    index:  this part's number in the sequence. The value shall start at 1 and
+     increment for every short message which makes up the concatenated short message
+    """
+    
+    def __init__(self, iei, ieLen, ieData):
+        super(Concatenation, self).__init__(iei, ieLen, ieData)
+        if iei == 0x00: # 8-bit reference
+            self.reference, self.parts, self.index = ieData
+        elif iei == 0x08: # 16-bit reference
+            self.reference = ieData[0] << 8 | ieData[1]
+            self.parts = ieData[2]
+            self.index = ieData[3]
+
+
+class PortAddress(InformationElement):
+    """ IE that indicates an Application Port Addressing Scheme.
+    
+    This implementation handles both 8-bit and 16-bit concatenation
+    indication, and exposes the specific useful details of this
+    IE as instance variables.
+    
+    Exposes:
+    destinationPort: The destination port number
+    originPort: The origin port number
+    """
+    
+    def __init__(self, iei, ieLen, ieData):
+        super(PortAddress, self).__init__(iei, ieLen, ieData)
+        if iei == 0x04: # 8-bit port addressing scheme
+            self.destinationPort, self.originPort = ieData
+        elif iei == 0x05: # 16-bit port addressing scheme
+            self.destinationPort = ieData[0] << 8 | ieData[1]
+            self.originPort = ieData[2] << 8 | ieData[3]
+
+
+# Map of recognized IEIs
+IEI_CLASS_MAP = {0x00: Concatenation, # Concatenated short messages, 8-bit reference number
+                 0x08: Concatenation, # Concatenated short messages, 16-bit reference number
+                 0x04: PortAddress, # Application port addressing scheme, 8 bit address
+                 0x05: PortAddress # Application port addressing scheme, 16 bit address
+                }
 
 def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requestStatusReport=True, rejectDuplicates=False):
     """ Creates an SMS-SUBMIT PDU for sending a message with the specified text to the specified number
@@ -157,15 +256,37 @@ def decodeSmsPdu(pdu):
     tpduFirstOctet = next(pduIter) 
     
     pduType = tpduFirstOctet & 0x03 # bits 1-0
-    if pduType == 0x00: # SMS-DELIVER or SMS-DELIVER REPORT        
+    if pduType == 0x00: # SMS-DELIVER or SMS-DELIVER REPORT
         result['type'] = 'SMS-DELIVER'
         result['number'] = _decodeAddressField(pduIter)[0]
         result['protocol_id'] = next(pduIter)
         dataCoding = _decodeDataCoding(next(pduIter))
         result['time'] = _decodeTimestamp(pduIter)
         userDataLen = next(pduIter)
+        udhPresent = (tpduFirstOctet & 0x40) != 0
+        if udhPresent:
+            # User Data Header is present
+            result['udh'] = []
+            udhLen = next(pduIter)
+            ieLenRead = 0
+            # Parse and store UDH fields
+            while ieLenRead < udhLen:
+                ie = InformationElement.decode(pduIter)
+                ieLenRead += len(ie)
+                result['udh'].append(ie)
+            del ieLenRead
+            if dataCoding == 0x00: # GSM-7
+                # Since we are using 7-bit data, "fill bits" may have been added to make the UDH end on a septet boundary
+                shift = ((udhLen + 1) * 8) % 7 # "fill bits" needed to make the UDH end on a septet boundary
+                # Simulate another "shift" in the unpackSeptets algorithm in order to ignore the fill bits
+                prevOctet = next(pduIter)
+                shift += 1
+        
         if dataCoding == 0x00: # GSM-7
-            userDataSeptets = unpackSeptets(pduIter, userDataLen)
+            if udhPresent:
+                userDataSeptets = unpackSeptets(pduIter, userDataLen, prevOctet, shift)
+            else:
+                userDataSeptets = unpackSeptets(pduIter, userDataLen)
             result['text'] = decodeGsm7(userDataSeptets)
         elif dataCoding == 0x02: # UCS2
             userData = []
@@ -263,6 +384,14 @@ def _encodeTimestamp(timestamp):
     dateStr = timestamp.strftime('%y%m%d%H%M%S%z')[-2]
     return encodeSemiOctets(dateStr)    
 
+def _decodeTagValueTriplet(byteIter):
+    """ Decodes a tag-value triplet (used for UDH fields) from the specified byte iterator """
+    iei = next(byteIter) # Information Element Identifier
+    ieLen = next(byteIter) # Information Element length
+    for i in xrange(ieLen):    
+        next(byteIter)
+    print 'UDH triplet. iei:',iei,'len:',ieLen
+    
 def _decodeDataCoding(octet):
     if octet & 0xC0 == 0:
         #compressed = octect & 0x20
@@ -439,6 +568,7 @@ def decodeGsm7(encodedText):
         encodedText = bytearray(encodedText)
     iterEncoded = iter(encodedText)
     for b in iterEncoded:
+        #print b
         if b == 0x1B: # ESC - switch to extended table
             c = chr(next(iterEncoded))
             for char, value in dictItemsIter(GSM7_EXTENDED):
@@ -446,6 +576,7 @@ def decodeGsm7(encodedText):
                     result.append(char)
                     break
         else:
+            #print 'appending:', GSM7_BASIC[b]
             result.append(GSM7_BASIC[b])
     return ''.join(result)
 
@@ -480,7 +611,7 @@ def packSeptets(octets):
         result.append(prevSeptet >> shift)
     return result
 
-def unpackSeptets(septets, numberOfSeptets=None):
+def unpackSeptets(septets, numberOfSeptets=None, prevOctet=None, shift=7):
     """ Unpacks the specified septets into octets 
     
     @param septets: Iterator or iterable containing the septets packed into octets
@@ -498,8 +629,8 @@ def unpackSeptets(septets, numberOfSeptets=None):
         septets = iter(septets)    
     if numberOfSeptets == None:        
         numberOfSeptets = MAX_INT # Loop until StopIteration
-    shift = 7
-    prevOctet = None
+    #shift = 7
+    #prevOctet = None
     i = 0
     for octet in septets:
         i += 1
@@ -517,6 +648,7 @@ def unpackSeptets(septets, numberOfSeptets=None):
             else:
                 continue
         b = ((octet << shift) & 0x7F) | (prevOctet >> (8 - shift))
+        
         prevOctet = octet        
         result.append(b)
         shift += 1

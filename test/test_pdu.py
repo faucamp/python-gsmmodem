@@ -215,14 +215,38 @@ class TestSmsPdu(unittest.TestCase):
                  (b'0006D60B911326880736F4111011719551401110117195714000',
                   {'type': 'SMS-STATUS-REPORT',
                    'number': '+31628870634',
-                   'reference': 214}))
+                   'reference': 214}),
+                 (b'0591721891F1400781721881F800003160526104848059050003C30101916536FB1DCABEEB2074D85E064941B19CAB060319A5C522289C96D3D3ED32286C0FA7D96131BBEC024941B19CAB0603DDD36C36A88C87A7E565D0DB0D82C55EB0DB4B068BCD5C20',
+                  {'type': 'SMS-DELIVER',
+                   'number': '2781188',
+                   'smsc': '+2781191',
+                   'text': 'Hello!You have R 19.50 FREE airtime available. R 19.50 will expire on 01/07/2013. ',
+                   'udh': [gsmmodem.pdu.Concatenation(0x00, 0x03, [0xC3, 0x01, 0x01])]}))
         
         for pdu, expected in tests:
             result = gsmmodem.pdu.decodeSmsPdu(pdu)
             self.assertIsInstance(result, dict)
             for key, value in expected.items():
                 self.assertIn(key, result)
-                self.assertEqual(result[key], value, 'Failed to decode PDU value for "{0}". Expected "{1}", got "{2}".'.format(key, value, result[key]))
+                if key == 'udh':
+                    self.assertEqual(len(result[key]), len(value), 'Incorrect number of UDH information elements; expected {0}, got {1}'.format(len(result[key]), len(value)))
+                    for i in xrange(len(value)):
+                        got = result[key][i]
+                        expected = value[i]
+                        self.assertIsInstance(got, expected.__class__)
+                        self.assertEqual(expected.id, got.id)
+                        self.assertEqual(expected.dataLength, got.dataLength)
+                        self.assertEqual(expected.data, got.data)
+                        if isinstance(expected, gsmmodem.pdu.Concatenation):
+                            self.assertEqual(got.reference, expected.reference)
+                            self.assertEqual(got.parts, expected.parts)
+                            self.assertEqual(got.index, expected.index)
+                        elif isinstance(expected, gsmmodem.pdu.PortAddress):
+                            self.assertEqual(got.destinationPort, expected.destinationPort)
+                            self.assertEqual(got.originPort, expected.originPort)
+                else:
+                    self.assertEqual(result[key], value, 'Failed to decode PDU value for "{0}". Expected "{1}", got "{2}".'.format(key, value, result[key]))
+
 
 if __name__ == "__main__":
     unittest.main()
