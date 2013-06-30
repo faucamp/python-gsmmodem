@@ -558,7 +558,7 @@ class GsmModem(SerialComms):
         """
         self._ussdSessionEvent = threading.Event()
         try:
-            cusdResponse = self.write('AT+CUSD=1,"{0}",15'.format(ussdString)) # Should respond with "OK"
+            cusdResponse = self.write('AT+CUSD=1,"{0}",15'.format(ussdString), timeout=responseTimeout) # Should respond with "OK"
         except Exception:
             self._ussdSessionEvent = None # Cancel the thread sync lock
             raise
