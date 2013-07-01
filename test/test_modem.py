@@ -22,6 +22,8 @@ from . import fakemodems
 
 # Silence logging exceptions
 logging.raiseExceptions = False
+if sys.version_info[0] == 3 and sys.version_info[1] >= 1:
+    logging.getLogger('gsmmodem').addHandler(logging.NullHandler())
 
 # The fake modem to use (if any)
 FAKE_MODEM = None
