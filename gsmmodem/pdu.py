@@ -221,8 +221,8 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
     except ValueError:
         # Cannot encode text using GSM-7; use UCS2 instead
         alphabet = 0x08 # UCS2        
-        encodedText = text.encode('utf-16')
-        userDataLength = len(encodedText) # Payload size in septets/characters
+        encodedText = encodeUcs2(text)
+        userDataLength = len(encodedText)
         userData = encodedText
     else:
         alphabet = 0x00 # GSM-7        
@@ -293,19 +293,6 @@ def decodeSmsPdu(pdu):
     
     return result
 
-def decodeUcs2(byteIter, numBytes):
-    """ Decodes UCS2-encoded text from the specified byte iterator, up to a maximum of numBytes """
-    userData = []
-    i = 0
-    try:
-        while i < numBytes:
-            userData.append(unichr((next(byteIter) << 8) | next(byteIter)))
-            i += 2
-    except StopIteration:
-        # Not enough bytes in iterator to reach numBytes; return what we have
-        pass
-    return u''.join(userData)
-
 def _decodeUserData(byteIter, userDataLen, dataCoding, udhPresent):
     """ Decodes PDU user data (UDHI (if present) and message text) """
     result = {}
@@ -335,8 +322,11 @@ def _decodeUserData(byteIter, userDataLen, dataCoding, udhPresent):
         result['text'] = decodeGsm7(userDataSeptets)
     elif dataCoding == 0x02: # UCS2
         result['text'] = decodeUcs2(byteIter, userDataLen)
-    else:
-        result['text'] = ''
+    else: # 8-bit (data)
+        userData = []
+        for b in byteIter:
+            userData.append(unichr(b))
+        result['text'] = ''.join(userData)
     return result
 
 def _decodeRelativeValidityPeriod(tpVp):
@@ -657,4 +647,33 @@ def unpackSeptets(septets, numberOfSeptets=None, prevOctet=None, shift=7):
         if b:
             # The final septet value still needs to be unpacked
             result.append(b)        
+    return result
+
+def decodeUcs2(byteIter, numBytes):
+    """ Decodes UCS2-encoded text from the specified byte iterator, up to a maximum of numBytes """
+    userData = []
+    i = 0
+    try:
+        while i < numBytes:
+            userData.append(unichr((next(byteIter) << 8) | next(byteIter)))
+            i += 2
+    except StopIteration:
+        # Not enough bytes in iterator to reach numBytes; return what we have
+        pass
+    return ''.join(userData)
+
+def encodeUcs2(text):
+    """ UCS2 text encoding algorithm
+    
+    Encodes the specified text string into UCS2-encoded bytes.
+    
+    @param text: the text string to encode
+    
+    @return: A bytearray containing the string encoded in UCS2 encoding
+    @rtype: bytearray
+    """
+    result = bytearray()
+    for b in map(ord, text):
+        result.append(b >> 8)
+        result.append(b & 0xFF)
     return result

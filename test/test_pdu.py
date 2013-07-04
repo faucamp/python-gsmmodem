@@ -43,7 +43,7 @@ class TestSemiOctets(unittest.TestCase):
 
 
 class TestGsm7(unittest.TestCase):
-    """ Tests the GSM-7 encoding/decoding algorithms """    
+    """ Tests the GSM-7 encoding/decoding algorithms """
     
     def setUp(self):
         self.tests = (('123', bytearray(b'123'), bytearray([49, 217, 12])),
@@ -103,6 +103,26 @@ class TestGsm7(unittest.TestCase):
             result = gsmmodem.pdu.encodeGsm7(invalidStr, discardInvalid=True)
             self.assertEqual(result, encoded, 'Failed to GSM-7 encode invalid plaintext string: "{0}". Expected: "{1}", got: "{2}"'.format(invalidStr, [b for b in encoded], [b for b in result]))
 
+
+class TestUcs2(unittest.TestCase):
+    """ Tests the UCS2 encoding/decoding algorithms """
+
+    def setUp(self):
+        self.tests = (('あ叶葉', bytearray([0x30, 0x42, 0x53, 0xF6, 0x84, 0x49])),
+                         ('はい', bytearray([0x30, 0x6F, 0x30, 0x44])))
+    
+    def test_encode(self):
+        """ Tests GSM-7 encoding algorithm """
+        for plaintext, encoded in self.tests:
+            result = gsmmodem.pdu.encodeUcs2(plaintext)
+            self.assertEqual(result, encoded, 'Failed to UCS-2 encode plaintext string: "{0}". Expected: "{1}", got: "{2}"'.format(plaintext, [b for b in encoded], [b for b in result]))
+
+    def test_decode(self):
+        """ Tests GSM-7 decoding algorithm """
+        for plaintext, encoded in self.tests:
+            result = gsmmodem.pdu.decodeUcs2(iter(encoded), len(encoded))
+            self.assertEqual(result, plaintext, 'Failed to decode UCS-2 string: "{0}". Expected: "{1}", got: "{2}"'.format([b for b in encoded], plaintext, result))
+            
 
 class TestSmsPduAddressFields(unittest.TestCase):
     """ Tests for SMS PDU address fields (these methods are not meant to be public) """
@@ -177,12 +197,13 @@ class TestRelativeValidityPeriod(unittest.TestCase):
 
 class TestSmsPdu(unittest.TestCase):
     """ Tests encoding/decoding of SMS PDUs """
-        
+
     def test_encodeSmsSubmit(self):
         """ Tests SMS PDU encoding """
         tests = (('+27820001111', 'Hello World!', 0, None, None, False, b'0001000B917228001011F100000CC8329BFD065DDF72363904'),
-                 ('+123456789', '世界您好！', 0, None, None, False, b'000100099121436587F900080CFFFE164E4C75A8607D5901FF'),
-                 ('+31628870634', 'www.diafaan.com', 13, timedelta(days=3), '+31624000000', True, b'07911326040000F0310D0B911326880736F40000A90FF7FBDD454E87CDE1B0DB357EB701'))
+                 ('+123456789', '世界您好！', 0, timedelta(weeks=52), '+44000000000', False, b'07914400000000F01100099121436587F90008F40A4E16754C60A8597DFF01'),
+                 ('+31628870634', 'www.diafaan.com', 13, timedelta(days=3), '+31624000000', True, b'07911326040000F0310D0B911326880736F40000A90FF7FBDD454E87CDE1B0DB357EB701'),
+                 )
         for number, text, reference, validity, smsc, rejectDuplicates, pduHex in tests:
             pdu = bytearray(codecs.decode(pduHex, 'hex_codec'))
             result = gsmmodem.pdu.encodeSmsSubmitPdu(number, text, reference, validity, smsc, rejectDuplicates)[0]            
@@ -233,8 +254,12 @@ class TestSmsPdu(unittest.TestCase):
                    'smsc': None,
                    'udh': [gsmmodem.pdu.Concatenation(0x00, 0x03, [0x00, 0x03, 0x01])],
                    'text': 'はい'}),
-                 )
-        
+                 (b'0591721891F101000B917228214365F700040C48656C6C6F20776F726C6421', # 8-bit data coding
+                  {'type': 'SMS-SUBMIT',
+                   'number': '+27821234567',
+                   'smsc': '+2781191',
+                   'text': 'Hello world!'}))
+
         for pdu, expected in tests:
             result = gsmmodem.pdu.decodeSmsPdu(pdu)
             self.assertIsInstance(result, dict)
