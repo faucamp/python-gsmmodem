@@ -9,7 +9,8 @@ from datetime import datetime
 from copy import copy
 
 from . import compat # For Python 2.6 compatibility
-from gsmmodem.exceptions import PinRequiredError, CommandError, InvalidStateException, TimeoutException
+from gsmmodem.exceptions import PinRequiredError, CommandError, InvalidStateException, TimeoutException,\
+    CmsError, CmeError
 from gsmmodem.modem import StatusReport, Sms
 PYTHON_VERSION = sys.version_info[0]
 
@@ -183,13 +184,25 @@ class TestGsmModemGeneralApi(unittest.TestCase):
         for test in tests:
             self.modem.serial.responseSequence = ['{0}\r\n'.format(test), 'OK\r\n']
             self.assertEqual(test, self.modem.imsi)
-    
+
+    def test_networkName(self):
+        def writeCallbackFunc(data):
+            self.assertEqual('AT+COPS?\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+COPS', data))
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc
+        tests = [('MTN', '+COPS: 0,0,"MTN",2'),
+                 ('I OMNITEL', '+COPS: 0,0,"I OMNITEL"'),
+                 (None, 'SOME RANDOM RESPONSE')]
+        for name, toWrite in tests:
+            self.modem.serial.responseSequence = ['{0}\r\n'.format(toWrite), 'OK\r\n']
+            self.assertEqual(name, self.modem.networkName)
+
     def test_supportedCommands(self):
         def writeCallbackFunc(data):
             self.assertEqual('AT+CLAC\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CLAC\r', data))
         self.modem.serial.writeCallbackFunc = writeCallbackFunc
         tests = ((['+CLAC:&C,D,E,\S,+CGMM,^DTMF\r\n', 'OK\r\n'], ['&C', 'D', 'E', '\S', '+CGMM', '^DTMF']),
                  (['+CLAC:Z\r\n', 'OK\r\n'], ['Z']),
+                 (['FGH,RTY,UIO\r\n', 'OK\r\n'], ['FGH', 'RTY', 'UIO']), # nasty, but possible
                  # ZTE-like response: do not start with +CLAC, and use multiple lines
                  (['A\r\n', 'BCD\r\n', 'EFGH\r\n', 'OK\r\n'], ['A', 'BCD', 'EFGH']),
                  # Some Huawei modems have a ZTE-like response, but add an addition \r character at the end of each listed command
@@ -199,14 +212,14 @@ class TestGsmModemGeneralApi(unittest.TestCase):
             commands = self.modem.supportedCommands
             self.assertEqual(commands, expected)
         # Fake a modem that does not support this command
-        self.modem.serial.modem.defaultResponse = ['ERROR\r\n']
+        self.modem.serial.responseSequence = ['ERROR\r\n']
         commands = self.modem.supportedCommands
         self.assertEqual(commands, None)
         # Test unhandled response format
-        self.modem.serial.modem.defaultResponse = ['OK\r\n']
+        self.modem.serial.responseSequence = ['OK\r\n']
         commands = self.modem.supportedCommands
         self.assertEqual(commands, None)
-        
+
     def test_smsc(self):
         """ Tests reading and writing the SMSC number from the SIM card """
         def writeCallbackFunc1(data):
@@ -228,9 +241,20 @@ class TestGsmModemGeneralApi(unittest.TestCase):
                 continue
             def writeCallbackFunc2(data):
                 self.assertEqual('AT+CSCA="{0}"\r'.format(test), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSCA="{0}"'.format(test), data))
+            def writeCallbackFunc3(data):
+                # This method should not be called - it merely exists to make sure nothing is written to the modem
+                self.fail("Nothing should have been written to modem, but got: {0}".format(data))
             self.modem.serial.writeCallbackFunc = writeCallbackFunc2
             self.modem.smsc = test
             self.assertEqual(test, self.modem.smsc)
+            # Now see if the SMSC value was cached properly
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc3
+            self.assertEqual(test, self.modem.smsc)
+        # Check response if modem returns a +CMS ERROR: 330 (SMSC number unknown) on querying the SMSC
+        self.modem._smscNumber = None
+        self.modem.serial.responseSequence = ['+CMS ERROR: 330\r\n']
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc1
+        self.assertEqual(self.modem.smsc, None) # Should just return None
     
     def test_signalStrength(self):
         """ Tests reading signal strength from the modem """
@@ -299,10 +323,40 @@ class TestGsmModemGeneralApi(unittest.TestCase):
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
             self.assertRaises(InvalidStateException, self.modem.waitForNetworkCoverage)
         # Test TimeoutException
-        def writeCallbackFunc(data):
+        def writeCallbackFunc2(data):
             self.modem.serial.responseSequence = ['+CREG: 0,1\r\n'.format(result), 'OK\r\n']
-        self.modem.serial.writeCallbackFunc = writeCallbackFunc
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc2
         self.assertRaises(TimeoutException, self.modem.waitForNetworkCoverage, timeout=1)
+        
+    def test_errorTypes(self):
+        """ Tests error type detection- and handling by throwing random errors to commands """
+        # Throw unnamed error
+        self.modem.serial.responseSequence = ['ERROR\r\n']
+        try:
+            self.modem.write('AT')
+        except CommandError as e:
+            self.assertIsInstance(e, CommandError)
+            self.assertEqual(e.command, 'AT')
+            self.assertEqual(e.type, None)
+            self.assertEqual(e.code, None)
+        # Throw CME error
+        self.modem.serial.responseSequence = ['+CME ERROR: 22\r\n']
+        try:
+            self.modem.write('AT+ZZZ')
+        except CommandError as e:
+            self.assertIsInstance(e, CmeError)
+            self.assertEqual(e.command, 'AT+ZZZ')
+            self.assertEqual(e.type, 'CME')
+            self.assertEqual(e.code, 22)
+        # Throw CMS error
+        self.modem.serial.responseSequence = ['+CMS ERROR: 310\r\n']
+        try:
+            self.modem.write('AT+XYZ')
+        except CommandError as e:
+            self.assertIsInstance(e, CmsError)
+            self.assertEqual(e.command, 'AT+XYZ')
+            self.assertEqual(e.type, 'CMS')
+            self.assertEqual(e.code, 310)
 
 
 class TestUssd(unittest.TestCase):
@@ -429,7 +483,7 @@ class TestEdgeCases(unittest.TestCase):
     def test_cfunNotSupported(self):
         """ Tests case where a modem does not support the AT+CFUN command """
         global FAKE_MODEM            
-        FAKE_MODEM = fakemodems.GenericTestModem()
+        FAKE_MODEM = copy(fakemodems.GenericTestModem())
         FAKE_MODEM.cfun = -1 # disable
         FAKE_MODEM.responses['AT+CFUN?\r'] = ['ERROR\r\n']
         FAKE_MODEM.responses['AT+CFUN=1\r'] = ['ERROR\r\n']
@@ -439,7 +493,7 @@ class TestEdgeCases(unittest.TestCase):
             if data == 'AT+CFUN?\r':
                 cfunWritten[0] = True
         global SERIAL_WRITE_CALLBACK_FUNC
-        SERIAL_WRITE_CALLBACK_FUNC = writeCallbackFunc         
+        SERIAL_WRITE_CALLBACK_FUNC = writeCallbackFunc
         mockSerial = MockSerialPackage()
         gsmmodem.serial_comms.serial = mockSerial
         modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')        
@@ -452,13 +506,187 @@ class TestEdgeCases(unittest.TestCase):
     def test_commandNotSupported(self):
         """ Some Huawei modems response with "COMMAND NOT SUPPORT" instead of "ERROR" or "OK"; ensure we detect this """
         global FAKE_MODEM
-        FAKE_MODEM = fakemodems.GenericTestModem()
+        FAKE_MODEM = copy(fakemodems.GenericTestModem())
         FAKE_MODEM.responses['AT+WIND?\r'] = ['COMMAND NOT SUPPORT\r\n']
         mockSerial = MockSerialPackage()
         gsmmodem.serial_comms.serial = mockSerial
         modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')
         modem.connect()
         self.assertRaises(CommandError, modem.write, 'AT+WIND?')
+        modem.close()
+        FAKE_MODEM = None
+        
+    def test_wavecomConnectSpecifics(self):
+        """ Wavecom-specific test cases that might not be covered by the modem profiles in fakemodems.py
+        - this is mostly to attain 100% code coverage in tests
+        """
+        global FAKE_MODEM
+        FAKE_MODEM = copy(fakemodems.WavecomMultiband900E1800())
+        # Test the case where AT+CLAC returns a response for Wavecom devices, and it includes +WIND and +VTS
+        FAKE_MODEM.responses['AT+CLAC\r'] = ['+CLAC: D,+CUSD,+WIND,+VTS\r\n', 'OK\r\n']
+        # Test the case where the +WIND setting is already what we want it to be
+        FAKE_MODEM.responses['AT+WIND?\r'] = ['+WIND: 50\r\n', 'OK\r\n']
+        mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = mockSerial
+        modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')
+        modem.connect()
+        self.assertTrue(gsmmodem.modem.Call.dtmfSupport, '+VTS in AT+CLAC response should have indicated DTMF support')
+        modem.close()
+        FAKE_MODEM = None
+
+    def test_zteConnectSpecifics(self):
+        """ ZTE-specific test cases that might not be covered by the modem profiles in fakemodems.py
+        - this is mostly to attain 100% code coverage in tests
+        """
+        global FAKE_MODEM
+        FAKE_MODEM = copy(fakemodems.ZteK3565Z())
+        # Test the case where AT+CLAC returns a response for ZTE devices, and it includes +ZPAS and +VTS
+        FAKE_MODEM.responses['AT+CLAC\r'][-1] = '+ZPAS\r\n'
+        FAKE_MODEM.responses['AT+CLAC\r'].append('OK\r\n')
+        mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = mockSerial
+        modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')
+        modem.connect()
+        self.assertTrue(gsmmodem.modem.Call.dtmfSupport, '+VTS in AT+CLAC response should have indicated DTMF support')
+        modem.close()
+        FAKE_MODEM = None
+
+    def test_huaweiConnectSpecifics(self):
+        """ Huawei-specific test cases that might not be covered by the modem profiles in fakemodems.py
+        - this is mostly to attain 100% code coverage in tests
+        """
+        global FAKE_MODEM
+        FAKE_MODEM = copy(fakemodems.HuaweiK3715())
+        # Test the case where AT+CLAC returns no response for Huawei devices; causing the need for other methods to detect phone type
+        FAKE_MODEM.responses['AT+CLAC\r'] = ['ERROR\r\n']
+        mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = mockSerial
+        modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')
+        modem.connect()
+        # Huawei modems should have DTMF support
+        self.assertTrue(gsmmodem.modem.Call.dtmfSupport, 'Huawei modems should have DTMF support')
+        modem.close()
+        FAKE_MODEM = None
+
+    def test_smscSpecifiedBeforeConnect(self):
+        """ Tests connect() operation when an SMSC number is set before connect() is called """
+        smscNumber = '123454321'
+        global FAKE_MODEM
+        FAKE_MODEM = copy(fakemodems.GenericTestModem())
+        FAKE_MODEM.smsc = None
+        mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = mockSerial
+        modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')
+        # Look for the AT+CSCA write
+        cscaWritten = [False]
+        def writeCallbackFunc(data):
+            if data == 'AT+CSCA="{0}"\r'.format(smscNumber):
+                cscaWritten[0] = True
+        global SERIAL_WRITE_CALLBACK_FUNC
+        SERIAL_WRITE_CALLBACK_FUNC = writeCallbackFunc
+        # Set the SMSC number before calling connect()
+        modem.smsc = smscNumber
+        self.assertFalse(cscaWritten[0])
+        modem.connect()
+        self.assertTrue(cscaWritten[0], 'Preset SMSC value not written to modem during connect()')
+        self.assertEqual(modem.smsc, smscNumber, 'Pre-set SMSC not stored correctly during connect()')
+        modem.close()
+        FAKE_MODEM = None
+
+    def test_cpmsNotSupported(self):
+        """ Tests case where a modem does not support the AT+CPMS command """
+        global FAKE_MODEM            
+        FAKE_MODEM = copy(fakemodems.GenericTestModem())
+        FAKE_MODEM.responses['AT+CPMS=?\r'] = ['+CMS ERROR: 302\r\n']
+        # This should pass without any problem, and AT+CPMS=? should at least have been checked during connect()
+        cpmsWritten = [False]
+        def writeCallbackFunc(data):
+            if data == 'AT+CPMS=?\r':
+                cpmsWritten[0] = True
+        global SERIAL_WRITE_CALLBACK_FUNC
+        SERIAL_WRITE_CALLBACK_FUNC = writeCallbackFunc
+        mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = mockSerial
+        modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')        
+        modem.connect()
+        SERIAL_WRITE_CALLBACK_FUNC = None        
+        self.assertTrue(cpmsWritten[0], 'Modem CPMS allowed values not checked during connect()')
+        modem.close()
+        FAKE_MODEM = None
+
+    def test_cnmiNotSupported(self):
+        """ Tests case where a modem does not support the AT+CNMI command (but does support other SMS-related commands) """
+        global FAKE_MODEM            
+        FAKE_MODEM = copy(fakemodems.GenericTestModem())
+        FAKE_MODEM.responses['AT+CNMI=2,1,0,2\r'] = ['ERROR\r\n']
+        # This should pass without any problem, and AT+CNMI=2,1,0,2 should at least have been attempted during connect()
+        cnmiWritten = [False]
+        def writeCallbackFunc(data):
+            if data == 'AT+CNMI=2,1,0,2\r':
+                cnmiWritten[0] = True
+        global SERIAL_WRITE_CALLBACK_FUNC
+        SERIAL_WRITE_CALLBACK_FUNC = writeCallbackFunc
+        mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = mockSerial
+        modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')        
+        modem.connect()
+        SERIAL_WRITE_CALLBACK_FUNC = None        
+        self.assertTrue(cnmiWritten[0], 'AT+CNMI setting not written to modem during connect()')
+        self.assertFalse(modem._smsReadSupported, 'Modem\'s internal SMS read support flag should be False if AT+CNMI is not supported')
+        modem.close()
+        FAKE_MODEM = None
+
+    def test_clipNotSupported(self):
+        """ Tests case where a modem does not support the AT+CLIP command """
+        global FAKE_MODEM            
+        FAKE_MODEM = copy(fakemodems.GenericTestModem())
+        FAKE_MODEM.responses['AT+CLIP=1\r'] = ['ERROR\r\n']
+        # This should pass without any problem, and AT+CLIP=1 should at least have been attempted during connect()
+        clipWritten = [False]
+        crcWritten = [False]
+        def writeCallbackFunc(data):
+            if data == 'AT+CLIP=1\r':
+                clipWritten[0] = True
+            elif data == 'AT+CRC=1\r':
+                crcWritten[0] = True
+        global SERIAL_WRITE_CALLBACK_FUNC
+        SERIAL_WRITE_CALLBACK_FUNC = writeCallbackFunc
+        mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = mockSerial
+        modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')        
+        modem.connect()
+        SERIAL_WRITE_CALLBACK_FUNC = None        
+        self.assertTrue(clipWritten[0], 'AT+CLIP=1 not written to modem during connect()')
+        self.assertFalse(crcWritten[0], 'AT+CRC=1 should not be attempted if AT+CLIP is not supported')
+        self.assertFalse(modem._callingLineIdentification, 'Modem\'s internal calling line identification flag should be False if AT+CLIP is not supported')
+        self.assertFalse(modem._extendedIncomingCallIndication, 'Modem\'s internal extended calling line identification information flag should be False if AT+CLIP is not supported')
+        modem.close()
+        FAKE_MODEM = None
+
+    def test_crcNotSupported(self):
+        """ Tests case where a modem does not support the AT+CRC command """
+        global FAKE_MODEM            
+        FAKE_MODEM = copy(fakemodems.GenericTestModem())
+        FAKE_MODEM.responses['AT+CRC=1\r'] = ['ERROR\r\n']
+        # This should pass without any problem, and AT+CRC=1 should at least have been attempted during connect()
+        clipWritten = [False]
+        crcWritten = [False]
+        def writeCallbackFunc(data):
+            if data == 'AT+CLIP=1\r':
+                clipWritten[0] = True
+            elif data == 'AT+CRC=1\r':
+                crcWritten[0] = True
+        global SERIAL_WRITE_CALLBACK_FUNC
+        SERIAL_WRITE_CALLBACK_FUNC = writeCallbackFunc
+        mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = mockSerial
+        modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')        
+        modem.connect()
+        SERIAL_WRITE_CALLBACK_FUNC = None        
+        self.assertTrue(clipWritten[0], 'AT+CLIP=1 not written to modem during connect()')
+        self.assertTrue(crcWritten[0], 'AT+CRC=1 not written to modem during connect()')
+        self.assertTrue(modem._callingLineIdentification, 'Modem\'s internal calling line identification flag should be True if AT+CLIP is supported')
+        self.assertFalse(modem._extendedIncomingCallIndication, 'Modem\'s internal extended calling line identification information flag should be False if AT+CRC is not supported')
         modem.close()
         FAKE_MODEM = None
 
@@ -792,6 +1020,7 @@ class TestSms(unittest.TestCase):
         """ Tests sending SMS messages in text mode """
         self.initModem(None)
         self.modem.smsTextMode = True # Set modem to text mode
+        self.assertTrue(self.modem.smsTextMode)
         for number, message, index, smsTime, smsc, pdu, tpdu_length, ref, mem in self.tests:
             self.modem._smsRef = ref
             def writeCallbackFunc(data):
@@ -814,7 +1043,8 @@ class TestSms(unittest.TestCase):
     def test_sendSmsPduMode(self):
         """ Tests sending a SMS messages in PDU mode """
         self.initModem(None)
-        self.modem.smsTextMode = False # Set modem to PDU mode        
+        self.modem.smsTextMode = False # Set modem to PDU mode
+        self.assertFalse(self.modem.smsTextMode)
         for number, message, index, smsTime, smsc, pdu, sms_deliver_tpdu_length, ref, mem in self.tests:
             self.modem._smsRef = ref
             calcPdu, tpdu_length = gsmmodem.pdu.encodeSmsSubmitPdu(number, message, ref)
@@ -891,6 +1121,7 @@ class TestSms(unittest.TestCase):
 
         self.initModem(smsReceivedCallbackFunc=smsReceivedCallbackFuncText)
         self.modem.smsTextMode = True # Set modem to text mode
+        self.assertTrue(self.modem.smsTextMode)
         for number, message, index, smsTime, smsc, pdu, tpdu_length, ref, mem in self.tests:            
             # Wait for the handler function to finish
             callbackInfo[0] = False # "done" flag
@@ -940,6 +1171,7 @@ class TestSms(unittest.TestCase):
 
         self.initModem(smsReceivedCallbackFunc=smsReceivedCallbackFuncPdu)
         self.modem.smsTextMode = False # Set modem to PDU mode
+        self.assertFalse(self.modem.smsTextMode)
         for number, message, index, smsTime, smsc, pdu, tpdu_length, ref, mem in self.tests:
             if smsc == None or pdu == None:
                 continue # not enough info for a PDU test, skip it

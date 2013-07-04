@@ -121,10 +121,8 @@ class GsmModem(SerialComms):
             if '+VTS' in commands: # Check for DTMF sending support
                 Call.dtmfSupport = True
             elif '^DTMF' in commands:
-                # Huawei modems use ^DTMF to send DTMF tones; use that instead
+                # Huawei modems use ^DTMF to send DTMF tones
                 callUpdateTableHint = 1 # Huawei
-                Call.DTMF_COMMAND_BASE = '^DTMF=1,'
-                Call.dtmfSupport = True
             if '+WIND' in commands:
                 callUpdateTableHint = 2 # Wavecom
                 enableWind = True
@@ -166,6 +164,9 @@ class GsmModem(SerialComms):
                                        (re.compile(r'^\^CONN:(\d),(\d)$'), self._handleCallAnswered),
                                        (re.compile(r'^\^CEND:(\d),(\d),(\d)+,(\d)+$'), self._handleCallEnded))
             self._mustPollCallStatus = False
+            # Huawei modems use ^DTMF to send DTMF tones; use that instead
+            Call.DTMF_COMMAND_BASE = '^DTMF=1,'
+            Call.dtmfSupport = True
         elif callUpdateTableHint == 2:
             # Wavecom modem: +WIND notifications supported
             self.log.info('Loading Wavecom call state update table')
@@ -220,7 +221,6 @@ class GsmModem(SerialComms):
             # Modem does not support AT+CPMS; SMS reading unavailable
             self._smsReadSupported = False
             self.log.warn('SMS preferred message storage query not supported by modem. SMS reading unavailable.')
-            del cpmsLine
         else:
             cpmsSupport = cpmsLine.split(' ', 1)[1].split('),(')
             # Do a sanity check on the memory types returned - Nokia S60 devices return empty strings, for example
@@ -334,10 +334,8 @@ class GsmModem(SerialComms):
                             return result
                         if errorType == 'CME':
                             raise CmeError(data, int(errorCode))
-                        elif errorType == 'CMS':
+                        else: # CMS error
                             raise CmsError(data, int(errorCode))
-                        else:
-                            raise CommandError(data, errorType, int(errorCode))
                     else:
                         raise CommandError(data)
                 elif cmdStatusLine == 'COMMAND NOT SUPPORT': # Some Huawei modems respond with this for unknown commands
@@ -391,7 +389,7 @@ class GsmModem(SerialComms):
     @property
     def networkName(self):
         """ @return: the name of the GSM Network Operator to which the modem is connected """
-        copsMatch = lineMatching(r'^\+COPS: (\d),(\d),"(.+)",\d$', self.write('AT+COPS?')) # response format: +COPS: mode,format,"operator_name",x
+        copsMatch = lineMatching(r'^\+COPS: (\d),(\d),"(.+)",{0,1}\d*$', self.write('AT+COPS?')) # response format: +COPS: mode,format,"operator_name",x
         if copsMatch:
             return copsMatch.group(3)
 

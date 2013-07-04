@@ -64,7 +64,7 @@ class SmsPduTzInfo(tzinfo):
         return self._offset
     
     def dst(self, dt):
-        """ We do not have enough info in the SMS PDU to implement DST """
+        """ We do not have enough info in the SMS PDU to implement daylight savings time """
         return timedelta(0)
 
 
@@ -264,37 +264,8 @@ def decodeSmsPdu(pdu):
         result['time'] = _decodeTimestamp(pduIter)
         userDataLen = next(pduIter)
         udhPresent = (tpduFirstOctet & 0x40) != 0
-        if udhPresent:
-            # User Data Header is present
-            result['udh'] = []
-            udhLen = next(pduIter)
-            ieLenRead = 0
-            # Parse and store UDH fields
-            while ieLenRead < udhLen:
-                ie = InformationElement.decode(pduIter)
-                ieLenRead += len(ie)
-                result['udh'].append(ie)
-            del ieLenRead
-            if dataCoding == 0x00: # GSM-7
-                # Since we are using 7-bit data, "fill bits" may have been added to make the UDH end on a septet boundary
-                shift = ((udhLen + 1) * 8) % 7 # "fill bits" needed to make the UDH end on a septet boundary
-                # Simulate another "shift" in the unpackSeptets algorithm in order to ignore the fill bits
-                prevOctet = next(pduIter)
-                shift += 1
-        
-        if dataCoding == 0x00: # GSM-7
-            if udhPresent:
-                userDataSeptets = unpackSeptets(pduIter, userDataLen, prevOctet, shift)
-            else:
-                userDataSeptets = unpackSeptets(pduIter, userDataLen)
-            result['text'] = decodeGsm7(userDataSeptets)
-        elif dataCoding == 0x02: # UCS2
-            userData = []
-            for i in xrange(userDataLen):
-                userData.append(chr(next(pduIter)))
-            result['text'] = ''.join(userData).decode('utf-16')
-        else:
-            result['text'] = ''        
+        ud = _decodeUserData(pduIter, userDataLen, dataCoding, udhPresent)
+        result.update(ud)
     elif pduType == 0x01: # SMS-SUBMIT or SMS-SUBMIT-REPORT
         result['type'] = 'SMS-SUBMIT'
         result['reference'] = next(pduIter) # message reference - we don't really use this
@@ -307,15 +278,9 @@ def decodeSmsPdu(pdu):
         elif validityPeriodFormat == 0x03: # TP-VP field present and semi-octet represented (absolute)            
             result['validity'] = _decodeTimestamp(pduIter)
         userDataLen = next(pduIter)
-        if dataCoding == 0x00: # GSM-7
-            userDataSeptets = unpackSeptets(pduIter, userDataLen)
-            result['text'] = decodeGsm7(userDataSeptets)
-        elif dataCoding == 0x02: # UCS2
-            for i in xrange(userDataLen):
-                userData.append(next(pduIter))
-            result['text'] = ''.join(userData).decode('utf-16')
-        else:
-            result['text'] = ''        
+        udhPresent = (tpduFirstOctet & 0x40) != 0
+        ud = _decodeUserData(pduIter, userDataLen, dataCoding, udhPresent)
+        result.update(ud)
     elif pduType == 0x02: # SMS-STATUS-REPORT or SMS-COMMAND
         result['type'] = 'SMS-STATUS-REPORT'
         result['reference'] = next(pduIter)
@@ -326,6 +291,52 @@ def decodeSmsPdu(pdu):
     else:
         raise EncodingError('Unknown SMS message type: {0}. First TPDU octect was: {1}'.format(pduType, tpduFirstOctet))
     
+    return result
+
+def decodeUcs2(byteIter, numBytes):
+    """ Decodes UCS2-encoded text from the specified byte iterator, up to a maximum of numBytes """
+    userData = []
+    i = 0
+    try:
+        while i < numBytes:
+            userData.append(unichr((next(byteIter) << 8) | next(byteIter)))
+            i += 2
+    except StopIteration:
+        # Not enough bytes in iterator to reach numBytes; return what we have
+        pass
+    return u''.join(userData)
+
+def _decodeUserData(byteIter, userDataLen, dataCoding, udhPresent):
+    """ Decodes PDU user data (UDHI (if present) and message text) """
+    result = {}
+    if udhPresent:
+        # User Data Header is present
+        result['udh'] = []
+        udhLen = next(byteIter)
+        ieLenRead = 0
+        # Parse and store UDH fields
+        while ieLenRead < udhLen:
+            ie = InformationElement.decode(byteIter)
+            ieLenRead += len(ie)
+            result['udh'].append(ie)
+        del ieLenRead
+        if dataCoding == 0x00: # GSM-7
+            # Since we are using 7-bit data, "fill bits" may have been added to make the UDH end on a septet boundary
+            shift = ((udhLen + 1) * 8) % 7 # "fill bits" needed to make the UDH end on a septet boundary
+            # Simulate another "shift" in the unpackSeptets algorithm in order to ignore the fill bits
+            prevOctet = next(byteIter)
+            shift += 1
+
+    if dataCoding == 0x00: # GSM-7
+        if udhPresent:
+            userDataSeptets = unpackSeptets(byteIter, userDataLen, prevOctet, shift)
+        else:
+            userDataSeptets = unpackSeptets(byteIter, userDataLen)
+        result['text'] = decodeGsm7(userDataSeptets)
+    elif dataCoding == 0x02: # UCS2
+        result['text'] = decodeUcs2(byteIter, userDataLen)
+    else:
+        result['text'] = ''
     return result
 
 def _decodeRelativeValidityPeriod(tpVp):

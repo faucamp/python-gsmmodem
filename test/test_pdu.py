@@ -221,7 +221,19 @@ class TestSmsPdu(unittest.TestCase):
                    'number': '2781188',
                    'smsc': '+2781191',
                    'text': 'Hello!You have R 19.50 FREE airtime available. R 19.50 will expire on 01/07/2013. ',
-                   'udh': [gsmmodem.pdu.Concatenation(0x00, 0x03, [0xC3, 0x01, 0x01])]}))
+                   'udh': [gsmmodem.pdu.Concatenation(0x00, 0x03, [0xC3, 0x01, 0x01])]}),
+                 (b'07914346466554F601000B914316565811F9000806304253F68449', # Valid UCS-2 PDU
+                  {'type': 'SMS-SUBMIT',
+                   'number': '+34616585119',
+                   'smsc': '+34646456456',
+                   'text': 'あ叶葉'}),
+                 (b'0041010C910661345542F60008A0050003000301306F3044', # UCS-2 PDU; User data length is invalid in this PDU (too long)
+                  {'type': 'SMS-SUBMIT',
+                   'number': '+60164355246',
+                   'smsc': None,
+                   'udh': [gsmmodem.pdu.Concatenation(0x00, 0x03, [0x00, 0x03, 0x01])],
+                   'text': 'はい'}),
+                 )
         
         for pdu, expected in tests:
             result = gsmmodem.pdu.decodeSmsPdu(pdu)
