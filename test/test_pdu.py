@@ -189,6 +189,7 @@ class TestRelativeValidityPeriod(unittest.TestCase):
         for validity, tpVp in self.tests:
             result = gsmmodem.pdu._encodeRelativeValidityPeriod(validity)
             self.assertEqual(result, tpVp, 'Failed to encode relative validity period: {0}. Expected: "{1}", got: "{2}"'.format(validity, tpVp, result))
+            self.assertIsInstance(result, tpVp.__class__, 'Invalid data type returned; expected {0}, got {1}'.format(tpVp.__class__, result.__class__))
     
     def test_decode(self):
         for validity, tpVp in self.tests:

@@ -192,7 +192,7 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
     else:
         pdu.append(0x00) # Don't supply an SMSC number - use the one configured in the device
     tpduFirstOctet = 0x01 # SMS-SUBMIT PDU
-    if validity != None:    
+    if validity != None:
         # Validity period format (TP-VPF) is stored in bits 4,3 of the first TPDU octet
         if type(validity) == timedelta:
             # Relative (TP-VP is integer)
@@ -354,13 +354,13 @@ def _encodeRelativeValidityPeriod(validityPeriod):
     #seconds = validityPeriod.total_seconds()
     seconds = validityPeriod.seconds + (validityPeriod.days * 24 * 3600)
     if seconds <= 43200: # 12 hours
-        tpVp = (seconds / 300) - 1 # divide by 5 minutes, subtract 1
+        tpVp = int(seconds / 300) - 1 # divide by 5 minutes, subtract 1
     elif seconds <= 86400: # 24 hours
-        tpVp = (seconds - 43200) / 1800 + 143 # subtract 12 hours, divide by 30 minutes. add 143
+        tpVp = int((seconds - 43200) / 1800) + 143 # subtract 12 hours, divide by 30 minutes. add 143
     elif validityPeriod.days <= 30: # 30 days
         tpVp = validityPeriod.days + 166 # amount of days + 166
     elif validityPeriod.days > 30:
-        tpVp = validityPeriod.days / 7 + 192 # amount of weeks + 192
+        tpVp = int(validityPeriod.days / 7) + 192 # amount of weeks + 192
     return tpVp
         
 def _decodeTimestamp(byteIter):
