@@ -220,7 +220,7 @@ class GsmModem(SerialComms):
         except CommandError:
             # Modem does not support AT+CPMS; SMS reading unavailable
             self._smsReadSupported = False
-            self.log.warn('SMS preferred message storage query not supported by modem. SMS reading unavailable.')
+            self.log.warning('SMS preferred message storage query not supported by modem. SMS reading unavailable.')
         else:
             cpmsSupport = cpmsLine.split(' ', 1)[1].split('),(')
             # Do a sanity check on the memory types returned - Nokia S60 devices return empty strings, for example
@@ -228,7 +228,7 @@ class GsmModem(SerialComms):
                 if len(memItem) == 0:
                     # No support for reading stored SMS via AT commands - probably a Nokia S60
                     self._smsReadSupported = False
-                    self.log.warn('Invalid SMS message storage support returned by modem. SMS reading unavailable. Response was: "%s"', cpmsLine)
+                    self.log.warning('Invalid SMS message storage support returned by modem. SMS reading unavailable. Response was: "%s"', cpmsLine)
                     break
             else:
                 # Suppported memory types look fine, continue
@@ -251,21 +251,21 @@ class GsmModem(SerialComms):
             except CommandError:
                 # Message notifications not supported
                 self._smsReadSupported = False
-                self.log.warn('Incoming SMS notifications not supported by modem. SMS receiving unavailable.')
+                self.log.warning('Incoming SMS notifications not supported by modem. SMS receiving unavailable.')
         
         # Incoming call notification setup
         try:
             self.write('AT+CLIP=1') # Enable calling line identification presentation
         except CommandError as clipError:
             self._callingLineIdentification = False
-            self.log.warn('Incoming call calling line identification (caller ID) not supported by modem. Error: {0}'.format(clipError))
+            self.log.warning('Incoming call calling line identification (caller ID) not supported by modem. Error: {0}'.format(clipError))
         else:
             self._callingLineIdentification = True
             try:
                 self.write('AT+CRC=1') # Enable extended format of incoming indication (optional)
             except CommandError as crcError:
                 self._extendedIncomingCallIndication = False
-                self.log.warn('Extended format incoming call indication not supported by modem. Error: {0}'.format(crcError))
+                self.log.warning('Extended format incoming call indication not supported by modem. Error: {0}'.format(crcError))
             else:
                 self._extendedIncomingCallIndication = True        
 
