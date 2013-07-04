@@ -15,7 +15,7 @@ if PYTHON_VERSION >= 3:
     MAX_INT = sys.maxsize
     dictItemsIter = dict.items
     xrange = range
-    #toByteArray = lambda x: bytearray(codecs.decode(x, 'hex_codec')) if type(x) in (bytes, str) else x
+    unichr = chr
     toByteArray = lambda x: bytearray(codecs.decode(x, 'hex_codec')) if type(x) == bytes else bytearray(codecs.decode(bytes(x, 'ascii'), 'hex_codec')) if type(x)  == str else x
 else:
     MAX_INT = sys.maxint
