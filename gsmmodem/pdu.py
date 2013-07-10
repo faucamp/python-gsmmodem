@@ -261,7 +261,7 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
             tpduFirstOctet |= 0x18 # bit4 == 1, bit3 == 1
             validityPeriod = _encodeTimestamp(validity) 
         else:
-            raise ValueError('"validity" must be of type datetime.timedelta (for relative value) or datetime.datetime (for absolute value)')        
+            raise TypeError('"validity" must be of type datetime.timedelta (for relative value) or datetime.datetime (for absolute value)')        
     else:
         validityPeriod = None
     if rejectDuplicates:
@@ -456,7 +456,9 @@ def _decodeRelativeValidityPeriod(tpVp):
         return timedelta(days=(tpVp - 166))
     elif 197 <= tpVp <= 255:
         return timedelta(weeks=(tpVp - 192))
-    
+    else:
+        raise ValueError('tpVp must be in range [0, 255]')
+
 def _encodeRelativeValidityPeriod(validityPeriod):
     """ Encodes the specified relative validity period timedelta into an integer for use in an SMS PDU
     (based on the table in section 9.2.3.12 of GSM 03.40)
@@ -474,8 +476,10 @@ def _encodeRelativeValidityPeriod(validityPeriod):
         tpVp = int((seconds - 43200) / 1800) + 143 # subtract 12 hours, divide by 30 minutes. add 143
     elif validityPeriod.days <= 30: # 30 days
         tpVp = validityPeriod.days + 166 # amount of days + 166
-    elif validityPeriod.days > 30:
+    elif validityPeriod.days <= 441: # max value of tpVp is 255
         tpVp = int(validityPeriod.days / 7) + 192 # amount of weeks + 192
+    else:
+        raise ValueError('Validity period too long; tpVp limited to 1 octet (max value: 255)')
     return tpVp
         
 def _decodeTimestamp(byteIter):

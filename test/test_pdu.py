@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 
 from . import compat # For Python 2.6, 3.0-2 compatibility
  
-
 import gsmmodem.pdu
 from gsmmodem.util import SimpleOffsetTzInfo
 
@@ -204,6 +203,14 @@ class TestRelativeValidityPeriod(unittest.TestCase):
         for validity, tpVp in self.tests:
             result = gsmmodem.pdu._decodeRelativeValidityPeriod(tpVp)
             self.assertEqual(result, validity, 'Failed to decode relative validity period: {0}. Expected: "{1}", got: "{2}"'.format(tpVp, validity, result))
+    
+    def test_decode_invalidTpVp(self):
+        tpVp = '2048' # invalid since > 255
+        self.assertRaises(ValueError, gsmmodem.pdu._decodeRelativeValidityPeriod, tpVp)
+    
+    def test_encode_validityPeriodTooLong(self):
+        validity = timedelta(weeks=1000)
+        self.assertRaises(ValueError, gsmmodem.pdu._encodeRelativeValidityPeriod, validity)
 
 
 class TestTimestamp(unittest.TestCase):
@@ -231,6 +238,34 @@ class TestTimestamp(unittest.TestCase):
         """ Tests encoding without timezone information """
         timestamp = datetime(2013, 3, 1, 12, 30, 21)
         self.assertRaises(ValueError, gsmmodem.pdu._encodeTimestamp, timestamp)
+
+
+class TestSmsPduTzInfo(unittest.TestCase):
+    """ Basic tests for the SmsPduTzInfo class """
+    
+    def test_pickle(self):
+        """ Ensure SmsPduTzInfo objects can be pickled (mentioneded as requirement of tzinfo implementations in Python docs) """
+        import pickle
+        obj = gsmmodem.pdu.SmsPduTzInfo('08')
+        self.assertIsInstance(obj, gsmmodem.pdu.SmsPduTzInfo)
+        pickledObj = pickle.dumps(obj)
+        self.assertNotEqual(obj, pickledObj)
+        unpickledObj = pickle.loads(pickledObj)
+        self.assertIsInstance(unpickledObj, gsmmodem.pdu.SmsPduTzInfo)
+        self.assertEqual(obj.utcoffset(0), unpickledObj.utcoffset(0))
+    
+    def test_dst(self):
+        """ Test SmsPduTzInfo.dst() """
+        obj = gsmmodem.pdu.SmsPduTzInfo('08')
+        self.assertEqual(obj.dst(0), timedelta(0))
+        
+    def test_utcoffset(self):
+        """ Test SmsPduTzInfo.utcoffest() """
+        tests = (('08', 2), ('B2', -8))
+        for pduOffsetStr, offset in tests:
+            result = gsmmodem.pdu.SmsPduTzInfo(pduOffsetStr)
+            expected = SimpleOffsetTzInfo(offset)
+            self.assertEqual(result.utcoffset(0), expected.utcoffset(0))
 
 
 class TestUdhConcatenation(unittest.TestCase):
@@ -374,7 +409,11 @@ class TestSmsPdu(unittest.TestCase):
                   {'type': 'SMS-SUBMIT',
                    'number': '+27821234567',
                    'smsc': '+2781191',
-                   'text': 'Hello world!'}))
+                   'text': 'Hello world!'}),
+                 (b'0019000B917228001011F100003170013193008017D474BB3CA787DB70903DCC4E93D3F43C885E9ED301', # absolute validity period
+                  {'text': 'Timestamp validity test',
+                   'validity': datetime(2013, 7, 10, 13, 39, tzinfo=SimpleOffsetTzInfo(2))})
+                 )
 
         for pdu, expected in tests:
             result = gsmmodem.pdu.decodeSmsPdu(pdu)
@@ -419,6 +458,17 @@ class TestSmsPdu(unittest.TestCase):
                 expectedPdu = bytearray(codecs.decode(expectedPduHex, 'hex_codec'))
                 self.assertEqual(pdu.data, expectedPdu, 'Failed to encode concatentated SMS PDU (PDU {0}/{1}). Expected: "{2}", got: "{3}"'.format(i+1, len(result), expectedPduHex, codecs.encode(compat.str(pdu.data), 'hex_codec').upper()))
                 i += 1
+    
+    def test_encodeSmsSubmit_invalidValidityType(self):
+        """ Tests SMS PDU encoding when specifying an invalid object type for validity """
+        self.assertRaises(TypeError, gsmmodem.pdu.encodeSmsSubmitPdu, **{'number': '123', 'text': 'abc', 'validity': 'INVALID'})
+    
+    def test_decode_invalidPduType(self):
+        """ Tests SMS PDU decoding when an invalid PDU type is specified """
+        # PDU first octect: 0x43; thus PDU type: 0x03 (invalid)
+        pdu = '0043010C910661345542F60008A0050003000301306F3044'
+        self.assertRaises(gsmmodem.exceptions.EncodingError, gsmmodem.pdu.decodeSmsPdu, pdu)
+
 
 if __name__ == "__main__":
     unittest.main()
