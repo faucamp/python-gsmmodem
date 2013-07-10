@@ -16,7 +16,7 @@ PYTHON_VERSION = sys.version_info[0]
 if PYTHON_VERSION >= 3:
     xrange = range
     dictValuesIter = dict.values
-else:
+else: #pragma: no cover
     dictValuesIter = dict.itervalues
 
 class GsmModem(SerialComms):

@@ -6,7 +6,7 @@ if sys.version_info[0] >= 3:
     dictKeysIter = dict.keys
     dictItemsIter = dict.items
     dictValuesIter = dict.values
-else:
+else: #pragma: no cover
     dictKeysIter = dict.iterkeys
     dictItemsIter = dict.iteritems
     dictValuesIter = dict.itervalues
