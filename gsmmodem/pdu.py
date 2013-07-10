@@ -18,7 +18,7 @@ if PYTHON_VERSION >= 3:
     xrange = range
     unichr = chr
     toByteArray = lambda x: bytearray(codecs.decode(x, 'hex_codec')) if type(x) == bytes else bytearray(codecs.decode(bytes(x, 'ascii'), 'hex_codec')) if type(x)  == str else x
-else:
+else: #pragma: no cover
     MAX_INT = sys.maxint
     dictItemsIter = dict.iteritems
     toByteArray = lambda x: bytearray(x.decode('hex')) if type(x) in (str, unicode) else x
@@ -59,11 +59,12 @@ class SmsPduTzInfo(tzinfo):
             self._setPduOffsetStr(pduOffsetStr)
         
     def _setPduOffsetStr(self, pduOffsetStr):
-        # See if the timezone difference is positive/negative               
-        if int(pduOffsetStr, 16) & 0x80 == 0: # positive            
+        # See if the timezone difference is positive/negative by checking MSB of first semi-octet
+        tzHexVal = int(pduOffsetStr, 16)
+        if tzHexVal & 0x80 == 0: # positive
             self._offset = timedelta(minutes=(int(pduOffsetStr) * 15))
-        else: # negative            
-            self._offset = timedelta(minutes=(int(pduOffsetStr) * -15))
+        else: # negative
+            self._offset = timedelta(minutes=(int('{0:0>2X}'.format(tzHexVal & 0x7F)) * -15))
     
     def utcoffset(self, dt):
         return self._offset
@@ -143,7 +144,7 @@ class Concatenation(InformationElement):
     parts: total number of parts. The value shall remain constant for every short
      message which makes up the concatenated short message. If the value is zero then 
      the receiving entity shall ignore the whole information element
-    index:  this part's number in the sequence. The value shall start at 1 and
+    number:  this part's number in the sequence. The value shall start at 1 and
      increment for every short message which makes up the concatenated short message
     """
     
@@ -151,21 +152,20 @@ class Concatenation(InformationElement):
         super(Concatenation, self).__init__(iei, ieLen, ieData)
         if ieData != None:
             if iei == 0x00: # 8-bit reference
-                self.reference, self.parts, self.index = ieData
-            elif iei == 0x08: # 16-bit reference
+                self.reference, self.parts, self.number = ieData
+            else: # 0x08: 16-bit reference
                 self.reference = ieData[0] << 8 | ieData[1]
                 self.parts = ieData[2]
-                self.index = ieData[3]
+                self.number = ieData[3]
 
     def encode(self):
-        if self.data != None:
-            if self.reference > 0xFF:
-                self.iei = 0x08 # 16-bit reference
-                self.data = [self.reference >> 8, self.reference & 0xFF, self.parts, self.index]
-            else:
-                self.iei = 0x00 # 8-bit reference
-                self.data = [self.reference, self.parts, self.index]
-            self.dataLength = len(self.data)
+        if self.reference > 0xFF:
+            self.id = 0x08 # 16-bit reference
+            self.data = [self.reference >> 8, self.reference & 0xFF, self.parts, self.number]
+        else:
+            self.id = 0x00 # 8-bit reference
+            self.data = [self.reference, self.parts, self.number]
+        self.dataLength = len(self.data)
         return super(Concatenation, self).encode()
 
 
@@ -177,28 +177,28 @@ class PortAddress(InformationElement):
     IE as instance variables.
     
     Exposes:
-    destinationPort: The destination port number
-    originPort: The origin port number
+    destination: The destination port number
+    source: The source port number
     """
     
     def __init__(self, iei=0x04, ieLen=0, ieData=None):
         super(PortAddress, self).__init__(iei, ieLen, ieData)
-        if iei == 0x04: # 8-bit port addressing scheme
-            self.destinationPort, self.originPort = ieData
-        elif iei == 0x05: # 16-bit port addressing scheme
-            self.destinationPort = ieData[0] << 8 | ieData[1]
-            self.originPort = ieData[2] << 8 | ieData[3]
+        if ieData != None:
+            if iei == 0x04: # 8-bit port addressing scheme
+                self.destination, self.source = ieData
+            else: # 0x05: 16-bit port addressing scheme
+                self.destination = ieData[0] << 8 | ieData[1]
+                self.source = ieData[2] << 8 | ieData[3]
     
     def encode(self):
-        if self.data == None:
-            if self.destinationPort > 0xFF or self.originPort > 0xFF:
-                self.iei = 0x05 # 16-bit
-                self.data = [self.destinationPort >> 8, self.destinationPort & 0xFF, self.originPort >> 8, self.originPort & 0xFF]
-            else:
-                self.iei = 0x04 # 8-bit
-                self.data = [self.destinationPort, self.originPort]
-            self.dataLength = len(self.data)
-        return super(Concatenation, self).encode()
+        if self.destination > 0xFF or self.source > 0xFF:
+            self.id = 0x05 # 16-bit
+            self.data = [self.destination >> 8, self.destination & 0xFF, self.source >> 8, self.source & 0xFF]
+        else:
+            self.id = 0x04 # 8-bit
+            self.data = [self.destination, self.source]
+        self.dataLength = len(self.data)
+        return super(PortAddress, self).encode()
 
 
 # Map of recognized IEIs
@@ -226,7 +226,7 @@ class Pdu(object):
         global PYTHON_VERSION
         if PYTHON_VERSION < 3:
             return str(self.data).encode('hex').upper()
-        else:
+        else: #pragma: no cover
             return str(codecs.encode(self.data, 'hex_codec'), 'ascii').upper() 
 
 
@@ -307,7 +307,7 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
         udh = bytearray()
         if concatHeaderPrototype != None:
             concatHeader = copy(concatHeaderPrototype)
-            concatHeader.index = i + 1
+            concatHeader.number = i + 1
             pduText = text[i*153:(i+1) * 153]
             udh.extend(concatHeader.encode())
         else:
@@ -495,10 +495,22 @@ def _encodeTimestamp(timestamp):
     @return: The encoded timestamp
     @rtype: bytearray
     """
-    if timestamp.utcoffset == None:
-        raise ValueError('Please specify a UTC offset for the timestamp (e.g. by using gsmmodem.util.SimpleOffsetTzInfo)')
-    dateStr = timestamp.strftime('%y%m%d%H%M%S%z')[-2]
-    return encodeSemiOctets(dateStr)    
+    if timestamp.tzinfo == None:
+        raise ValueError('Please specify time zone information for the timestamp (e.g. by using gsmmodem.util.SimpleOffsetTzInfo)')
+
+    # See if the timezone difference is positive/negative
+    tzDelta = timestamp.utcoffset()
+    if tzDelta.days >= 0:
+        tzValStr = '{0:0>2}'.format(int(tzDelta.seconds / 60 / 15))
+    if tzDelta.days < 0: # negative
+        tzVal = int((tzDelta.days * -3600 * 24 - tzDelta.seconds) / 60 / 15) # calculate offset in 0.25 hours
+        # Cast as literal hex value and set MSB of first semi-octet of timezone to 1 to indicate negative value
+        tzVal = int('{0:0>2}'.format(tzVal), 16) | 0x80
+        tzValStr = '{0:0>2X}'.format(tzVal)
+
+    dateStr = timestamp.strftime('%y%m%d%H%M%S') + tzValStr
+
+    return encodeSemiOctets(dateStr)
 
 def _decodeDataCoding(octet):
     if octet & 0xC0 == 0:
@@ -693,7 +705,7 @@ def packSeptets(octets, padBits=0):
     bytearray contains the original GSM-7 characters packed into septets ready for transmission.
     
     @rtype: bytearray
-    """    
+    """
     result = bytearray()    
     if type(octets) == str:
         octets = iter(bytearray(octets))

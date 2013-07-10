@@ -31,8 +31,10 @@ class TestSemiOctets(unittest.TestCase):
     def test_decode(self):
         """ Tests the semi-octet decoding algorithm """        
         for plaintext, encoded in self.tests:
-            result = gsmmodem.pdu.decodeSemiOctets(encoded)
-            self.assertEqual(result, plaintext, 'Failed to decode data. Expected: "{0}", got: "{1}"'.format(plaintext, result))
+            # Test different parameter types: bytearray, str
+            for param in (encoded, codecs.encode(compat.str(encoded), 'hex_codec')):
+                result = gsmmodem.pdu.decodeSemiOctets(param)
+                self.assertEqual(result, plaintext, 'Failed to decode data. Expected: "{0}", got: "{1}"'.format(plaintext, result))
         
     def test_decodeIter(self):
         """ Tests semi-octet decoding when using a bytearray iterator and number of octets as input argument """
@@ -66,20 +68,26 @@ class TestGsm7(unittest.TestCase):
     def test_decode(self):
         """ Tests GSM-7 decoding algorithm """
         for plaintext, encoded, septets in self.tests:
-            result = gsmmodem.pdu.decodeGsm7(encoded)
-            self.assertEqual(result, plaintext, 'Failed to decode GSM-7 string: "{0}". Expected: "{1}", got: "{2}"'.format([b for b in encoded], plaintext, result))
+            # Test different parameter types: bytearray, str
+            for param in (encoded, str(encoded)):
+                result = gsmmodem.pdu.decodeGsm7(param)
+                self.assertEqual(result, plaintext, 'Failed to decode GSM-7 string: "{0}". Expected: "{1}", got: "{2}"'.format([b for b in encoded], plaintext, result))
             
     def test_packSeptets(self):
         """ Tests the septet-packing alogrithm for GSM-7-encoded strings """
         for plaintext, encoded, septets in self.tests:
-            result = gsmmodem.pdu.packSeptets(encoded)
-            self.assertEqual(result, septets, 'Failed to pack GSM-7 octets into septets for string: "{0}". Expected: "{1}", got: "{2}"'.format(plaintext, [b for b in septets], [b for b in result]))
+            # Test different parameter types: bytearray, str, iter(bytearray)
+            for param in (encoded, str(encoded), iter(encoded)):
+                result = gsmmodem.pdu.packSeptets(param)
+                self.assertEqual(result, septets, 'Failed to pack GSM-7 octets into septets for string: "{0}" using parameter type: {1}. Expected: "{2}", got: "{3}"'.format(plaintext, type(param), [b for b in septets], [b for b in result]))
     
     def test_unpackSeptets_no_limits(self):
         """ Tests the septet-unpacking alogrithm for GSM-7-encoded strings (no maximum number of septets specified) """
         for plaintext, encoded, septets in self.tests:
-            result = gsmmodem.pdu.unpackSeptets(septets)
-            self.assertEqual(result, encoded, 'Failed to unpack GSM-7 septets into octets for string: "{0}". Expected: "{1}", got: "{2}"'.format(plaintext, [b for b in encoded], [b for b in result]))
+            # Test different parameter types: bytearray, str, iter(bytearray)
+            for param in (septets, str(septets), iter(septets)):
+                result = gsmmodem.pdu.unpackSeptets(param)
+                self.assertEqual(result, encoded, 'Failed to unpack GSM-7 septets into octets for string: "{0}". Expected: "{1}", got: "{2}"'.format(plaintext, [b for b in encoded], [b for b in result]))
     
     def test_unpackSeptets_with_limits(self):
         """ Tests the septet-unpacking alogrithm for GSM-7-encoded strings (max number of septets specified) """        
@@ -92,7 +100,6 @@ class TestGsm7(unittest.TestCase):
     def test_encodeInvalid(self):
         """ Test encoding a string that cannot be encoded with GSM-7 """
         tests = ('世界您好！',)
-        # First check without "discard invalid chars"
         for invalidStr in tests:
             self.assertRaises(ValueError, gsmmodem.pdu.encodeGsm7, invalidStr, discardInvalid=False)
 
@@ -136,6 +143,7 @@ class TestSmsPduAddressFields(unittest.TestCase):
                  ('abc', 5, b'06D061F118D3F1FF0032', b'06D061F118'), # same as above, but checking read limits                 
                  ('FRANCOIS', 9, b'0ED04669D0397C26A7', b'0ED04669D0397C26A7'),
                  ('a[]{}€', 12, b'14D0E10D6FE3DBA036A94D19', b'14D0E10D6FE3DBA036A94D19'),
+                 ('0129998765', 7, b'0AA11092997856', b'0AA11092997856') # local number
                  )
     
     def test_decodeAddressField(self):        
@@ -176,6 +184,7 @@ class TestSmsPduSmscFields(unittest.TestCase):
             result = gsmmodem.pdu._encodeAddressField(plaintext, smscField=True)
             self.assertEqual(result, expected, 'Failed to encode SMSC address field data "{0}". Expected: "{1}", got: "{2}"'.format(plaintext, realHexEncoded, codecs.encode(compat.str(result), 'hex_codec').upper()))
 
+
 class TestRelativeValidityPeriod(unittest.TestCase):
     """ Tests for SMS PDU relative validity period encoding/decoding (these methods are not meant to be public) """
     
@@ -196,6 +205,108 @@ class TestRelativeValidityPeriod(unittest.TestCase):
             result = gsmmodem.pdu._decodeRelativeValidityPeriod(tpVp)
             self.assertEqual(result, validity, 'Failed to decode relative validity period: {0}. Expected: "{1}", got: "{2}"'.format(tpVp, validity, result))
 
+
+class TestTimestamp(unittest.TestCase):
+    """ Tests for SMS PDU timestamp encoding used for absolute validity period encoding/decoding (these methods are not meant to be public) """
+    
+    def setUp(self):
+        self.tests = ((datetime(2015, 11, 27, 0, 0, 0, tzinfo=SimpleOffsetTzInfo(0)), b'51117200000000'),
+                      (datetime(2015, 11, 27, 0, 0, 0, tzinfo=SimpleOffsetTzInfo(2)), b'51117200000080'), # same as previous but with GMT+2 timezone
+                      (datetime(2007, 4, 12, 23, 25, 42, tzinfo=SimpleOffsetTzInfo(8)), b'70402132522423'),
+                      (datetime(2007, 4, 12, 23, 25, 42, tzinfo=SimpleOffsetTzInfo(-8)), b'7040213252242B'), # same as previous but with GMT-8 timezone
+                      )
+    
+    def test_encode(self):
+        for timestamp, encodedHex in self.tests:
+            encoded = bytearray(codecs.decode(encodedHex, 'hex_codec'))
+            result = gsmmodem.pdu._encodeTimestamp(timestamp)
+            self.assertEqual(result, encoded, 'Failed to encode timestamp: {0}. Expected: "{1}", got: "{2}"'.format(timestamp, encodedHex, codecs.encode(compat.str(result), 'hex_codec').upper()))
+    
+    def test_decode(self):
+        for timestamp, encoded in self.tests:
+            result = gsmmodem.pdu._decodeTimestamp(encoded)
+            self.assertEqual(result, timestamp, 'Failed to decode timestamp: {0}. Expected: "{1}", got: "{2}"'.format(encoded, timestamp, result))
+            
+    def test_encode_noTimezone(self):
+        """ Tests encoding without timezone information """
+        timestamp = datetime(2013, 3, 1, 12, 30, 21)
+        self.assertRaises(ValueError, gsmmodem.pdu._encodeTimestamp, timestamp)
+
+
+class TestUdhConcatenation(unittest.TestCase):
+    """ Tests for UDH concatenation information element """
+    
+    def setUp(self):
+        self.tests = ((23, 1, 3, '0003170301'), # 8-bit reference
+                      (384, 2, 4, '080401800402') # 16-bit reference
+                      )
+        
+    def test_encode(self):
+        for ref, number, parts, ieHex in self.tests:
+            concatIe = gsmmodem.pdu.Concatenation()
+            concatIe.reference = ref
+            concatIe.number = number
+            concatIe.parts = parts
+            expected = bytearray(codecs.decode(ieHex, 'hex_codec'))
+            result = concatIe.encode()
+            self.assertEqual(result, expected, 'Failed to encode Concatenation Information Element; expected: "{0}", got: "{1}"'.format(ieHex, codecs.encode(compat.str(result), 'hex_codec').upper()))
+            # Now modify some values and ensure encoded values changes
+            concatIe.reference = ref+1
+            result = concatIe.encode()
+            self.assertNotEqual(result, expected, 'Modifications to UDH information element object not reflected in encode()')
+    
+    def test_decode(self):
+        for ref, number, parts, ieHex in self.tests:
+            ieData = bytearray(codecs.decode(ieHex, 'hex_codec'))
+            # Test IE constructor with args
+            result = gsmmodem.pdu.InformationElement(ieData[0], ieData[1], ieData[2:])
+            self.assertIsInstance(result, gsmmodem.pdu.Concatenation, 'Invalid object type returned; expected Concatenation, got {0}'.format(type(result)))
+            self.assertEqual(result.reference, ref, 'Invalid reference; expected {0}, got {1}'.format(ref, result.reference))
+            self.assertEqual(result.number, number, 'Invalid part number; expected {0}, got {1}'.format(number, result.number))
+            self.assertEqual(result.parts, parts, 'Invalid total number of parts; expected {0}, got {1}'.format(parts, result.parts))
+            # Test IE constructor with kwargs
+            result = gsmmodem.pdu.InformationElement(iei=ieData[0], ieLen=ieData[1], ieData=ieData[2:])
+            self.assertIsInstance(result, gsmmodem.pdu.Concatenation, 'Invalid object type returned; expected Concatenation, got {0}'.format(type(result)))
+            self.assertEqual(result.reference, ref, 'Invalid reference; expected {0}, got {1}'.format(ref, result.reference))
+            self.assertEqual(result.number, number, 'Invalid part number; expected {0}, got {1}'.format(number, result.number))
+            self.assertEqual(result.parts, parts, 'Invalid total number of parts; expected {0}, got {1}'.format(parts, result.parts))
+
+
+class TestUdhPortAddress(unittest.TestCase):
+    """ Tests for UDH application port addressing scheme information element """
+    
+    def setUp(self):
+        self.tests = ((100, 50, '04026432'), # 8-bit addresses
+                      (1234, 5222, '050404D21466') # 16-bit addresses
+                      )
+        
+    def test_encode(self):
+        for destination, source, ieHex in self.tests:
+            portIe = gsmmodem.pdu.PortAddress()
+            portIe.source = source
+            portIe.destination = destination
+            expected = bytearray(codecs.decode(ieHex, 'hex_codec'))
+            result = portIe.encode()
+            self.assertEqual(result, expected, 'Failed to encode PortAddress Information Element; expected: "{0}", got: "{1}"'.format(ieHex, codecs.encode(compat.str(result), 'hex_codec').upper()))
+            # Now modify some values and ensure encoded values changes
+            portIe.destination = destination+1
+            result = portIe.encode()
+            self.assertNotEqual(result, expected, 'Modifications to UDH information element object not reflected in encode()')
+    
+    def test_decode(self):
+        for destination, source, ieHex in self.tests:
+            ieData = bytearray(codecs.decode(ieHex, 'hex_codec'))
+            # Test IE constructor with args
+            result = gsmmodem.pdu.InformationElement(ieData[0], ieData[1], ieData[2:])
+            self.assertIsInstance(result, gsmmodem.pdu.PortAddress, 'Invalid object type returned; expected Concatenation, got {0}'.format(type(result)))
+            self.assertEqual(result.source, source, 'Invalid origin port number; expected {0}, got {1}'.format(source, result.source))
+            self.assertEqual(result.destination, destination, 'Invalid destination port number; expected {0}, got {1}'.format(destination, result.destination))
+            # Test IE constructor with kwargs
+            result = gsmmodem.pdu.InformationElement(iei=ieData[0], ieLen=ieData[1], ieData=ieData[2:])
+            self.assertIsInstance(result, gsmmodem.pdu.PortAddress, 'Invalid object type returned; expected Concatenation, got {0}'.format(type(result)))
+            self.assertEqual(result.source, source, 'Invalid origin port number; expected {0}, got {1}'.format(source, result.source))
+            self.assertEqual(result.destination, destination, 'Invalid destination port number; expected {0}, got {1}'.format(destination, result.destination))
+
 class TestSmsPdu(unittest.TestCase):
     """ Tests encoding/decoding of SMS PDUs """
 
@@ -203,7 +314,8 @@ class TestSmsPdu(unittest.TestCase):
         """ Tests SMS PDU encoding """
         tests = (('+27820001111', 'Hello World!', 0, None, None, False, b'0001000B917228001011F100000CC8329BFD065DDF72363904'),
                  ('+123456789', '世界您好！', 0, timedelta(weeks=52), '+44000000000', False, b'07914400000000F01100099121436587F90008F40A4E16754C60A8597DFF01'),
-                 ('+31628870634', 'www.diafaan.com', 13, timedelta(days=3), '+31624000000', True, b'07911326040000F0310D0B911326880736F40000A90FF7FBDD454E87CDE1B0DB357EB701'),
+                 ('0126541234', 'Test message: local numbers', 13, timedelta(days=3), '12345', True, b'04A12143F5310D0AA110624521430000A91BD4F29C0E6A97E7F3F0B9AC03B1DFE3301BE4AEB7C565F91C'),
+                 ('+27820001111', 'Timestamp validity test', 0, datetime(2013, 7, 10, 13, 39, tzinfo=SimpleOffsetTzInfo(2)), None, False, b'0019000B917228001011F100003170013193008017D474BB3CA787DB70903DCC4E93D3F43C885E9ED301'),
                  )
         for number, text, reference, validity, smsc, rejectDuplicates, pduHex in tests:
             pdu = bytearray(codecs.decode(pduHex, 'hex_codec'))
@@ -281,10 +393,10 @@ class TestSmsPdu(unittest.TestCase):
                         if isinstance(expected, gsmmodem.pdu.Concatenation):
                             self.assertEqual(got.reference, expected.reference)
                             self.assertEqual(got.parts, expected.parts)
-                            self.assertEqual(got.index, expected.index)
+                            self.assertEqual(got.number, expected.number)
                         elif isinstance(expected, gsmmodem.pdu.PortAddress):
-                            self.assertEqual(got.destinationPort, expected.destinationPort)
-                            self.assertEqual(got.originPort, expected.originPort)
+                            self.assertEqual(got.destination, expected.destination)
+                            self.assertEqual(got.source, expected.source)
                 else:
                     self.assertEqual(result[key], value, 'Failed to decode PDU value for "{0}". Expected "{1}", got "{2}".'.format(key, value, result[key]))
 
