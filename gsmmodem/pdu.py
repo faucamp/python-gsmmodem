@@ -275,13 +275,8 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
     except ValueError:
         # Cannot encode text using GSM-7; use UCS2 instead
         alphabet = 0x08 # UCS2
-#        encodedText = encodeUcs2(text)
-#        userDataLength = len(encodedText)
-#        userData = encodedText
     else:
-        alphabet = 0x00 # GSM-7        
-#        userDataLength = len(encodedText) # Payload size in septets/characters
-#        userData = packSeptets(encodeGsm7(text))    
+        alphabet = 0x00 # GSM-7    
         
     # Check if message should be concatenated
     if len(text) > MAX_MESSAGE_LENGTH[alphabet]:
