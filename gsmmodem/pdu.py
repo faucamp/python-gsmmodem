@@ -18,10 +18,12 @@ if PYTHON_VERSION >= 3:
     xrange = range
     unichr = chr
     toByteArray = lambda x: bytearray(codecs.decode(x, 'hex_codec')) if type(x) == bytes else bytearray(codecs.decode(bytes(x, 'ascii'), 'hex_codec')) if type(x)  == str else x
+    rawStrToByteArray = lambda x: bytearray(bytes(x, 'latin-1'))
 else: #pragma: no cover
     MAX_INT = sys.maxint
     dictItemsIter = dict.iteritems
     toByteArray = lambda x: bytearray(x.decode('hex')) if type(x) in (str, unicode) else x
+    rawStrToByteArray = bytearray
 
 # Tables can be found at: http://en.wikipedia.org/wiki/GSM_03.38#GSM_7_bit_default_alphabet_and_extension_table_of_3GPP_TS_23.038_.2F_GSM_03.38
 GSM7_BASIC = ('@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ`¿abcdefghijklmnopqrstuvwxyzäöñüà')
@@ -627,8 +629,8 @@ def decodeSemiOctets(encodedNumber, numberOfOctets=None):
     @rtype: string
     """
     number = []
-    if type(encodedNumber) == str:
-        encodedNumber = bytearray(encodedNumber.decode('hex'))
+    if type(encodedNumber) in (str, bytes):
+        encodedNumber = bytearray(codecs.decode(encodedNumber, 'hex_codec'))
     i = 0
     for octet in encodedNumber:        
         hexVal = hex(octet)[2:].zfill(2)   
@@ -684,7 +686,7 @@ def decodeGsm7(encodedText):
     """
     result = []
     if type(encodedText) == str:
-        encodedText = bytearray(encodedText)
+        encodedText = rawStrToByteArray(encodedText) #bytearray(encodedText)
     iterEncoded = iter(encodedText)
     for b in iterEncoded:
         if b == 0x1B: # ESC - switch to extended table
@@ -707,7 +709,7 @@ def packSeptets(octets, padBits=0):
     """
     result = bytearray()    
     if type(octets) == str:
-        octets = iter(bytearray(octets))
+        octets = iter(rawStrToByteArray(octets))
     elif type(octets) == bytearray:
         octets = iter(octets)
     shift = padBits
@@ -744,7 +746,7 @@ def unpackSeptets(septets, numberOfSeptets=None, prevOctet=None, shift=7):
     """    
     result = bytearray()    
     if type(septets) == str:
-        septets = iter(bytearray(septets))
+        septets = iter(rawStrToByteArray(septets))
     elif type(septets) == bytearray:
         septets = iter(septets)    
     if numberOfSeptets == None:        

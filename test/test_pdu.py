@@ -68,7 +68,7 @@ class TestGsm7(unittest.TestCase):
         """ Tests GSM-7 decoding algorithm """
         for plaintext, encoded, septets in self.tests:
             # Test different parameter types: bytearray, str
-            for param in (encoded, str(encoded)):
+            for param in (encoded, compat.bytearrayToStr(encoded)):
                 result = gsmmodem.pdu.decodeGsm7(param)
                 self.assertEqual(result, plaintext, 'Failed to decode GSM-7 string: "{0}". Expected: "{1}", got: "{2}"'.format([b for b in encoded], plaintext, result))
             
@@ -76,15 +76,17 @@ class TestGsm7(unittest.TestCase):
         """ Tests the septet-packing alogrithm for GSM-7-encoded strings """
         for plaintext, encoded, septets in self.tests:
             # Test different parameter types: bytearray, str, iter(bytearray)
-            for param in (encoded, str(encoded), iter(encoded)):
+            i = 0
+            for param in (encoded, compat.bytearrayToStr(encoded), iter(encoded)):
                 result = gsmmodem.pdu.packSeptets(param)
                 self.assertEqual(result, septets, 'Failed to pack GSM-7 octets into septets for string: "{0}" using parameter type: {1}. Expected: "{2}", got: "{3}"'.format(plaintext, type(param), [b for b in septets], [b for b in result]))
+                i+=1
     
     def test_unpackSeptets_no_limits(self):
         """ Tests the septet-unpacking alogrithm for GSM-7-encoded strings (no maximum number of septets specified) """
         for plaintext, encoded, septets in self.tests:
             # Test different parameter types: bytearray, str, iter(bytearray)
-            for param in (septets, str(septets), iter(septets)):
+            for param in (septets, compat.bytearrayToStr(septets), iter(septets)):
                 result = gsmmodem.pdu.unpackSeptets(param)
                 self.assertEqual(result, encoded, 'Failed to unpack GSM-7 septets into octets for string: "{0}". Expected: "{1}", got: "{2}"'.format(plaintext, [b for b in encoded], [b for b in result]))
     
@@ -205,7 +207,7 @@ class TestRelativeValidityPeriod(unittest.TestCase):
             self.assertEqual(result, validity, 'Failed to decode relative validity period: {0}. Expected: "{1}", got: "{2}"'.format(tpVp, validity, result))
     
     def test_decode_invalidTpVp(self):
-        tpVp = '2048' # invalid since > 255
+        tpVp = 2048 # invalid since > 255
         self.assertRaises(ValueError, gsmmodem.pdu._decodeRelativeValidityPeriod, tpVp)
     
     def test_encode_validityPeriodTooLong(self):
@@ -272,8 +274,8 @@ class TestUdhConcatenation(unittest.TestCase):
     """ Tests for UDH concatenation information element """
     
     def setUp(self):
-        self.tests = ((23, 1, 3, '0003170301'), # 8-bit reference
-                      (384, 2, 4, '080401800402') # 16-bit reference
+        self.tests = ((23, 1, 3, b'0003170301'), # 8-bit reference
+                      (384, 2, 4, b'080401800402') # 16-bit reference
                       )
         
     def test_encode(self):
@@ -311,8 +313,8 @@ class TestUdhPortAddress(unittest.TestCase):
     """ Tests for UDH application port addressing scheme information element """
     
     def setUp(self):
-        self.tests = ((100, 50, '04026432'), # 8-bit addresses
-                      (1234, 5222, '050404D21466') # 16-bit addresses
+        self.tests = ((100, 50, b'04026432'), # 8-bit addresses
+                      (1234, 5222, b'050404D21466') # 16-bit addresses
                       )
         
     def test_encode(self):
