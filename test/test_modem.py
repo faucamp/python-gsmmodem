@@ -1047,8 +1047,8 @@ class TestSms(unittest.TestCase):
         self.assertFalse(self.modem.smsTextMode)
         for number, message, index, smsTime, smsc, pdu, sms_deliver_tpdu_length, ref, mem in self.tests:
             self.modem._smsRef = ref
-            calcPdu, tpdu_length = gsmmodem.pdu.encodeSmsSubmitPdu(number, message, ref)
-            pduHex = codecs.encode(compat.str(calcPdu), 'hex_codec').upper()
+            calcPdu = gsmmodem.pdu.encodeSmsSubmitPdu(number, message, ref)[0]
+            pduHex = codecs.encode(compat.str(calcPdu.data), 'hex_codec').upper()
             if PYTHON_VERSION >= 3:
                 pduHex = str(pduHex, 'ascii')
             
@@ -1056,7 +1056,7 @@ class TestSms(unittest.TestCase):
                 def writeCallbackFunc2(data):
                     self.assertEqual('{0}{1}'.format(pduHex, chr(26)), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('{0}{1}'.format(pduHex, chr(26)), data))
                     self.modem.serial.flushResponseSequence = True                
-                self.assertEqual('AT+CMGS={0}\r'.format(tpdu_length), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS={0}'.format(tpdu_length), data))
+                self.assertEqual('AT+CMGS={0}\r'.format(calcPdu.tpduLength), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS={0}'.format(calcPdu.tpduLength), data))
                 self.modem.serial.writeCallbackFunc = writeCallbackFunc2
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
             self.modem.serial.flushResponseSequence = False
@@ -1078,8 +1078,8 @@ class TestSms(unittest.TestCase):
         self.modem.smsTextMode = False # Set modem to PDU mode        
         for number, message, index, smsTime, smsc, pdu, sms_deliver_tpdu_length, ref, mem in self.tests:
             self.modem._smsRef = ref
-            calcPdu, tpdu_length = gsmmodem.pdu.encodeSmsSubmitPdu(number, message, ref)
-            pduHex = codecs.encode(compat.str(calcPdu), 'hex_codec').upper()
+            calcPdu = gsmmodem.pdu.encodeSmsSubmitPdu(number, message, ref)[0]
+            pduHex = codecs.encode(compat.str(calcPdu.data), 'hex_codec').upper()
             if PYTHON_VERSION >= 3:
                 pduHex = str(pduHex, 'ascii')
             
@@ -1088,7 +1088,7 @@ class TestSms(unittest.TestCase):
                     self.assertEqual('{0}{1}'.format(pduHex, chr(26)), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('{0}{1}'.format(pduHex, chr(26)), data))
                     # Note thee +ZDONR and +ZPASR unsolicted messages in the "response"
                     self.modem.serial.responseSequence =  ['+ZDONR: "METEOR",272,3,"CS_ONLY","ROAM_OFF"\r\n', '+ZPASR: "UMTS"\r\n', '+ZDONR: "METEOR",272,3,"CS_PS","ROAM_OFF"\r\n', '+ZPASR: "UMTS"\r\n', '+CMGS: {0}\r\n'.format(ref), 'OK\r\n']
-                self.assertEqual('AT+CMGS={0}\r'.format(tpdu_length), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS={0}'.format(tpdu_length), data))
+                self.assertEqual('AT+CMGS={0}\r'.format(calcPdu.tpduLength), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS={0}'.format(calcPdu.tpduLength), data))
                 self.modem.serial.writeCallbackFunc = writeCallbackFunc2
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
             self.modem.serial.flushResponseSequence = True

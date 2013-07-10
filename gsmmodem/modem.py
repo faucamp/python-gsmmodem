@@ -519,13 +519,10 @@ class GsmModem(SerialComms):
             self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq='> ')
             result = lineStartingWith('+CMGS:', self.write(text, timeout=15, writeTerm=chr(26)))
         else:
-            smsPdu, tpduLength = encodeSmsSubmitPdu(destination, text, reference=self._smsRef)
-            if PYTHON_VERSION < 3:
-                smsPduHex = str(smsPdu).encode('hex').upper()
-            else:
-                smsPduHex = str(codecs.encode(smsPdu, 'hex_codec'), 'ascii').upper()
-            self.write('AT+CMGS={0}'.format(tpduLength), timeout=3, expectedResponseTermSeq='> ')
-            result = lineStartingWith('+CMGS:', self.write(smsPduHex, timeout=15, writeTerm=chr(26))) # example: +CMGS: xx
+            pdus = encodeSmsSubmitPdu(destination, text, reference=self._smsRef)
+            for pdu in pdus:
+                self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=3, expectedResponseTermSeq='> ')
+                result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=15, writeTerm=chr(26))) # example: +CMGS: xx
         reference = int(result[7:])
         self._smsRef = reference + 1
         if self._smsRef > 255:

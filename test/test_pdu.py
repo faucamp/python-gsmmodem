@@ -207,8 +207,11 @@ class TestSmsPdu(unittest.TestCase):
                  )
         for number, text, reference, validity, smsc, rejectDuplicates, pduHex in tests:
             pdu = bytearray(codecs.decode(pduHex, 'hex_codec'))
-            result = gsmmodem.pdu.encodeSmsSubmitPdu(number, text, reference, validity, smsc, rejectDuplicates)[0]            
-            self.assertEqual(result, pdu, 'Failed to encode SMS PDU for number: "{0}" and text "{1}". Expected: "{2}", got: "{3}"'.format(number, text, pduHex, codecs.encode(compat.str(result), 'hex_codec').upper()))
+            result = gsmmodem.pdu.encodeSmsSubmitPdu(number, text, reference, validity, smsc, rejectDuplicates)
+            self.assertIsInstance(result, list)
+            self.assertEqual(len(result), 1, 'Only 1 PDU should have been created, but got {0}'.format(len(result)))
+            self.assertIsInstance(result[0], gsmmodem.pdu.Pdu)
+            self.assertEqual(result[0].data, pdu, 'Failed to encode SMS PDU for number: "{0}" and text "{1}". Expected: "{2}", got: "{3}"'.format(number, text, pduHex, codecs.encode(compat.str(result[0].data), 'hex_codec').upper()))
 
     def test_decode(self):
         """ Tests SMS PDU decoding """
@@ -285,6 +288,25 @@ class TestSmsPdu(unittest.TestCase):
                 else:
                     self.assertEqual(result[key], value, 'Failed to decode PDU value for "{0}". Expected "{1}", got "{2}".'.format(key, value, result[key]))
 
+    def test_encodeSmsSubmit_concatenated(self):
+        """ Tests concatenated SMS encoding """
+        tests = (('Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.Ut enim ad minim veniam, quinostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.Duis aute irure dolor in reprehenderit in voluptate velit esse cillum doloe eu fugiat nulla pariatur.Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum',
+                  '+15125551234',
+                  [b'0045000B915121551532F40000A0050003000301986F79B90D4AC3E7F53688FC66BFE5A0799A0E0AB7CB741668FC76CFCB637A995E9783C2E4343C3D4F8FD3EE33A8CC4ED359A079990C22BF41E5747DDE7E9341F4721BFE9683D2EE719A9C26D7DD74509D0E6287C56F791954A683C86FF65B5E06B5C36777181466A7E3F5B0AB4A0795DDE936284C06B5D3EE741B642FBBD3E1360B14AFA7DD',
+                   b'0045000B915121551532F40000A0050003000302DE73BABC4E0695F165F9384D0FD3D36F37A8CE6687DBE337881D16BFE5E939C89D9EA741753A28CC4EC7EB6938A88C0795C3A0F1BBDD7E93DFA0F1DB3D2FC7EB61BA8B584FCF41E13ABD0C4ACBEBF23288FC66BFE5A0B41B242FC3E56574D94D2ECBD37450DA0DB2BFD975383D4C2F83EC65769A0E2ACFE765D038CD66D7DB20F29BFD2E83CA',
+                   b'0045000B915121551532F400008C050003000303EA2073FD9C0ED341EE3A9B1D06C1C3F274985E97BB8AF871194E2FD7E5A079DA4D07BDC7E370791CA683C675789A1CA687E920F7DB0D82CBDF6972D94D6781E675371D947683C675363C0C8AD7D3A0B7D99C1EA7C32072795E96D7DD7450FBCD66A7E9A0B03BDD06A5C9A0F29C0E6287C56F79BD0D']
+                 ),)
+        for text, number, hexPdus in tests:
+            result = gsmmodem.pdu.encodeSmsSubmitPdu(number, text, reference=0, requestStatusReport=False, rejectDuplicates=True)
+            self.assertIsInstance(result, list)
+            self.assertEqual(len(result), len(hexPdus), 'Invalid number of PDUs returned; expected {0}, got {1}'.format(len(hexPdus), len(result)))
+            i = 0
+            for pdu in result:
+                self.assertIsInstance(pdu, gsmmodem.pdu.Pdu)
+                expectedPduHex = hexPdus[i]
+                expectedPdu = bytearray(codecs.decode(expectedPduHex, 'hex_codec'))
+                self.assertEqual(pdu.data, expectedPdu, 'Failed to encode concatentated SMS PDU (PDU {0}/{1}). Expected: "{2}", got: "{3}"'.format(i+1, len(result), expectedPduHex, codecs.encode(compat.str(pdu.data), 'hex_codec').upper()))
+                i += 1
 
 if __name__ == "__main__":
     unittest.main()
