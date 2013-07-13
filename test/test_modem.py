@@ -983,8 +983,68 @@ class TestIncomingCall(unittest.TestCase):
                 self.modem.serial.responseSequence = modem.getIncomingCallNotification(number, cringParam)
                 # Wait for the handler function to finish
                 while callReceived[0] == False:
-                    time.sleep(0.1)
+                    time.sleep(0.05)
             self.modem.close()
+    
+    def test_incomingCallCrcNotSupported(self):
+        """ Tests handling incoming calls without +CRC support """
+        callReceived = [False]
+        def callbackFunc(call):
+            self.assertIsInstance(call, gsmmodem.modem.IncomingCall)
+            self.assertEqual(call.type, None, 'Invalid call type; expected "{0}", got "{1}".'.format(None, call.type))
+            callReceived[0] = True
+        
+        testModem = copy(fakemodems.GenericTestModem())
+        testModem.responses['AT+CRC?\r'] = ['ERROR\r\n']
+        testModem.responses['AT+CRC=1\r'] = ['ERROR\r\n']
+        self.init_modem(testModem, incomingCallCallbackFunc=callbackFunc)
+        self.modem.connect()
+        # Ensure extended incoming call indications are active
+        self.assertFalse(self.modem._extendedIncomingCallIndication, 'Extended incoming call indicator flag should be False')
+        # Fake incoming voice call using basic incoming call indication format
+        self.modem.serial.responseSequence = ['RING\r\n', '+CLIP: "+27821231234",145,,,,0\r\n']
+        # Wait for the handler function to finish
+        while callReceived[0] == False:
+            time.sleep(0.1)
+        self.assertFalse(self.modem._extendedIncomingCallIndication, 'Extended incoming call indicator flag should be False')
+    
+    def test_incomingCallCrcChangedExternally(self):
+        """ Tests handling incoming call notifications when the +CRC setting
+        was modfied by some external program (issue #18) """
+        
+        callReceived = [False]
+        def callbackFunc(call):
+            self.assertIsInstance(call, gsmmodem.modem.IncomingCall)
+            callReceived[0] = True
+        
+        self.init_modem(None, incomingCallCallbackFunc=callbackFunc)
+        self.modem.connect()
+        # Ensure extended incoming call indications are active
+        self.assertTrue(self.modem._extendedIncomingCallIndication, 'Extended incoming call indicator flag should be True')
+        # Fake incoming voice call using extended incoming call indication format
+        self.modem.serial.responseSequence = ['+CRING: VOICE\r\n', '+CLIP: "+27821231234",145,,,,0\r\n']
+        # Wait for the handler function to finish
+        while callReceived[0] == False:
+            time.sleep(0.1)
+        callReceived[0] = False
+        # Now fake incoming call using basic incoming call indication format (without informing GsmModem class about change)
+        self.modem.serial.responseSequence = ['RING\r\n', '+CLIP: "+27821231234",145,,,,0\r\n']
+        # Wait for the handler function to finish
+        while callReceived[0] == False:
+            time.sleep(0.05)
+        # Ensure extended incoming call indications have been re-enabled
+        self.assertTrue(self.modem._extendedIncomingCallIndication, 'Extended incoming call indicator flag should be True')
+        
+        # Now repeat the test, but cause re-enabling the +CRC setting to fail
+        self.modem.serial.modem.responses['AT+CRC=1\r'] = ['ERROR\r\n']
+        callReceived[0] = False
+        # Basic incoming call indication format (without informing GsmModem class about change)
+        self.modem.serial.responseSequence = ['RING\r\n', '+CLIP: "+27821231234",145,,,,0\r\n']
+        # Wait for the handler function to finish
+        while callReceived[0] == False:
+            time.sleep(0.05)
+        # Since re-enabling the extended format failed,  extended incoming call indications flag should be False
+        self.assertFalse(self.modem._extendedIncomingCallIndication, 'Extended incoming call indicator flag should be False because AT+CRC=1 failed')
 
 
 class TestSms(unittest.TestCase):

@@ -838,7 +838,18 @@ class GsmModem(SerialComms):
         self.log.debug('Handling incoming call')
         ringLine = lines.pop(0)
         if self._extendedIncomingCallIndication:
-            callType = ringLine.split(' ', 1)[1]
+            try:
+                callType = ringLine.split(' ', 1)[1]
+            except IndexError:
+                # Some external 3G scripts modify incoming call indication settings (issue #18)
+                self.log.debug('Extended incoming call indication format changed externally; re-enabling...')
+                callType = None
+                try:
+                    # Re-enable extended format of incoming indication (optional)
+                    self.write('AT+CRC=1') 
+                except CommandError:
+                    self.log.warn('Extended incoming call indication format changed externally; unable to re-enable')
+                    self._extendedIncomingCallIndication = False
         else:
             callType = None
         if self._callingLineIdentification and len(lines) > 0:
