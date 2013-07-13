@@ -11,7 +11,8 @@ from copy import copy
 from . import compat # For Python 2.6 compatibility
 from gsmmodem.exceptions import PinRequiredError, CommandError, InvalidStateException, TimeoutException,\
     CmsError, CmeError
-from gsmmodem.modem import StatusReport, Sms
+from gsmmodem.modem import StatusReport, Sms, ReceivedSms
+
 PYTHON_VERSION = sys.version_info[0]
 
 import gsmmodem.serial_comms
@@ -1131,14 +1132,19 @@ class TestSms(unittest.TestCase):
             callbackInfo[4] = smsTime
             
             # Time string as returned by modem in text modem
-            textModeStr = smsTime.strftime('%y/%m/%d,%H:%M:%S%z')[:-2]
+            tzDelta = smsTime.utcoffset()
+            if tzDelta.days >= 0:
+                tzValStr = '+{0:0>2}'.format(int(tzDelta.seconds / 60 / 15)) # calculate offset in 0.25 hours
+            if tzDelta.days < 0: # negative
+                tzValStr = '-{0:0>2}'.format(int((tzDelta.days * -3600 * 24 - tzDelta.seconds) / 60 / 15))
+            textModeStr = smsTime.strftime('%y/%m/%d,%H:%M:%S') + tzValStr
             def writeCallbackFunc(data):
                 """ Intercept the "read stored message" command """        
                 def writeCallbackFunc2(data):                    
                     self.assertEqual('AT+CMGR={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGR={0}'.format(index), data))
                     self.modem.serial.responseSequence = ['+CMGR: "REC UNREAD","{0}",,"{1}"\r\n'.format(number, textModeStr), '{0}\r\n'.format(message), 'OK\r\n']
                     def writeCallbackFunc3(data):
-                        self.assertEqual('AT+CMGD={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(index), data))
+                        self.assertEqual('AT+CMGD={0},0\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(index), data))
                     self.modem.serial.writeCallbackFunc = writeCallbackFunc3
                 if self.modem._smsMemReadDelete != mem:
                     self.assertEqual('AT+CPMS={0}\r'.format(mem), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CPMS={0}'.format(mem), data))
@@ -1189,7 +1195,7 @@ class TestSms(unittest.TestCase):
                     self.assertEqual('AT+CMGR={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGR={0}'.format(index), data))
                     self.modem.serial.responseSequence = ['+CMGR: 0,,{0}\r\n'.format(tpdu_length), '{0}\r\n'.format(pdu), 'OK\r\n']                
                     def writeCallbackFunc3(data):
-                        self.assertEqual('AT+CMGD={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(index), data))
+                        self.assertEqual('AT+CMGD={0},0\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(index), data))
                     self.modem.serial.writeCallbackFunc = writeCallbackFunc3
                 if self.modem._smsMemReadDelete != mem:
                     self.assertEqual('AT+CPMS={0}\r'.format(mem), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CPMS={0}'.format(mem), data))
@@ -1204,6 +1210,205 @@ class TestSms(unittest.TestCase):
             while callbackInfo[0] == False:
                 time.sleep(0.1)
         self.modem.close()
+
+
+class TestStoredSms(unittest.TestCase):
+    """ Tests processing/accessing SMS messages stored on the SIM card """
+    
+    def initModem(self, textMode, smsReceivedCallbackFunc):
+        global FAKE_MODEM
+        # Override the pyserial import
+        mockSerial = MockSerialPackage()
+        gsmmodem.serial_comms.serial = mockSerial
+        self.modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --', smsReceivedCallbackFunc=smsReceivedCallbackFunc)
+        self.modem.smsTextMode = textMode
+        self.modem.connect()
+        FAKE_MODEM = None
+    
+    def setUp(self):
+        self.modem = None
+    
+    def tearDown(self):
+        if self.modem != None:
+            self.modem.close()
+    
+    def initFakeModemResponses(self, textMode):
+        global FAKE_MODEM
+        FAKE_MODEM = copy(fakemodems.GenericTestModem())
+        modem = gsmmodem.modem.GsmModem('--weak ref object--')
+        self.expectedMessages = [ReceivedSms(modem, Sms.STATUS_RECEIVED_READ, '+27748577604', datetime(2013, 1, 28, 14, 51, 42, tzinfo=SimpleOffsetTzInfo(2)), 'Hello raspberry pi', None),
+                                 ReceivedSms(modem, Sms.STATUS_RECEIVED_READ, '+2784000153099999', datetime(2013, 2, 7, 1, 31, 44, tzinfo=SimpleOffsetTzInfo(2)), 'New and here to stay! Don\'t just recharge SUPACHARGE and get your recharged airtime+FREE CellC to CellC mins & SMSs+Free data to use anytime. T&C apply. Cell C', None),
+                                 ReceivedSms(modem, Sms.STATUS_RECEIVED_READ, '+27840001463', datetime(2013, 2, 7, 6, 24, 2, tzinfo=SimpleOffsetTzInfo(2)), 'Standard Bank: Your accounts are no longer FICA compliant. Please bring ID & proof of residence to any branch to reactivate your accounts. Queries? 0860003422.')]       
+        if textMode:
+            FAKE_MODEM.responses['AT+CMGL="ALL"\r'] = ['+CMGL: 0,"REC READ","+27748577604",,"13/01/28,14:51:42+08"\r\n', 'Hello raspberry pi\r\n',
+                                                       '+CMGL: 1,"REC READ","+2784000153099999",,"13/02/07,01:31:44+08"\r\n', 'New and here to stay! Don\'t just recharge SUPACHARGE and get your recharged airtime+FREE CellC to CellC mins & SMSs+Free data to use anytime. T&C apply. Cell C\r\n',
+                                                       '+CMGL: 2,"REC READ","+27840001463",,"13/02/07,06:24:02+08"\r\n', 'Standard Bank: Your accounts are no longer FICA compliant. Please bring ID & proof of residence to any branch to reactivate your accounts. Queries? 0860003422.\r\n',
+                                                       'OK\r\n']
+            FAKE_MODEM.responses['AT+CMGL="REC READ"\r'] = FAKE_MODEM.responses['AT+CMGL="ALL"\r']
+            FAKE_MODEM.responses['AT+CMGL="REC UNREAD\r'] = FAKE_MODEM.responses['AT+CMGL="STO UNSENT\r'] = FAKE_MODEM.responses['AT+CMGL="STO SENT\r'] = ['OK\r\n']
+            FAKE_MODEM.responses['AT+CMGL=0\r'] = FAKE_MODEM.responses['AT+CMGL=1\r'] = FAKE_MODEM.responses['AT+CMGL=2\r'] = FAKE_MODEM.responses['AT+CMGL=3\r'] = FAKE_MODEM.responses['AT+CMGL=4\r'] = ['ERROR\r\n']
+        else:
+            FAKE_MODEM.responses['AT+CMGL=4\r'] = ['+CMGL: 0,1,,35\r\n', '07917248014000F3240B917247587706F400003110824115248012C8329BFD06C9C373B8B82C97E741F034\r\n' 
+                                                   '+CMGL: 1,1,,161\r\n', '07917248010080F020109172480010359099990000312070101344809FCEF21D14769341E8B2BC0CA2BF41737A381F0211DFEE131DA4AECFE92079798C0ECBCF65D0B40A0D0E9141E9B1080ABBC9A073990ECABFEB7290BC3C4687E5E73219144ECBE9E976796594168BA06199CD1E82E86FD0B0CC660F41EDB47B0E3281A6CDE97C659497CB2072981E06D1DFA0FABC0C0ABBF3F474BBEC02514D4350180E67E75DA06199CD060D01\r\n',
+                                                   '+CMGL: 2,1,,159\r\n', '07917248010080F0240B917248001064F30000312070604220809F537AD84D0ECBC92061D8BDD681B2EFBA1C141E8FDF75377D0E0ACBCB20F71BC47EBBCF6539C8981C0641E3771BCE4E87DD741708CA2E87E76590589E769F414922C80482CBDF6F33E86D06C9CBF334B9EC1E9741F43728ECCE83C4F2B07B8C06D1DF2079393CA6A7ED617A19947FD7E5A0F078FCAEBBE97317285A2FCBD3E5F90F04C3D96030D88C2693B900\r\n',
+                                                   'OK\r\n']
+            FAKE_MODEM.responses['AT+CMGL=1\r'] = FAKE_MODEM.responses['AT+CMGL=4\r']
+            FAKE_MODEM.responses['AT+CMGL=0\r'] = FAKE_MODEM.responses['AT+CMGL=2\r'] = FAKE_MODEM.responses['AT+CMGL=3\r'] = ['OK\r\n']
+            FAKE_MODEM.responses['AT+CMGL="REC UNREAD\r'] = FAKE_MODEM.responses['AT+CMGL="REC READ"\r'] = FAKE_MODEM.responses['AT+CMGL="STO UNSENT\r'] = FAKE_MODEM.responses['AT+CMGL="STO SENT\r'] = FAKE_MODEM.responses['AT+CMGL="ALL"\r'] = ['ERROR\r\n']
+
+    def test_accessStoredSmsPduMode(self):
+        """ Tests accessing/reading SMSs that are currently stored on the SIM card (PDU mode) """
+        self.initFakeModemResponses(textMode=False)
+        self.initModem(False, None)
+        
+        # Test getting all messages
+        def writeCallbackFunc(data):
+            self.assertEqual('AT+CMGL=4\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGL=4', data))
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc
+        messages = self.modem._messageList()
+        self.assertIsInstance(messages, list)
+        self.assertEqual(len(messages), 3, 'Invalid number of messages returned; expected 3, got {0}'.format(len(messages)))
+        
+        for i in range(len(messages)):
+            message = messages[i]
+            expected = self.expectedMessages[i]
+            self.assertIsInstance(message, expected.__class__)
+            self.assertEqual(message.number, expected.number)
+            self.assertEqual(message.status, expected.status)
+            self.assertEqual(message.text, expected.text)
+            self.assertEqual(message.time, expected.time)
+        del messages
+        
+        # Test filtering
+        expectedFilter = [1]
+        def writeCallbackFunc2(data):
+            self.assertEqual('AT+CMGL={0}\r'.format(expectedFilter[0]), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGL={0}'.format(expectedFilter[0]), data))
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+        messages = self.modem._messageList(status=Sms.STATUS_RECEIVED_READ)
+        self.assertIsInstance(messages, list)
+        self.assertEqual(len(messages), 3, 'Invalid number of messages returned; expected 3, got {0}'.format(len(messages)))
+        
+        del messages
+        
+        expectedFilter[0] = 3
+        messages = self.modem._messageList(status=Sms.STATUS_STORED_SENT)
+        self.assertIsInstance(messages, list)
+        self.assertEqual(len(messages), 0, 'Invalid number of messages returned; expected 0, got {0}'.format(len(messages)))
+        
+        del messages
+        
+        # Test deleting messages after retrieval
+        # Test deleting all messages
+        expectedFilter = [4, ['1,4']]
+        delCount = [0]
+        def writeCallbackFunc3(data):
+            self.assertEqual('AT+CMGL={0}\r'.format(expectedFilter[0]), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGL={0}'.format(expectedFilter[0]), data))
+            def writeCallbackFunc4(data):
+                self.assertEqual('AT+CMGD={0}\r'.format(expectedFilter[1][delCount[0]]), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(expectedFilter[1][delCount[0]]), data))
+                delCount[0] += 1
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc4
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc3
+        messages = self.modem._messageList(status=Sms.STATUS_ALL, delete=True)
+        self.assertIsInstance(messages, list)
+        self.assertEqual(len(messages), 3, 'Invalid number of messages returned; expected 3, got {0}'.format(len(messages)))
+        
+        # Test deleting filtered messages
+        expectedFilter[0] = 1
+        expectedFilter[1] = ['0,0', '1,0', '2,0']
+        delCount[0] = 0
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc3
+        messages = self.modem._messageList(status=Sms.STATUS_RECEIVED_READ, delete=True)
+    
+    def test_accessStoredSmsTextMode(self):
+        """ Tests accessing/reading SMSs that are currently stored on the SIM card (text mode) """
+        self.initFakeModemResponses(textMode=True)
+        self.initModem(True, None)
+        
+        # Test getting all messages
+        def writeCallbackFunc(data):
+            self.assertEqual('AT+CMGL="ALL"\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGL="ALL"', data))
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc
+        messages = self.modem._messageList()
+        self.assertIsInstance(messages, list)
+        self.assertEqual(len(messages), 3, 'Invalid number of messages returned; expected 3, got {0}'.format(len(messages)))
+        
+        for i in range(len(messages)):
+            message = messages[i]
+            expected = self.expectedMessages[i]
+            self.assertIsInstance(message, expected.__class__)
+            self.assertEqual(message.number, expected.number)
+            self.assertEqual(message.status, expected.status)
+            self.assertEqual(message.text, expected.text)
+            self.assertEqual(message.time, expected.time)
+        del messages
+        
+        # Test filtering
+        expectedFilter = ['REC READ']
+        def writeCallbackFunc2(data):
+            self.assertEqual('AT+CMGL="{0}"\r'.format(expectedFilter[0]), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGL="{0}"'.format(expectedFilter[0]), data))
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+        messages = self.modem._messageList(status=Sms.STATUS_RECEIVED_READ)
+        self.assertIsInstance(messages, list)
+        self.assertEqual(len(messages), 3, 'Invalid number of messages returned; expected 3, got {0}'.format(len(messages)))
+        
+        del messages
+        
+        expectedFilter[0] = 'STO SENT'
+        messages = self.modem._messageList(status=Sms.STATUS_STORED_SENT)
+        self.assertIsInstance(messages, list)
+        self.assertEqual(len(messages), 0, 'Invalid number of messages returned; expected 0, got {0}'.format(len(messages)))
+        
+        del messages
+        
+        # Test deleting messages after retrieval
+        # Test deleting all messages
+        expectedFilter = ['ALL', ['1,4']]
+        delCount = [0]
+        def writeCallbackFunc3(data):
+            self.assertEqual('AT+CMGL="{0}"\r'.format(expectedFilter[0]), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGL="{0}"'.format(expectedFilter[0]), data))
+            def writeCallbackFunc4(data):
+                self.assertEqual('AT+CMGD={0}\r'.format(expectedFilter[1][delCount[0]]), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(expectedFilter[1][delCount[0]]), data))
+                delCount[0] += 1
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc4
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc3
+        messages = self.modem._messageList(status=Sms.STATUS_ALL, delete=True)
+        self.assertIsInstance(messages, list)
+        self.assertEqual(len(messages), 3, 'Invalid number of messages returned; expected 3, got {0}'.format(len(messages)))
+        
+        # Test deleting filtered messages
+        expectedFilter[0] = 'REC READ'
+        expectedFilter[1] = ['0,0', '1,0', '2,0']
+        delCount[0] = 0
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc3
+        messages = self.modem._messageList(status=Sms.STATUS_RECEIVED_READ, delete=True)
+    
+    def test_processStoredSms(self):
+        """ Tests processing and then "receiving" SMSs that are currently stored on the SIM card """
+        self.initFakeModemResponses(textMode=False)
+        
+        i = [0]
+        def smsCallbackFunc(sms):
+            expected = self.expectedMessages[i[0]]
+            self.assertIsInstance(sms, ReceivedSms)
+            self.assertEqual(sms.number, expected.number)
+            self.assertEqual(sms.status, expected.status)
+            self.assertEqual(sms.text, expected.text)
+            self.assertEqual(sms.time, expected.time)
+            i[0] += 1
+        
+        self.initModem(False, smsCallbackFunc)
+        
+        commandsWritten = [False, False]
+        def writeCallbackFunc(data):
+            if data.startswith('AT+CMGL'):
+                commandsWritten[0] = True
+            elif data.startswith('AT+CMGD'):
+                commandsWritten[1] = True
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc
+        
+        self.modem.processStoredSms()
+        self.assertTrue(commandsWritten[0], 'AT+CMGL command not written to modem')
+        self.assertTrue(commandsWritten[1], 'AT+CMGD command not written to modem')
 
 
 class TestSmsStatusReports(unittest.TestCase):
@@ -1225,8 +1430,8 @@ class TestSmsStatusReports(unittest.TestCase):
                   Sms.STATUS_RECEIVED_UNREAD, # message read status 
                   '0870000000', # number
                   20, # reference
-                  datetime(2013, 4, 29, 19, 58, 0, tzinfo=SimpleOffsetTzInfo(4)), # sentTime
-                  datetime(2013, 4, 29, 19, 59, 0, tzinfo=SimpleOffsetTzInfo(4)), # deliverTime
+                  datetime(2013, 4, 29, 19, 58, 0, tzinfo=SimpleOffsetTzInfo(1)), # sentTime
+                  datetime(2013, 4, 29, 19, 59, 0, tzinfo=SimpleOffsetTzInfo(1)), # deliverTime
                   StatusReport.DELIVERED), # delivery status
                  )
         
@@ -1254,7 +1459,7 @@ class TestSmsStatusReports(unittest.TestCase):
                     self.assertEqual('AT+CMGR={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGR={0}'.format(index), data))
                     self.modem.serial.responseSequence = ['{0}\r\n'.format(notification), 'OK\r\n']
                     def writeCallbackFunc3(data):
-                        self.assertEqual('AT+CMGD={0}\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(index), data))
+                        self.assertEqual('AT+CMGD={0},0\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0}'.format(index), data))
                     self.modem.serial.writeCallbackFunc = writeCallbackFunc3
                 if self.modem._smsMemReadDelete != mem:
                     self.assertEqual('AT+CPMS={0}\r'.format(mem), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CPMS={0}'.format(mem), data))

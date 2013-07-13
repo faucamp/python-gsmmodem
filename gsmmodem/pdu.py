@@ -503,7 +503,7 @@ def _encodeTimestamp(timestamp):
     tzDelta = timestamp.utcoffset()
     if tzDelta.days >= 0:
         tzValStr = '{0:0>2}'.format(int(tzDelta.seconds / 60 / 15))
-    if tzDelta.days < 0: # negative
+    else: # negative
         tzVal = int((tzDelta.days * -3600 * 24 - tzDelta.seconds) / 60 / 15) # calculate offset in 0.25 hours
         # Cast as literal hex value and set MSB of first semi-octet of timezone to 1 to indicate negative value
         tzVal = int('{0:0>2}'.format(tzVal), 16) | 0x80

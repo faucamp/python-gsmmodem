@@ -8,16 +8,101 @@ from datetime import datetime
 from .serial_comms import SerialComms
 from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException, TimeoutException, PinRequiredError, IncorrectPinError, SmscNumberUnknownError
 from .pdu import encodeSmsSubmitPdu, decodeSmsPdu
-from .util import SimpleOffsetTzInfo, lineStartingWith, allLinesMatchingPattern
+from .util import SimpleOffsetTzInfo, lineStartingWith, allLinesMatchingPattern, parseTextModeTimeStr
 
 from . import compat # For Python 2.6 compatibility
 from gsmmodem.util import lineMatching
+from gsmmodem.exceptions import EncodingError
 PYTHON_VERSION = sys.version_info[0]
 if PYTHON_VERSION >= 3:
     xrange = range
     dictValuesIter = dict.values
 else: #pragma: no cover
     dictValuesIter = dict.itervalues
+
+
+class Sms(object):
+    """ Abstract SMS message base class """
+    __metaclass__ = abc.ABCMeta
+
+    # Some constants to ease handling SMS statuses
+    STATUS_RECEIVED_UNREAD = 0
+    STATUS_RECEIVED_READ = 1
+    STATUS_STORED_UNSENT = 2
+    STATUS_STORED_SENT = 3
+    STATUS_ALL = 4
+    # ...and a handy converter for text mode statuses
+    TEXT_MODE_STATUS_MAP = {'REC UNREAD': STATUS_RECEIVED_UNREAD,
+                            'REC READ': STATUS_RECEIVED_READ,
+                            'STO UNSENT': STATUS_STORED_UNSENT,
+                            'STO SENT': STATUS_STORED_SENT,
+                            'ALL': STATUS_ALL}
+
+    def __init__(self, number, text, smsc=None):
+        self.number = number
+        self.text = text
+        self.smsc = smsc
+
+
+class ReceivedSms(Sms):
+    """ An SMS message that has been received (MT) """
+    
+    def __init__(self, gsmModem, status, number, time, text, smsc=None):
+        super(ReceivedSms, self).__init__(number, text, smsc)
+        self._gsmModem = weakref.proxy(gsmModem)
+        self.status = status
+        self.time = time
+        
+    def reply(self, message):
+        """ Convenience method that sends a reply SMS to the sender of this message """
+        return self._gsmModem.sendSms(self.number, message)
+
+
+class SentSms(Sms):
+    """ An SMS message that has been sent (MO) """
+        
+    ENROUTE = 0 # Status indicating message is still enroute to destination
+    DELIVERED = 1 # Status indicating message has been received by destination handset
+    FAILED = 2 # Status indicating message delivery has failed
+
+    def __init__(self, number, text, reference, smsc=None):
+        super(SentSms, self).__init__(number, text, smsc)
+        self.report = None # Status report for this SMS (StatusReport object)
+        self.reference = reference
+        
+    @property
+    def status(self):
+        """ Status of this SMS. Can be ENROUTE, DELIVERED or FAILED
+        
+        The actual status report object may be accessed via the 'report' attribute
+        if status is 'DELIVERED' or 'FAILED'
+        """
+        if self.report == None:
+            return SentSms.ENROUTE
+        else:
+            return SentSms.DELIVERED if self.report.deliveryStatus == StatusReport.DELIVERED else SentSms.FAILED
+
+
+class StatusReport(Sms):
+    """ An SMS status/delivery report
+    
+    Note: the 'status' attribute of this class refers to this status report SM's status (whether
+    it has been read, etc). To find the status of the message that caused this status report,
+    use the 'deliveryStatus' attribute.
+    """
+        
+    DELIVERED = 0 # SMS delivery status: delivery successful
+    FAILED = 68 # SMS delivery status: delivery failed
+    
+    def __init__(self, gsmModem, status, reference, number, timeSent, timeFinalized, deliveryStatus, smsc=None):
+        super(StatusReport, self).__init__(number, None, smsc)
+        self._gsmModem = weakref.proxy(gsmModem)
+        self.status = status
+        self.reference = reference
+        self.timeSent = timeSent
+        self.timeFinalized = timeFinalized
+        self.deliveryStatus = deliveryStatus
+
 
 class GsmModem(SerialComms):
     """ Main class for interacting with an attached GSM modem """
@@ -616,6 +701,95 @@ class GsmModem(SerialComms):
             self._dialEvent = None
             raise TimeoutException()
 
+    def processStoredSms(self):
+        """ Process all SMS messages currently stored on the device/SIM card.
+        
+        Reads all SMS messages currently stored on the device/SIM card,
+        initiates "SMS received" events for them, and removes them from the SIM card.
+        This is useful if SMS messages were received during a period that
+        python-gsmmodem was not running but the modem was powered on.
+        """
+        messages = self._messageList(delete=True)
+        for sms in messages:
+            self.smsReceivedCallback(sms)
+
+    def _messageList(self, status=Sms.STATUS_ALL, delete=False):
+        """ Returns SMS messages currently stored on the device/SIM card
+        
+        @param status: Filter messages based on this read status; must be 0-4 (see Sms class)
+        @type status: int
+        @param delete: If True, delete returned messages from the device/SIM card
+        @type delete: bool
+        
+        @return: A list of Sms objects containing the messages read
+        @rtype: list
+        """
+        messages = []
+        delMessages = set()
+        if self._smsTextMode:
+            cmglRegex= re.compile(r'^\+CMGL: (\d+),"([^"]+)","([^"]+)",[^,]*,"([^"]+)"$')
+            for key, val in Sms.TEXT_MODE_STATUS_MAP.iteritems():
+                if status == val:
+                    statusStr = key
+                    break
+            else:
+                raise ValueError('Invalid status value: '+status)
+            result = self.write('AT+CMGL="{0}"'.format(statusStr))
+            msgLines = []
+            msgIndex = msgStatus = number = msgTime = None
+            for line in result:
+                cmglMatch = cmglRegex.match(line)                
+                if cmglMatch:
+                    # New message; save old one if applicable
+                    if msgIndex != None and len(msgLines) > 0:
+                        msgText = '\n'.join(msgLines)
+                        msgLines = []
+                        messages.append(ReceivedSms(self, Sms.TEXT_MODE_STATUS_MAP[msgStatus], number, parseTextModeTimeStr(msgTime), msgText))
+                        delMessages.add(int(msgIndex))
+                    msgIndex, msgStatus, number, msgTime = cmglMatch.groups()
+                    msgLines = []
+                else:
+                    if line != 'OK':
+                        msgLines.append(line)
+            if msgIndex != None and len(msgLines) > 0:
+                msgText = '\n'.join(msgLines)
+                msgLines = []
+                messages.append(ReceivedSms(self, Sms.TEXT_MODE_STATUS_MAP[msgStatus], number, parseTextModeTimeStr(msgTime), msgText))
+                delMessages.add(int(msgIndex))
+        else:
+            cmglRegex = re.compile(r'^\+CMGL:\s*(\d+),(\d+),.*$')
+            readPdu = False
+            result = self.write('AT+CMGL={0}'.format(status))
+            for line in result:
+                if not readPdu:
+                    cmglMatch = cmglRegex.match(line)
+                    if cmglMatch:
+                        msgIndex = int(cmglMatch.group(1))
+                        msgStat = int(cmglMatch.group(2))
+                        readPdu = True
+                else:
+                    try:
+                        smsDict = decodeSmsPdu(line)
+                    except EncodingError:
+                        self.log.debug('Discarding line from +CMGL response: %s', line)
+                    else:
+                        if smsDict['type'] == 'SMS-DELIVER':
+                            sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'])
+                        elif smsDict['type'] == 'SMS-STATUS-REPORT':
+                            sms = StatusReport(self, int(msgStat), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
+                        else:
+                            raise CommandError('Invalid PDU type for _readStoredSmsMessage(): {0}'.format(smsDict['type']))
+                        messages.append(sms)
+                        delMessages.add(msgIndex)
+                        readPdu = False
+        if delete:
+            if status == Sms.STATUS_ALL:
+                # Delete all messages
+                self.write('AT+CMGD=1,4')
+            else:
+                for msgIndex in delMessages:
+                    self._deleteStoredMessage(msgIndex)
+        return messages
 
     def _handleModemNotification(self, lines):
         """ Handler for unsolicited notifications from the modem
@@ -804,11 +978,7 @@ class GsmModem(SerialComms):
             if cmgrMatch:
                 msgStatus, number, msgTime = cmgrMatch.groups()
                 msgText = '\n'.join(msgData[1:-1])
-                # Parse date/time
-                timeStr = msgTime[:-3]
-                tzOffsetHours = int(msgTime[-3:])        
-                parsedTime = datetime.strptime(timeStr, '%y/%m/%d,%H:%M:%S').replace(tzinfo=SimpleOffsetTzInfo(tzOffsetHours))
-                return ReceivedSms(self, Sms.TEXT_MODE_STATUS_MAP[msgStatus], number, parsedTime, msgText)
+                return ReceivedSms(self, Sms.TEXT_MODE_STATUS_MAP[msgStatus], number, parseTextModeTimeStr(msgTime), msgText)
             else:
                 # Try parsing status report
                 cmgrMatch = self.CMGR_SM_REPORT_REGEXT_TEXT.match(msgData[0])
@@ -818,14 +988,7 @@ class GsmModem(SerialComms):
                         msgStatus = msgStatus[1:-1]                    
                     if len(msgStatus) == 0:
                         msgStatus = "REC UNREAD"
-                    # Parse date/time
-                    timeStr = sentTime[:-3]
-                    tzOffsetHours = int(sentTime[-3:])
-                    parsedSentTime = datetime.strptime(timeStr, '%y/%m/%d,%H:%M:%S').replace(tzinfo=SimpleOffsetTzInfo(tzOffsetHours))
-                    timeStr = deliverTime[:-3]
-                    tzOffsetHours = int(deliverTime[-3:])
-                    parsedDeliveryTime = datetime.strptime(timeStr, '%y/%m/%d,%H:%M:%S').replace(tzinfo=SimpleOffsetTzInfo(tzOffsetHours))
-                    return StatusReport(self, Sms.TEXT_MODE_STATUS_MAP[msgStatus], int(reference), number, parsedSentTime, parsedDeliveryTime, int(deliverStatus))
+                    return StatusReport(self, Sms.TEXT_MODE_STATUS_MAP[msgStatus], int(reference), number, parseTextModeTimeStr(sentTime), parseTextModeTimeStr(deliverTime), int(deliverStatus))
                 else:
                     raise CommandError('Failed to parse text-mode SMS message +CMGR response: {0}'.format(msgData))
         else:
@@ -843,7 +1006,7 @@ class GsmModem(SerialComms):
                 raise CommandError('Invalid PDU type for _readStoredSmsMessage(): {0}'.format(smsDict['type']))
             
     def _deleteStoredMessage(self, msgIndex):
-        self.write('AT+CMGD={0}'.format(msgIndex))
+        self.write('AT+CMGD={0},0'.format(msgIndex))
     
     def _handleUssd(self, lines):
         """ Handler for USSD event notification line(s) """
@@ -1042,88 +1205,6 @@ class IncomingCall(Call):
         """ End the phone call. """
         self.ringing = False
         super(IncomingCall, self).hangup()
-
-
-class Sms(object):
-    """ Abstract SMS message base class """
-    __metaclass__ = abc.ABCMeta
-
-    # Some constants to ease handling SMS statuses
-    STATUS_RECEIVED_UNREAD = 0
-    STATUS_RECEIVED_READ = 1
-    STATUS_STORED_UNSENT = 2
-    STATUS_STORED_SENT = 3
-    # ...and a handy converter for text mode statuses
-    TEXT_MODE_STATUS_MAP = {'REC UNREAD': STATUS_RECEIVED_UNREAD,
-                            'REC READ': STATUS_RECEIVED_READ,
-                            'STO UNSENT': STATUS_STORED_UNSENT,
-                            'STO SENT': STATUS_STORED_SENT}
-
-    def __init__(self, number, text, smsc=None):
-        self.number = number
-        self.text = text
-        self.smsc = smsc
-
-
-class ReceivedSms(Sms):
-    """ An SMS message that has been received (MT) """
-    
-    def __init__(self, gsmModem, status, number, time, text, smsc=None):
-        super(ReceivedSms, self).__init__(number, text, smsc)
-        self._gsmModem = weakref.proxy(gsmModem)
-        self.status = status
-        self.time = time
-        
-    def reply(self, message):
-        """ Convenience method that sends a reply SMS to the sender of this message """
-        return self._gsmModem.sendSms(self.number, message)
-
-
-class SentSms(Sms):
-    """ An SMS message that has been sent (MO) """
-        
-    ENROUTE = 0 # Status indicating message is still enroute to destination
-    DELIVERED = 1 # Status indicating message has been received by destination handset
-    FAILED = 2 # Status indicating message delivery has failed
-
-    def __init__(self, number, text, reference, smsc=None):
-        super(SentSms, self).__init__(number, text, smsc)
-        self.report = None # Status report for this SMS (StatusReport object)
-        self.reference = reference
-        
-    @property
-    def status(self):
-        """ Status of this SMS. Can be ENROUTE, DELIVERED or FAILED
-        
-        The actual status report object may be accessed via the 'report' attribute
-        if status is 'DELIVERED' or 'FAILED'
-        """
-        if self.report == None:
-            return SentSms.ENROUTE
-        else:
-            return SentSms.DELIVERED if self.report.deliveryStatus == StatusReport.DELIVERED else SentSms.FAILED
-
-
-class StatusReport(Sms):
-    """ An SMS status/delivery report 
-    
-    Note: the 'status' attribute of this class refers to this status report SM's status (whether
-    it has been read, etc). To find the status of the message that caused this status report,
-    use the 'deliveryStatus' attribute.
-    """
-        
-    DELIVERED = 0 # SMS delivery status: delivery successful    
-    FAILED = 68 # SMS delivery status: delivery failed
-    
-    def __init__(self, gsmModem, status, reference, number, timeSent, timeFinalized, deliveryStatus, smsc=None):
-        super(StatusReport, self).__init__(number, None, smsc)
-        self._gsmModem = weakref.proxy(gsmModem)
-        self.status = status
-        self.reference = reference
-        self.timeSent = timeSent
-        self.timeFinalized = timeFinalized
-        self.deliveryStatus = deliveryStatus
-        
 
 class Ussd(object):
     """ Unstructured Supplementary Service Data (USSD) message.
