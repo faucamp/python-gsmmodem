@@ -17,8 +17,10 @@ PYTHON_VERSION = sys.version_info[0]
 if PYTHON_VERSION >= 3:
     xrange = range
     dictValuesIter = dict.values
+    dictItemsIter = dict.items
 else: #pragma: no cover
     dictValuesIter = dict.itervalues
+    dictItemsIter = dict.iteritems
 
 
 class Sms(object):
@@ -728,7 +730,7 @@ class GsmModem(SerialComms):
         delMessages = set()
         if self._smsTextMode:
             cmglRegex= re.compile(r'^\+CMGL: (\d+),"([^"]+)","([^"]+)",[^,]*,"([^"]+)"$')
-            for key, val in Sms.TEXT_MODE_STATUS_MAP.iteritems():
+            for key, val in dictItemsIter(Sms.TEXT_MODE_STATUS_MAP):
                 if status == val:
                     statusStr = key
                     break
