@@ -354,10 +354,15 @@ def decodeSmsPdu(pdu):
     @param pdu: PDU data as a hex string, or a bytearray containing PDU octects
     @type pdu: str or bytearray
     
+    @raise EncodingError: If the specified PDU data cannot be decoded
+    
     @return: The decoded SMS data as a dictionary
     @rtype: dict    
     """ 
-    pdu = toByteArray(pdu)
+    try:
+        pdu = toByteArray(pdu)
+    except TypeError as e:
+        raise EncodingError(e)
     result = {}
     pduIter = iter(pdu)
  
@@ -401,7 +406,7 @@ def decodeSmsPdu(pdu):
         result['discharge'] = _decodeTimestamp(pduIter)
         result['status'] = next(pduIter)        
     else:
-        raise EncodingError('Unknown SMS message type: {0}. First TPDU octect was: {1}'.format(pduType, tpduFirstOctet))
+        raise EncodingError('Unknown SMS message type: {0}. First TPDU octet was: {1}'.format(pduType, tpduFirstOctet))
     
     return result
 

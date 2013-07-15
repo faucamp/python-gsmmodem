@@ -470,6 +470,13 @@ class TestSmsPdu(unittest.TestCase):
         # PDU first octect: 0x43; thus PDU type: 0x03 (invalid)
         pdu = '0043010C910661345542F60008A0050003000301306F3044'
         self.assertRaises(gsmmodem.exceptions.EncodingError, gsmmodem.pdu.decodeSmsPdu, pdu)
+    
+    def test_decode_invalidData(self):
+        """ Tests SMS PDU decoding when completely invalid data is specified """
+        pdu = 'AFSDSDF LJJFKLDJKLFJ# #$KJLKJL SF'
+        self.assertRaises(gsmmodem.exceptions.EncodingError, gsmmodem.pdu.decodeSmsPdu, pdu)
+        pdu = 'AEFDSDFSDFSDFS'
+        self.assertRaises(gsmmodem.exceptions.EncodingError, gsmmodem.pdu.decodeSmsPdu, pdu)
 
 
 if __name__ == "__main__":

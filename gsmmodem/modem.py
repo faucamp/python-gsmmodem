@@ -118,7 +118,7 @@ class GsmModem(SerialComms):
     # Used for parsing caller ID announcements for incoming calls. Group 1 is the number
     CLIP_REGEX = re.compile(r'^\+CLIP:\s*"(\+{0,1}\d+)",(\d+).*$')
     # Used for parsing new SMS message indications
-    CMTI_REGEX = re.compile(r'^\+CMTI:\s*([^,]+),(\d+)$')
+    CMTI_REGEX = re.compile(r'^\+CMTI:\s*"([^"]+)",(\d+)$')
     # Used for parsing SMS message reads (text mode)
     CMGR_SM_DELIVER_REGEX_TEXT = None
     # Used for parsing SMS status report message reads (text mode)
@@ -157,7 +157,8 @@ class GsmModem(SerialComms):
         self._smsTextMode = False # Storage variable for the smsTextMode property
         self._smscNumber = None # Default SMSC number
         self._smsRef = 0 # Sent SMS reference counter
-        self._smsMemReadDelete = None # Preferred message storage memory for reads (<mem1> parameter used for +CPMS)
+        self._smsMemReadDelete = None # Preferred message storage memory for reads/deletes (<mem1> parameter used for +CPMS)
+        self._smsMemWrite = None # Preferred message storage memory for writes (<mem2> parameter used for +CPMS)
         self._smsReadSupported = True # Whether or not reading SMS messages is supported via AT commands
 
     def connect(self, pin=None):
@@ -512,7 +513,20 @@ class GsmModem(SerialComms):
                 self.write('AT+CMGF={0}'.format(1 if textMode else 0))
             self._smsTextMode = textMode
             self._compileSmsRegexes()
-            
+    
+    def _setSmsMemory(self, readDelete=None, write=None):
+        """ Set the current SMS memory to use for read/delete/write operations """
+        # Switch to the correct memory type if required
+        if write != None and write != self._smsMemWrite:
+            self.write()
+            readDel = readDelete or self._smsMemReadDelete
+            self.write('AT+CPMS="{0}","{1}"'.format(readDel, write))
+            self._smsMemReadDelete = readDel
+            self._smsMemWrite = write
+        elif readDelete != None and readDelete != self._smsMemReadDelete:
+            self.write('AT+CPMS="{0}"'.format(readDelete))
+            self._smsMemReadDelete = readDelete
+
     def _compileSmsRegexes(self):
         """ Compiles regular expression used for parsing SMS messages based on current mode """
         if self._smsTextMode:
@@ -601,7 +615,6 @@ class GsmModem(SerialComms):
         @param destination: The recipient's phone number
         @param text: The message text
         """
-        global PYTHON_VERSION
         if self._smsTextMode:
             self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq='> ')
             result = lineStartingWith('+CMGS:', self.write(text, timeout=15, writeTerm=chr(26)))
@@ -703,29 +716,42 @@ class GsmModem(SerialComms):
             self._dialEvent = None
             raise TimeoutException()
 
-    def processStoredSms(self):
+    def processStoredSms(self, unreadOnly=False):
         """ Process all SMS messages currently stored on the device/SIM card.
         
-        Reads all SMS messages currently stored on the device/SIM card,
-        initiates "SMS received" events for them, and removes them from the SIM card.
+        Reads all (or just unread) received SMS messages currently stored on the 
+        device/SIM card, initiates "SMS received" events for them, and removes 
+        them from the SIM card.
         This is useful if SMS messages were received during a period that
         python-gsmmodem was not running but the modem was powered on.
+        
+        @param unreadOnly: If True, only process unread SMS messages
+        @type unreadOnly: boolean
         """
-        messages = self._messageList(delete=True)
-        for sms in messages:
-            self.smsReceivedCallback(sms)
+        states = [Sms.STATUS_RECEIVED_UNREAD]
+        if not unreadOnly:
+            states.insert(0, Sms.STATUS_RECEIVED_READ)
+        for msgStatus in states:
+            messages = self.listStoredSms(status=msgStatus, delete=True)
+            for sms in messages:
+                self.smsReceivedCallback(sms)
 
-    def _messageList(self, status=Sms.STATUS_ALL, delete=False):
-        """ Returns SMS messages currently stored on the device/SIM card
+    def listStoredSms(self, status=Sms.STATUS_ALL, memory=None, delete=False):
+        """ Returns SMS messages currently stored on the device/SIM card.
+        
+        The messages are read from the memory set by the "memory" parameter.
         
         @param status: Filter messages based on this read status; must be 0-4 (see Sms class)
         @type status: int
+        @param memory: The memory type to read from. If None, use the current default SMS read memory
+        @type memory: str or None
         @param delete: If True, delete returned messages from the device/SIM card
         @type delete: bool
         
         @return: A list of Sms objects containing the messages read
         @rtype: list
         """
+        self._setSmsMemory(readDelete=memory)
         messages = []
         delMessages = set()
         if self._smsTextMode:
@@ -735,7 +761,7 @@ class GsmModem(SerialComms):
                     statusStr = key
                     break
             else:
-                raise ValueError('Invalid status value: '+status)
+                raise ValueError('Invalid status value: {0}'.format(status))
             result = self.write('AT+CMGL="{0}"'.format(statusStr))
             msgLines = []
             msgIndex = msgStatus = number = msgTime = None
@@ -780,7 +806,7 @@ class GsmModem(SerialComms):
                         elif smsDict['type'] == 'SMS-STATUS-REPORT':
                             sms = StatusReport(self, int(msgStat), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
                         else:
-                            raise CommandError('Invalid PDU type for _readStoredSmsMessage(): {0}'.format(smsDict['type']))
+                            raise CommandError('Invalid PDU type for readStoredSms(): {0}'.format(smsDict['type']))
                         messages.append(sms)
                         delMessages.add(msgIndex)
                         readPdu = False
@@ -790,7 +816,7 @@ class GsmModem(SerialComms):
                 self.write('AT+CMGD=1,4')
             else:
                 for msgIndex in delMessages:
-                    self._deleteStoredMessage(msgIndex)
+                    self.deleteStoredSms(msgIndex)
         return messages
 
     def _handleModemNotification(self, lines):
@@ -944,8 +970,8 @@ class GsmModem(SerialComms):
         if cmtiMatch:
             msgMemory = cmtiMatch.group(1)
             msgIndex = cmtiMatch.group(2)
-            sms = self._readStoredSmsMessage(msgIndex, msgMemory)
-            self._deleteStoredMessage(msgIndex)
+            sms = self.readStoredSms(msgIndex, msgMemory)
+            self.deleteStoredSms(msgIndex)
             self.smsReceivedCallback(sms)
     
     def _handleSmsStatusReport(self, notificationLine):
@@ -955,8 +981,8 @@ class GsmModem(SerialComms):
         if cdsiMatch:
             msgMemory = cdsiMatch.group(1)
             msgIndex = cdsiMatch.group(2)
-            report = self._readStoredSmsMessage(msgIndex, msgMemory)
-            self._deleteStoredMessage(msgIndex)
+            report = self.readStoredSms(msgIndex, msgMemory)
+            self.deleteStoredSms(msgIndex)
             # Update sent SMS status if possible            
             if report.reference in self.sentSms:                
                 self.sentSms[report.reference].report = report
@@ -967,7 +993,7 @@ class GsmModem(SerialComms):
                 # Nothing is waiting for this report directly - use callback
                 self.smsStatusReportCallback(report)
     
-    def _readStoredSmsMessage(self, index, memory=None):
+    def readStoredSms(self, index, memory=None):
         """ Reads and returns the SMS message at the specified index
         
         @param index: The index of the SMS message in the specified memory
@@ -981,9 +1007,7 @@ class GsmModem(SerialComms):
         @rtype: subclass of gsmmodem.modem.Sms (either ReceivedSms or StatusReport)
         """
         # Switch to the correct memory type if required
-        if memory != None and memory != self._smsMemReadDelete:
-            self.write('AT+CPMS={0}'.format(memory))
-            self._smsMemReadDelete = memory
+        self._setSmsMemory(readDelete=memory)
         msgData = self.write('AT+CMGR={0}'.format(index))
         # Parse meta information
         if self._smsTextMode:
@@ -1016,10 +1040,20 @@ class GsmModem(SerialComms):
             elif smsDict['type'] == 'SMS-STATUS-REPORT':
                 return StatusReport(self, int(stat), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
             else:
-                raise CommandError('Invalid PDU type for _readStoredSmsMessage(): {0}'.format(smsDict['type']))
-            
-    def _deleteStoredMessage(self, msgIndex):
-        self.write('AT+CMGD={0},0'.format(msgIndex))
+                raise CommandError('Invalid PDU type for readStoredSms(): {0}'.format(smsDict['type']))
+    
+    def deleteStoredSms(self, index, memory=None):
+        """ Deletes the SMS message stored at the specified index in modem/SIM card memory
+        
+        @param index: The index of the SMS message in the specified memory
+        @type index: int
+        @param memory: The memory type to read from. If None, use the current default SMS read memory
+        @type memory: str or None
+        
+        @raise CommandError: if unable to read the stored message
+        """
+        self._setSmsMemory(readDelete=memory)
+        self.write('AT+CMGD={0},0'.format(index))
     
     def _handleUssd(self, lines):
         """ Handler for USSD event notification line(s) """
