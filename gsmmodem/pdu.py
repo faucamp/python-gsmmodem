@@ -361,7 +361,8 @@ def decodeSmsPdu(pdu):
     """ 
     try:
         pdu = toByteArray(pdu)
-    except TypeError as e:
+    except Exception as e:
+        # Python 2 raises TypeError, Python 3 raises binascii.Error
         raise EncodingError(e)
     result = {}
     pduIter = iter(pdu)
