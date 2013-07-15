@@ -999,7 +999,7 @@ class TestIncomingCall(unittest.TestCase):
         testModem.responses['AT+CRC?\r'] = ['ERROR\r\n']
         testModem.responses['AT+CRC=1\r'] = ['ERROR\r\n']
         self.init_modem(testModem, incomingCallCallbackFunc=callbackFunc)
-        self.modem.connect()
+        
         # Ensure extended incoming call indications are active
         self.assertFalse(self.modem._extendedIncomingCallIndication, 'Extended incoming call indicator flag should be False')
         # Fake incoming voice call using basic incoming call indication format
@@ -1010,7 +1010,7 @@ class TestIncomingCall(unittest.TestCase):
         self.assertFalse(self.modem._extendedIncomingCallIndication, 'Extended incoming call indicator flag should be False')
     
     def test_incomingCallCrcChangedExternally(self):
-        """ Tests handling incoming call notifications when the +CRC setting
+        """ Tests handling incoming call notifications when the +CRC setting \
         was modfied by some external program (issue #18) """
         
         callReceived = [False]
@@ -1019,7 +1019,7 @@ class TestIncomingCall(unittest.TestCase):
             callReceived[0] = True
         
         self.init_modem(None, incomingCallCallbackFunc=callbackFunc)
-        self.modem.connect()
+        
         # Ensure extended incoming call indications are active
         self.assertTrue(self.modem._extendedIncomingCallIndication, 'Extended incoming call indicator flag should be True')
         # Fake incoming voice call using extended incoming call indication format
