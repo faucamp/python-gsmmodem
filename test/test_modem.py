@@ -78,8 +78,7 @@ class MockSerialPackage(object):
                     if len(self.writeQueue) > 0:
                         self._setupReadValue(self.writeQueue.pop(0))
                         if len(self._readQueue) > 0:
-                            return self._readQueue.pop(0)                       
-#                    time.sleep(self._REPONSE_TIME)
+                            return self._readQueue.pop(0)
                     time.sleep(0.05)
                     
         def _setupReadValue(self, command):
@@ -399,6 +398,23 @@ class TestUssd(unittest.TestCase):
             else:
                 ussd.cancel() # This call shouldn't do anything
             del ussd
+    
+    def test_sendUssdReply(self):
+        """ Test replying in a USSD session via Ussd.reply() """
+        test = ('First menu. Reply with 1 for blah blah blah...', 'Second menu')
+        self.modem.serial.responseSequence = ['+CUSD: 1,"{0}",15\r\n'.format(test[0]), 'OK\r\n']
+        ussd = self.modem.sendUssd('*101#')
+        self.assertIsInstance(ussd, gsmmodem.modem.Ussd)
+        self.assertTrue(ussd.sessionActive, 'Session should be active')
+        self.assertEqual(ussd.message, test[0])
+        # Reply to this active session
+        self.modem.serial.responseSequence = ['+CUSD: 2,"{0}",15\r\n'.format(test[1]), 'OK\r\n']
+        ussd = ussd.reply('1')
+        self.assertIsInstance(ussd, gsmmodem.modem.Ussd)
+        self.assertFalse(ussd.sessionActive, 'Session should be inactive')
+        self.assertEqual(ussd.message, test[1])
+        # Reply to inactive session
+        self.assertRaises(gsmmodem.exceptions.InvalidStateException, ussd.reply, '2')
 
     def test_sendUssdResponseBeforeOk(self):
         """ Tests +CUSD responses that arrive before the +CUSD command's OK is issued (non-standard behaviour) - reported by user """
@@ -425,7 +441,8 @@ class TestUssd(unittest.TestCase):
     def test_sendUssdExtraRelease(self):
         """ Some modems send an extra +CUSD: 2 message when the USSD session is released - see issue #14 on github """
         tests = (('*100#', 'Wrong order test message', ['+CUSD: 2,"Initiating Release",15\r\n', '+CUSD: 0,"Wrong order test message",15\r\n', 'OK\r\n']),
-                 ('*101#', 'Notifications test', ['OK\r\n', '+CUSD: 2,"Initiating Release",15\r\n', '+CUSD: 0,"Notifications test",15\r\n']))
+                 ('*101#', 'Notifications test', ['OK\r\n', '+CUSD: 2,"Initiating Release",15\r\n', '+CUSD: 0,"Notifications test",15\r\n']),
+                 ('*101#', 'Test2', ['OK\r\n', '+CUSD: 3,"Other local client responded",15\r\n', '+CUSD: 0,"Test2",15\r\n']))
         for test in tests:            
             self.modem.serial.responseSequence = test[2]
             ussd = self.modem.sendUssd(test[0])
@@ -436,6 +453,31 @@ class TestUssd(unittest.TestCase):
             atResponse = self.modem.write('AT')
             self.assertEqual(len(atResponse), 1)
             self.assertEqual(atResponse[0], 'OK')
+    
+    def test_sendUssdError(self):
+        """ Test error handling in a USSD session """
+        self.modem.serial.responseSequence = ['+CME ERROR: 30\r\n']
+        self.assertRaises(gsmmodem.exceptions.CmeError, self.modem.sendUssd, '*101#')
+        self.modem.serial.responseSequence = ['+CMS ERROR: 500\r\n']
+        self.assertRaises(gsmmodem.exceptions.CmsError, self.modem.sendUssd, '*101#')
+        self.modem.serial.responseSequence = ['ERROR\r\n']
+        self.assertRaises(gsmmodem.exceptions.CommandError, self.modem.sendUssd, '*101#')
+        
+    def test_sendUssdExtraLinesInResponse(self):
+        """ Test parsing USSD response if it contains extra unsolicited notifications """
+        tests = (('Notification appended', ['OK\r\n', 0.1, '+CUSD: 2,"Notification appended",15\r\n', 'Some random notification!\r\n']),
+                 ('Notification prepended', ['OK\r\n', 0.1, 'Another random notification!\r\n', '+CUSD: 2,"Notification prepended",15\r\n']),
+                 ('Notification before OK', ['Yet another random notification!\r\n', 'OK\r\n', 0.1, '+CUSD: 2,"Notification before OK",15\r\n']))
+        for message, responseSeq in tests:
+            self.modem.serial.responseSequence = responseSeq
+            ussd = self.modem.sendUssd('*101#')
+            self.assertIsInstance(ussd, gsmmodem.modem.Ussd)
+            self.assertEqual(ussd.message, message)
+    
+    def test_sendUssd_responseTimeout(self):
+        """ Test sendUssd() response timeout event """
+        # The following should timeout very quickly due to no +CUSD update being issued
+        self.assertRaises(gsmmodem.exceptions.TimeoutException, self.modem.sendUssd, **{'ussdString': '*101#', 'responseTimeout': 0.05})
 
 
 class TestEdgeCases(unittest.TestCase):
@@ -886,6 +928,30 @@ class TestGsmModemDial(unittest.TestCase):
                     self.assertFalse(call.active, 'Call state invalid: should be inactive. Modem: {0}'.format(modem))
 
             self.modem.close()
+    
+    def test_dialError(self):
+        """ Test error handling when dialing """
+        self.init_modem(fakemodems.HuaweiK3715()) # Use a modem that supports call update notifications
+        self.modem.serial.responseSequence = ['+CME ERROR: 30\r\n']
+        self.assertRaises(gsmmodem.exceptions.CmeError, self.modem.dial, '123')
+        self.modem.serial.responseSequence = ['+CMS ERROR: 500\r\n']
+        self.assertRaises(gsmmodem.exceptions.CmsError, self.modem.dial, '123')
+        self.modem.serial.responseSequence = ['ERROR\r\n']
+        self.assertRaises(gsmmodem.exceptions.CommandError, self.modem.dial, '123')
+    
+    def test_dial_callInitEventTimeout(self):
+        """ Test dial() timeout event: call initiated event never occurs """
+        self.init_modem(fakemodems.HuaweiK3715()) # Use a modem that supports call update notifications
+        # The following should timeout very quickly - ATD does not timeout, but no call is established
+        self.assertRaises(gsmmodem.exceptions.TimeoutException, self.modem.dial, **{'number': '123', 'timeout': 0.05})
+    
+    def test_dial_atdTimeout(self):
+        """ Test dial() timeout event: ATD command timeout """
+        self.init_modem(fakemodems.GenericTestModem())
+        # Disable ATD response
+        self.modem.serial.modem.responses['ATD123;\r'] = []
+        # The following should timeout very quickly - no ATD command response received
+        self.assertRaises(gsmmodem.exceptions.TimeoutException, self.modem.dial, **{'number': '123', 'timeout': 0.05})
 
 
 class TestGsmModemPinConnect(unittest.TestCase):
@@ -962,6 +1028,12 @@ class TestIncomingCall(unittest.TestCase):
                     self.modem.serial.writeCallbackFunc = writeCallbackFunc1
                     call.answer()
                     self.assertTrue(call.answered, 'Call state invalid: should be answered. Modem: {0}'.format(modem))
+                    # Call answer() again - shouldn't do anything
+                    def writeCallbackShouldNotBeCalled(data):
+                        self.fail('Nothing should have been written to modem, but got: {0}'.format(data))
+                    self.modem.serial.writeCallbackFunc = writeCallbackShouldNotBeCalled
+                    call.answer()
+                    # Hang up
                     def writeCallbackFunc2(data):
                         self.assertEqual('ATH\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}". Modem: {2}'.format('ATH\r', data, modem))
                     self.modem.serial.writeCallbackFunc = writeCallbackFunc2
@@ -969,6 +1041,9 @@ class TestIncomingCall(unittest.TestCase):
                     self.assertFalse(call.answered, 'Call state invalid: hangup did not change call state. Modem: {0}'.format(modem))
                     self.assertNotIn(call.id, self.modem.activeCalls)
                     self.assertEqual(len(self.modem.activeCalls), 0)
+                    # Call hangup() again - shouldn't do anything
+                    self.modem.serial.writeCallbackFunc = writeCallbackShouldNotBeCalled
+                    call.hangup()
                 finally:
                     callReceived[0] = True
         
@@ -1046,6 +1121,77 @@ class TestIncomingCall(unittest.TestCase):
             time.sleep(0.05)
         # Since re-enabling the extended format failed,  extended incoming call indications flag should be False
         self.assertFalse(self.modem._extendedIncomingCallIndication, 'Extended incoming call indicator flag should be False because AT+CRC=1 failed')
+
+
+class TestCall(unittest.TestCase):
+    """ Tests Call object APIs that are not covered by TestIncomingCall and TestGsmModemDial """
+    
+    def init_modem(self, modem):
+        global FAKE_MODEM
+        FAKE_MODEM = modem
+        gsmmodem.serial_comms.serial = MockSerialPackage()
+        self.modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')
+        self.modem.connect()
+        FAKE_MODEM = None
+
+    def testDtmf(self):
+        """ Tests sending DTMF tones in a phone call """
+        originalBaseDtmfCommand = gsmmodem.modem.Call.DTMF_COMMAND_BASE
+        for fakeModem in fakemodems.createModems():
+            gsmmodem.modem.Call.DTMF_COMMAND_BASE = originalBaseDtmfCommand
+            self.init_modem(fakeModem)
+            # Make sure everything is set up correctly during connect()
+            self.assertEqual(gsmmodem.modem.Call.DTMF_COMMAND_BASE, fakeModem.dtmfCommandBase, 'Invalid base DTMF command for modem: {0}; expected "{1}", got "{2}"'.format(fakeModem, fakeModem.dtmfCommandBase, gsmmodem.modem.Call.DTMF_COMMAND_BASE))
+            # Test sending DTMF tones in a call
+            call = gsmmodem.modem.Call(self.modem, 1, 1, '+270000000')
+            call.answered = True
+            
+            tests = (('3', 'AT{0}3\r'.format(fakeModem.dtmfCommandBase.format(cid=call.id))),
+                     ('1234', 'AT{0}1;{0}2;{0}3;{0}4\r'.format(fakeModem.dtmfCommandBase.format(cid=call.id))),
+                     ('#0*', 'AT{0}#;{0}0;{0}*\r'.format(fakeModem.dtmfCommandBase.format(cid=call.id))))
+            
+            for tones, expectedCommand in tests:
+                def writeCallbackFunc(data):
+                    self.assertEqual(expectedCommand, data, 'Invalid data written to modem for tones: "{0}"; expected "{1}", got: "{2}". Modem: {3}'.format(tones, expectedCommand[:-1].format(cid=self.id), data[:-1] if data[-1] == '\r' else data, fakeModem))
+                self.modem.serial.writeCallbackFunc = writeCallbackFunc
+                call.sendDtmfTone(tones)
+            
+            # Now attempt to send DTMF tones in an inactive call
+            self.modem.serial.writeCallbackFunc = None
+            call.hangup()
+            self.assertRaises(gsmmodem.exceptions.InvalidStateException, call.sendDtmfTone, '1')
+            self.modem.close()
+        gsmmodem.modem.Call.DTMF_COMMAND_BASE = originalBaseDtmfCommand
+    
+    def testDtmfInterrupted(self):
+        """ Tests interrupting the playback of DTMF tones """
+        self.init_modem(fakemodems.GenericTestModem())
+        call = gsmmodem.modem.Call(self.modem, 1, 1, '+270000000')
+        call.answered = True
+        # Fake an interruption - no network service
+        self.modem.serial.responseSequence = [0.1, '+CME ERROR: 30\r\n']
+        self.assertRaises(gsmmodem.exceptions.InterruptedException, call.sendDtmfTone, '5')
+        # Fake an interruption - operation not allowed
+        self.modem.serial.responseSequence = [0.1, '+CME ERROR: 3\r\n']
+        self.assertRaises(gsmmodem.exceptions.InterruptedException, call.sendDtmfTone, '5')
+        # Fake some other CME error
+        self.modem.serial.responseSequence = [0.1, '+CME ERROR: 1234\r\n']
+        self.assertRaises(gsmmodem.exceptions.CmeError, call.sendDtmfTone, '5')
+        self.modem.close()
+        
+    def testCallAnsweredCallback(self):
+        """ Tests Call object's "call answered" callback mechanism """
+        self.init_modem(fakemodems.GenericTestModem())
+        
+        callbackCalled = [False]
+        def callbackFunc(callObj):
+            self.assertEqual(callObj, call)
+            callbackCalled[0] = True
+        call = gsmmodem.modem.Call(self.modem, 1, 1, '+270000000', callStatusUpdateCallbackFunc=callbackFunc)
+        # Answer the call "remotely" - this should trigger the callback
+        call.answered = True
+        self.assertTrue(callbackCalled[0], "Call status update callback not called for answer event")
+        self.modem.close()
 
 
 class TestSms(unittest.TestCase):

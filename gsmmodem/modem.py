@@ -253,7 +253,7 @@ class GsmModem(SerialComms):
                                        (re.compile(r'^\^CEND:(\d),(\d),(\d)+,(\d)+$'), self._handleCallEnded))
             self._mustPollCallStatus = False
             # Huawei modems use ^DTMF to send DTMF tones; use that instead
-            Call.DTMF_COMMAND_BASE = '^DTMF=1,'
+            Call.DTMF_COMMAND_BASE = '^DTMF={cid},'
             Call.dtmfSupport = True
         elif callUpdateTableHint == 2:
             # Wavecom modem: +WIND notifications supported
@@ -688,13 +688,13 @@ class GsmModem(SerialComms):
             # Wait for the "call originated" notification message
             self._dialEvent = threading.Event()
             try:
-                self.write('ATD{0};'.format(number), waitForResponse=self._waitForAtdResponse)
+                self.write('ATD{0};'.format(number), timeout=timeout, waitForResponse=self._waitForAtdResponse)
             except Exception:
                 self._dialEvent = None # Cancel the thread sync lock
                 raise
         else:
             # Don't wait for a call init update - base the call ID on the number of active calls
-            self.write('ATD{0};'.format(number), waitForResponse=self._waitForAtdResponse)
+            self.write('ATD{0};'.format(number), timeout=timeout, waitForResponse=self._waitForAtdResponse)
             self.log.debug("Not waiting for outgoing call init update message")
             callId = len(self.activeCalls) + 1
             callType = 0 # Assume voice
@@ -1145,7 +1145,7 @@ class GsmModem(SerialComms):
 class Call(object):
     """ A voice call """
     
-    DTMF_COMMAND_BASE = '+VTS='    
+    DTMF_COMMAND_BASE = '+VTS='
     dtmfSupport = False # Indicates whether or not DTMF tones can be sent in calls
     
     def __init__(self, gsmModem, callId, callType, number, callStatusUpdateCallbackFunc=None):
@@ -1187,11 +1187,12 @@ class Call(object):
         @raise InvalidStateException: if the call has not been answered, or is ended while the command is still executing
         """        
         if self.answered:
+            dtmfCommandBase = self.DTMF_COMMAND_BASE.format(cid=self.id)
             toneLen = len(tones)
             if len(tones) > 1:
-                cmd = ('AT{0}{1};{0}' + ';{0}'.join(tones[1:])).format(self.DTMF_COMMAND_BASE, tones[0])                
+                cmd = ('AT{0}{1};{0}' + ';{0}'.join(tones[1:])).format(dtmfCommandBase, tones[0])                
             else:
-                cmd = 'AT{0}={0}'.format(self.DTMF_COMMAND_BASE, tones)
+                cmd = 'AT{0}{1}'.format(dtmfCommandBase, tones)
             try:
                 self._gsmModem.write(cmd, timeout=(5 + toneLen))
             except CmeError as e:
@@ -1207,10 +1208,14 @@ class Call(object):
             raise InvalidStateException('Call is not active (it has not yet been answered, or it has ended).')
     
     def hangup(self):
-        """ End the phone call. """
-        self._gsmModem.write('ATH')
-        self.answered = False
-        self.active = False
+        """ End the phone call.
+        
+        Does nothing if the call is already inactive.
+        """
+        if self.active:
+            self._gsmModem.write('ATH')
+            self.answered = False
+            self.active = False
         if self.id in self._gsmModem.activeCalls:
             del self._gsmModem.activeCalls[self.id]
 

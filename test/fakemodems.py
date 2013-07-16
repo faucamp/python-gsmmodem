@@ -18,6 +18,7 @@ class FakeModem(object):
         self.simBusyErrorCounter = 0 # Number of times to issue a "SIM busy" error
         self.deviceBusyErrorCounter = 0 # Number of times to issue a "Device busy" error
         self.cfun = 1 # +CFUN value to report back
+        self.dtmfCommandBase = '+VTS='
     
     def getResponse(self, cmd):
         if self.deviceBusyErrorCounter > 0:
@@ -221,6 +222,7 @@ $QCPDPLT,$QCPWRDN,$QCDGEN,$BREW,$QCSYSMODE,^CVOICE,^DDSETEX,^pcmrecord,^SYSINFO,
 ^U2DIAG,^CELLMODE,^HSPA,^SCSIOVERTIME,^SETPID,^ADCTEMP,^OPWORD,^CPWORD,^DISLOG,^ANQUERY,^RSCPCFG,^ECIOCFG,\r\n', 'OK\r\n'],
                  'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
         self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
+        self.dtmfCommandBase = '^DTMF={cid},'
     
     def getAtdResponse(self, number):
         return ['OK\r\n']
@@ -311,6 +313,7 @@ class HuaweiE1752(FakeModem):
                                '^SECTIME\r\r\n', '^WPDNP\r\r\n', '^WPDDL\r\r\n', '^WPDCP\r\r\n', 'OK\r\n'],
                  'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
         self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
+        self.dtmfCommandBase = '^DTMF={cid},'
 
     def getAtdResponse(self, number):
         return ['OK\r\n']
