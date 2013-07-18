@@ -1759,7 +1759,6 @@ class TestStoredSms(unittest.TestCase):
         
         tests = (1,2,3)
         for index in tests:        
-            # Test getting all messages
             def writeCallbackFunc(data):
                 self.assertEqual('AT+CMGD={0},0\r'.format(index), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD={0},0'.format(index), data))
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
@@ -1774,6 +1773,38 @@ class TestStoredSms(unittest.TestCase):
                 self.modem.serial.writeCallbackFunc = writeCallbackFunc2
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
             self.modem.deleteStoredSms(index, memory=mem)
+            
+    def test_deleteMultipleStoredSms(self):
+        self.initFakeModemResponses(textMode=True)
+        self.initModem(True, None)
+        
+        tests = (4,3,2,1)
+        for delFlag in tests:        
+            # Test getting all messages
+            def writeCallbackFunc(data):
+                self.assertEqual('AT+CMGD=1,{0}\r'.format(delFlag), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD=1,{0}'.format(delFlag), data))
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            self.modem.deleteMultipleStoredSms(delFlag)
+        # Test switching SMS memory
+        tests = ((4, 'TEST1'), (4, 'ME'))
+        for delFlag, mem in tests:
+            def writeCallbackFunc(data):
+                self.assertEqual('AT+CPMS="{0}"\r'.format(mem), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CPMS="{0}"'.format(mem), data))
+                def writeCallbackFunc2(data):
+                    self.assertEqual('AT+CMGD=1,{0}\r'.format(delFlag), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD=1,{0}'.format(delFlag), data))
+                self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            self.modem.deleteMultipleStoredSms(delFlag, memory=mem)
+        # Test default delFlag value
+        delFlag = 4
+        def writeCallbackFunc3(data):
+            self.assertEqual('AT+CMGD=1,{0}\r'.format(delFlag), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGD=1,{0}'.format(delFlag), data))
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc3
+        self.modem.deleteMultipleStoredSms()
+        # Test invalid delFlag values
+        tests = (0, 5, -3)
+        for delFlag in tests:
+            self.assertRaises(ValueError, self.modem.deleteMultipleStoredSms, **{'delFlag': delFlag})
     
     def test_readStoredSms_pdu(self):
         """ Tests reading stored SMS messages (PDU mode) """

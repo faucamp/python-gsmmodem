@@ -824,7 +824,7 @@ class GsmModem(SerialComms):
         if delete:
             if status == Sms.STATUS_ALL:
                 # Delete all messages
-                self.write('AT+CMGD=1,4')
+                self.deleteMultipleStoredSms()
             else:
                 for msgIndex in delMessages:
                     self.deleteStoredSms(msgIndex)
@@ -1058,13 +1058,39 @@ class GsmModem(SerialComms):
         
         @param index: The index of the SMS message in the specified memory
         @type index: int
-        @param memory: The memory type to read from. If None, use the current default SMS read memory
+        @param memory: The memory type to delete from. If None, use the current default SMS read/delete memory
         @type memory: str or None
         
-        @raise CommandError: if unable to read the stored message
+        @raise CommandError: if unable to delete the stored message
         """
         self._setSmsMemory(readDelete=memory)
         self.write('AT+CMGD={0},0'.format(index))
+    
+    def deleteMultipleStoredSms(self, delFlag=4, memory=None):
+        """ Deletes all SMS messages that have the specified read status.
+        
+        The messages are read from the memory set by the "memory" parameter.
+        The value of the "delFlag" paramater is the same as the "DelFlag" parameter of the +CMGD command:
+        1: Delete All READ messages
+        2: Delete All READ and SENT messages
+        3: Delete All READ, SENT and UNSENT messages
+        4: Delete All messages (this is the default)
+ 
+        @param delFlag: Controls what type of messages to delete; see description above.
+        @type delFlag: int
+        @param memory: The memory type to delete from. If None, use the current default SMS read/delete memory
+        @type memory: str or None
+        @param delete: If True, delete returned messages from the device/SIM card
+        @type delete: bool
+        
+        @raise ValueErrror: if "delFlag" is not in range [1,4]
+        @raise CommandError: if unable to delete the stored messages
+        """
+        if 0 < delFlag <= 4:
+            self._setSmsMemory(readDelete=memory)
+            self.write('AT+CMGD=1,{0}'.format(delFlag))
+        else:
+            raise ValueError('"delFlag" must be in range [1,4]')
     
     def _handleUssd(self, lines):
         """ Handler for USSD event notification line(s) """
