@@ -128,7 +128,7 @@ class GsmModem(SerialComms):
     # Used for parsing USSD event notifications
     CUSD_REGEX = re.compile(r'^\+CUSD:\s*(\d),"(.*)",(\d+)$', re.DOTALL)
     # Used for parsing SMS status reports
-    CDSI_REGEX = re.compile(r'\+CDSI:\s*([^,]+),(\d+)$')
+    CDSI_REGEX = re.compile(r'\+CDSI:\s*"([^"]+)",(\d+)$')
     
     def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallback=None):
         super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification)
@@ -612,8 +612,17 @@ class GsmModem(SerialComms):
     def sendSms(self, destination, text, waitForDeliveryReport=False, deliveryTimeout=15):
         """ Send an SMS text message
         
-        @param destination: The recipient's phone number
-        @param text: The message text
+        @param destination: the recipient's phone number
+        @type destination: str
+        @param text: the message text
+        @type text: str
+        @param waitForDeliveryReport: if True, this method blocks until a delivery report is received for the sent message
+        @type waitForDeliveryReport: boolean
+        @param deliveryReport: the maximum time in seconds to wait for a delivery report (if "waitForDeliveryReport" is True)
+        @type deliveryTimeout: int or float 
+        
+        @raise CommandError: if an error occurs while attempting to send the message
+        @raise TimeoutException: if the operation times out
         """
         if self._smsTextMode:
             self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq='> ')
@@ -623,6 +632,8 @@ class GsmModem(SerialComms):
             for pdu in pdus:
                 self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=3, expectedResponseTermSeq='> ')
                 result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=15, writeTerm=chr(26))) # example: +CMGS: xx
+        if result == None:
+            raise CommandError('Modem did not respond with +CMGS response')
         reference = int(result[7:])
         self._smsRef = reference + 1
         if self._smsRef > 255:

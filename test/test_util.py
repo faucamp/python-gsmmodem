@@ -5,10 +5,11 @@
 from __future__ import print_function
 
 import sys, time, unittest, logging, re
+from datetime import timedelta
 
 from . import compat # For Python 2.6 compatibility
 
-from gsmmodem.util import allLinesMatchingPattern, lineMatching, lineStartingWith, lineMatchingPattern
+from gsmmodem.util import allLinesMatchingPattern, lineMatching, lineStartingWith, lineMatchingPattern, SimpleOffsetTzInfo
 
 class TestUtil(unittest.TestCase):
     """ Tests misc utilities from gsmmodem.util """
@@ -62,6 +63,16 @@ class TestUtil(unittest.TestCase):
         result = allLinesMatchingPattern(re.compile('^ZZZ\d+$'), lines)
         self.assertIsInstance(result, list)
         self.assertEqual(result, [])
+        
+    def test_SimpleOffsetTzInfo(self):
+        """ Basic test for the SimpleOffsetTzInfo class """
+        tests = (2, -4, 0, 3.5)
+        for hours in tests:
+            tz = SimpleOffsetTzInfo(hours)
+            self.assertEqual(tz.offsetInHours, hours)
+            self.assertEqual(tz.utcoffset(None), timedelta(hours=hours))
+            self.assertEqual(tz.dst(None), timedelta(0))
+            self.assertIsInstance(tz.__repr__(), str)
 
 
 if __name__ == "__main__":

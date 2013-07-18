@@ -95,7 +95,7 @@ class PukRequiredError(SecurityException):
     _description = "PUK required (SIM locked)"
     
     def __init__(self, command, code=12):
-        super(PinRequiredError, self).__init__(command, code)
+        super(PukRequiredError, self).__init__(command, code)
 
 
 class CmsError(CommandError):

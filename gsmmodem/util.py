@@ -10,6 +10,11 @@ class SimpleOffsetTzInfo(tzinfo):
     """ Very simple implementation of datetime.tzinfo offering set timezone offset for datetime instances """
     
     def __init__(self, offsetInHours=None):
+        """ Constructs a new tzinfo instance using an amount of hours as an offset
+        
+        @param offsetInHours: The timezone offset, in hours (may be negative)
+        @type offsetInHours: int or float
+        """
         if offsetInHours != None: #pragma: no cover
             self.offsetInHours = offsetInHours        
     
