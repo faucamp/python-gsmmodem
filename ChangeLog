@@ -1,3 +1,10 @@
+* Thu Jul 18 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.9
+- Added UDH support for SMS PDUs
+- Stored messages APIs made public
+- USSD support improved on different modem types
+- Vastly improved unit test coverage
+- Lots of bugfixes and stability improvements
+
 * Tue May 21 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.8
 - Support added for ZTE modems
 - Improved support for Huawei modems
