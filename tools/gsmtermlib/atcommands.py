@@ -326,6 +326,30 @@ These extended indications are:\n\
 ('AT+ILRR', (c[7], 'DTE-DCE Local Rate Reporting')),
 ('AT+CRLP', (c[7], 'Radio Link Protocol Parameters')),
 ('AT+DOPT', (c[7], 'Radio Link Protocol Parameters')),
+('AT+CGDCONT', (c[7], 'Define PDP Context', (('<cid>', 'PDP Context Identifier - a numeric parameter (1-32) which specifies a particular \
+PDP context definition. The parameter is local to the TE-MT interface and is used in \
+other PDP context-related commands.'),
+                                             ('<PDP_type>', 'A string parameter which specifies the type of packet data protocol. (IP, IPV6, PPP, X.25 etc)'),
+                                             ('<APN>', 'Access Point Name. String parameter; logical name that is used to select the GGSN or external packet data network'),
+                                             ('<PDP_address>', 'String parameter that identifies the MT in the address space applicable to the PDP. If null/omitted, a dynamic address may be requested.'),
+                                             ('<d_comp>', 'PDP data compression. Values:\n\
+0 - off (default)\n\
+1 - on'),
+                                             ('<h_comp>', 'PDP header compression. Values:\n\
+0 - off (default)\n\
+1 - on')), None, 'This command specifies the PDP (Packet Data Protocol) context parameter values, such as PDP type (IP, IPV6, PPP, X.25 etc), APN, data compression, header compression, etc.')),
+('AT+CGATT', (c[7], 'GPRS attach or detach', (('<state>', 'indicates the state of GPRS attachment:\n\
+0 - detached\n\
+1 - attached\n'),), None, 'The execution command is used to attach the MT to, or detach the MT from, the GPRS\
+service. After the command has completed, the MT remains in V.25ter command state.\n\
+Any active PDP contexts will be automatically deactivated when the attachment state changes to detached.')),
+
+('AT+CGACT', (c[7], 'PDP context activate or deactivate', (('<state>', 'indicates the state of PDP context activation:\n\
+0 - deactivated\n\
+1 - activated\n'),
+                                                           ('<cid>', 'a numeric parameter which specifies a particular PDP context.')),
+               None, 'The execution command is used to activate or deactivate the specified PDP context (s).\n\
+After the command has completed, the MT remains in V.25ter command state.')),
 # Fax
 ('AT+FTM', (c[8], 'Transmit Speed')),
 ('AT+FRM', (c[8], 'Receive Speed')),
