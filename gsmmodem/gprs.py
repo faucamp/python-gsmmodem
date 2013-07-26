@@ -87,10 +87,10 @@ class GprsModem(GsmModem):
     def initDataConnection(self, pdpCid=1):
         """ Initializes a packet data (GPRS) connection using the specified PDP Context ID """
         # From this point on, we don't want the read thread interfering
-        self.log.debug('Stopping read thread')
-        self.alive = False
-        self.rxThread.join()
+        #self.log.debug('Stopping read thread')
+        #self.alive = False
+        #self.rxThread.join()
         self.log.debug('Init data connection')
-        self.write('ATD*99#', waitForResponse=False)
+        self.write('ATD*99#', expectedResponseTermSeq="CONNECT\r")
         self.log.debug('Data connection open; ready for PPP comms')
         # From here on we use PPP to communicate with the network
