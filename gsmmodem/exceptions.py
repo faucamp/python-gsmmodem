@@ -6,6 +6,11 @@ class GsmModemException(Exception):
 
 class TimeoutException(GsmModemException):
     """ Raised when a write command times out """
+    
+    def __init__(self, data=None):
+        """ @param data: Any data that was read was read before timeout occurred (if applicable) """
+        super(TimeoutException, self).__init__(data)
+        self.data = data 
 
 
 class InvalidStateException(GsmModemException):

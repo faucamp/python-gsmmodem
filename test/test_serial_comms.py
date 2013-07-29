@@ -199,6 +199,27 @@ class TestWrite(unittest.TestCase):
         # Serial comms will not response (no response sequence specified)
         self.assertRaises(TimeoutException, self.serialComms.write, 'test\r', waitForResponse=True, timeout=0.1)
 
+    def test_writeTimeout_data(self):
+        """ Tests passing partial data along with a TimeoutException """
+        self.serialComms.serial.responseSequence = ['abc\r\n', 0.5, 'def\r\n']
+        self.serialComms.serial.flushResponseSequence = True
+        try:
+            self.serialComms.write('test\r', waitForResponse=True, timeout=0.1)
+        except TimeoutException as timeout:
+            # The 0.5s pause in the response should cause the write to timeout but still return the first part
+            self.assertEqual(timeout.data, ['abc'])
+        else:
+            self.fail('TimeoutException not thrown')
+    
+    def test_writeTimeout_noData(self):
+        """ Similar to test_writeTimeout(), but checks TimeoutException's data field is None """
+        try:
+            self.serialComms.write('test\r', waitForResponse=True, timeout=0.1)
+        except TimeoutException as timeout:
+            self.assertEqual(timeout.data, None)
+        else:
+            self.fail('TimeoutException not thrown')
+
 
 if __name__ == "__main__":
     logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)

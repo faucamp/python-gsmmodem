@@ -1021,6 +1021,29 @@ class TestGsmModemPinConnect(unittest.TestCase):
         self.assertRaises(gsmmodem.exceptions.PukRequiredError, self.modem.connect, **{'pin': '1234'})
         self.modem.close()
         SERIAL_WRITE_CALLBACK_FUNC = None
+    
+    def test_connectPin_timeoutEvents(self):
+        """ Test different TimeoutException scenarios when checking PIN status (github issue #19) """
+        
+        tests = (([0.05], True), (['+CPIN: READY\r\n'], False), (['FIRST LINE\r\n', 'SECOND LINE\r\n'], True))
+        
+        for response, shouldTimeout in tests:
+            def writeCallbackFunc(data):
+                if data.startswith('AT+CPIN?'):
+                    # Fake "incorrect PIN" response
+                    self.modem.serial.responseSequence = response
+        
+            global SERIAL_WRITE_CALLBACK_FUNC
+            SERIAL_WRITE_CALLBACK_FUNC = writeCallbackFunc
+            fakeModem = fakemodems.GenericTestModem()
+            fakeModem.pinLock = False
+            self.init_modem(fakeModem)
+            if shouldTimeout:
+                self.assertRaises(gsmmodem.exceptions.TimeoutException, self.modem.connect)
+            else:
+                self.modem.connect() # should run fine
+            self.modem.close()
+            SERIAL_WRITE_CALLBACK_FUNC = None
 
 
 class TestIncomingCall(unittest.TestCase):
@@ -1938,7 +1961,6 @@ class TestSmsStatusReports(unittest.TestCase):
                   ['+CMGR: 0,,24\r\n', '07917248014000F506B70AA18092020000317071518590803170715185418000\r\n', 'OK\r\n'],
                   Sms.STATUS_RECEIVED_UNREAD, # message read status 
                   '0829200000', # number
-                  'XXX', # SMSC
                   183, # reference
                   datetime(2013, 7, 17, 15, 58, 9, tzinfo=SimpleOffsetTzInfo(2)), # sentTime
                   datetime(2013, 7, 17, 15, 58, 14, tzinfo=SimpleOffsetTzInfo(2)), # deliverTime
@@ -1947,7 +1969,6 @@ class TestSmsStatusReports(unittest.TestCase):
                   ['+CMGR: ,,27\r\n', '0297F1061C0F910B487228297020F5317062419272803170624192138000\r\n', 'OK\r\n'],
                   Sms.STATUS_RECEIVED_UNREAD,
                   '+b08427829207025', # <-- note the broken number
-                  'YYY', # SMSC
                   28,
                   datetime(2013, 7, 26, 14, 29, 27, tzinfo=SimpleOffsetTzInfo(2)), # sentTime
                   datetime(2013, 7, 26, 14, 29, 31, tzinfo=SimpleOffsetTzInfo(2)), # deliverTime
@@ -1956,14 +1977,13 @@ class TestSmsStatusReports(unittest.TestCase):
         
         callbackDone = [False]
         
-        for index, mem, responseSeq, msgStatus, number, smsc, reference, sentTime, deliverTime, deliveryStatus in tests:
+        for index, mem, responseSeq, msgStatus, number, reference, sentTime, deliverTime, deliveryStatus in tests:
             callbackDone[0] = False
             def smsStatusReportCallbackFuncText(sms):
                 try:
                     self.assertIsInstance(sms, gsmmodem.modem.StatusReport)
                     self.assertEqual(sms.status, msgStatus, 'Status report read status incorrect. Expected: "{0}", got: "{1}"'.format(msgStatus, sms.status))
                     self.assertEqual(sms.number, number, 'SMS sender number incorrect. Expected: "{0}", got: "{1}"'.format(number, sms.number))
-                    self.assertEqual(sms.smsc, smsc, 'SMSC incorrect. Expected: "{0}", got: "{1}"'.format(smsc, sms.smsc))
                     self.assertEqual(sms.reference, reference, 'Status report SMS reference number incorrect. Expected: "{0}", got: "{1}"'.format(reference, sms.reference))
                     self.assertIsInstance(sms.timeSent, datetime, 'SMS sent time type invalid. Expected: datetime.datetime, got: {0}"'.format(type(sms.timeSent)))
                     self.assertEqual(sms.timeSent, sentTime, 'SMS sent time incorrect. Expected: "{0}", got: "{1}"'.format(sentTime, sms.timeSent))

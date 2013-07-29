@@ -132,6 +132,10 @@ class SerialComms(object):
                 else: # Response timed out
                     self._responseEvent = None
                     self._expectResponseTermSeq = False
-                    raise TimeoutException()
+                    if len(self._response) > 0:
+                        # Add the partial response to the timeout exception
+                        raise TimeoutException(self._response)
+                    else:
+                        raise TimeoutException()
             else:                
                 self.serial.write(data)

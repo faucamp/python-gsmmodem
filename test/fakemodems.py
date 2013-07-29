@@ -11,7 +11,7 @@ class FakeModem(object):
         self.responses = {}
         self.commandsNoPinRequired = []
         self.commandsSimBusy = [] # Commands that may trigger "SIM busy" errors
-        self._pinLock = False
+        self.pinLock = False
         self.defaultResponse = ['OK\r\n']
         self.pinRequiredErrorResponse = ['+CME ERROR: 11\r\n']
         self.smscNumber = None
@@ -140,7 +140,11 @@ class GenericTestModem(FakeModem):
 
 
 class WavecomMultiband900E1800(FakeModem):
-    """ Family of old Wavecom serial modems """
+    """ Family of old Wavecom serial modems
+    
+    User franciumlin also submitted the following improvements to this profile:
+      +CPIN replies are not ended with "OK"
+    """
 
     def __init__(self):
         super(WavecomMultiband900E1800, self).__init__()
@@ -158,7 +162,7 @@ class WavecomMultiband900E1800(FakeModem):
                  'AT+CPMS="SM","SM"\r': ['+CPMS: 14,50,14,50\r\n', 'OK\r\n'],
                  'AT+CNMI=2,1,0,2\r': ['OK\r\n'],
                  'AT+CVHU=0\r': ['ERROR\r\n'],
-                 'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
+                 'AT+CPIN?\r': ['+CPIN: READY\r\n']} # <---- note: missing 'OK\r\n'
         self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
     
     def getResponse(self, cmd):
@@ -166,6 +170,17 @@ class WavecomMultiband900E1800(FakeModem):
             self.deviceBusyErrorCounter = 2 # This modem takes quite a while to recover from this
             return ['OK\r\n']
         return super(WavecomMultiband900E1800, self).getResponse(cmd)
+    
+    @property
+    def pinLock(self):
+        return self._pinLock
+    @pinLock.setter
+    def pinLock(self, pinLock):
+        self._pinLock = pinLock
+        if self._pinLock == True:
+            self.responses['AT+CPIN?\r'] = ['+CPIN: SIM PIN\r\n']  # missing OK
+        else:
+            self.responses['AT+CPIN?\r'] = ['+CPIN: READY\r\n'] # missing OK
     
     def getAtdResponse(self, number):
         return []
