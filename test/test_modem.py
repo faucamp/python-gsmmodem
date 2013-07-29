@@ -1913,7 +1913,7 @@ class TestSmsStatusReports(unittest.TestCase):
         callbackInfo = [False, '', '', -1, None, '', None]
         def smsCallbackFunc1(sms):
             try:
-                self.assertIsInstance(sms, gsmmodem.modem.ReceivedSms)
+                self.assertIsInstance(sms, gsmmodem.modem.StatusReport)
                 # Since the +CMGR response did not include the SMS's status, see if the default fallback was loaded correctly
                 self.assertEqual(sms.status, gsmmodem.modem.Sms.STATUS_RECEIVED_UNREAD)
             finally:
@@ -1924,10 +1924,10 @@ class TestSmsStatusReports(unittest.TestCase):
                 self.modem.serial.flushResponseSequence = True
                 self.modem.serial.responseSequence = zteResponse
 
-        self.initModem(smsReceivedCallbackFunc=smsCallbackFunc1)
+        self.initModem(smsStatusReportCallback=smsCallbackFunc1)
         # Fake a "new message" notification
-        self.modem.serial.responseSequence = ['+CMTI: "SM",1\r\n']
         self.modem.serial.writeCallbackFunc = writeCallback1
+        self.modem.serial.responseSequence = ['+CDSI: "SM",1\r\n']
         # Wait for the handler function to finish
         while callbackInfo[0] == False:
             time.sleep(0.1)
