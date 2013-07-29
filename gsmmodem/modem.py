@@ -534,7 +534,7 @@ class GsmModem(SerialComms):
                 self.CMGR_SM_DELIVER_REGEX_TEXT = re.compile(r'^\+CMGR: "([^"]+)","([^"]+)",[^,]*,"([^"]+)"$')
                 self.CMGR_SM_REPORT_REGEXT_TEXT = re.compile(r'^\+CMGR: ([^,]*),\d+,(\d+),"{0,1}([^"]*)"{0,1},\d*,"([^"]+)","([^"]+)",(\d+)$')
         elif self.CMGR_REGEX_PDU == None:
-            self.CMGR_REGEX_PDU = re.compile(r'^\+CMGR: (\d+),(\d*),(\d+)$')
+            self.CMGR_REGEX_PDU = re.compile(r'^\+CMGR: (\d*),(\d*),(\d+)$')
             
     @property
     def smsc(self):
@@ -1044,6 +1044,11 @@ class GsmModem(SerialComms):
             if not cmgrMatch:
                 raise CommandError('Failed to parse PDU-mode SMS message +CMGR response: {0}'.format(msgData))
             stat, alpha, length = cmgrMatch.groups()
+            try:
+                stat = int(stat)
+            except Exception:
+                # Some modems (ZTE) do not always read return status - default to RECEIVED UNREAD
+                stat = Sms.STATUS_RECEIVED_UNREAD
             pdu = msgData[1]
             smsDict = decodeSmsPdu(pdu)
             if smsDict['type'] == 'SMS-DELIVER':

@@ -1306,7 +1306,7 @@ class TestSms(unittest.TestCase):
             self.assertEqual(sms.reference, ref, 'Sent SMS reference incorrect. Expected "{0}", got "{1}"'.format(ref, sms.reference))
             self.assertEqual(sms.status, gsmmodem.modem.SentSms.ENROUTE, 'Sent SMS status should have been {0} ("ENROUTE"), but is: {1}'.format(gsmmodem.modem.SentSms.ENROUTE, sms.status))
         self.modem.close()
-        
+    
     def test_sendSmsResponseMixedWithUnsolictedMessages(self):
         """ Tests sending a SMS messages (PDU mode), but with unsolicted messages mixed into the modem responses
         - the only difference here is that the modem's responseSequence contains unsolicted messages
@@ -1905,26 +1905,65 @@ class TestSmsStatusReports(unittest.TestCase):
                 time.sleep(0.1)
         self.modem.close()
         
+    def test_receiveSmsPduMode_problemCases(self):
+        """ Test receiving PDU-mode SMS using data captured from failed operations/bug reports """
+        # AT+CMGR response from ZTE modem breaks incoming message read - simply test that we can parse it properly
+        zteResponse = ['+CMGR: ,,27\r\n', '0297F1061C0F910B487228297020F5317062419272803170624192138000\r\n', 'OK\r\n']
+        
+        callbackInfo = [False, '', '', -1, None, '', None]
+        def smsCallbackFunc1(sms):
+            try:
+                self.assertIsInstance(sms, gsmmodem.modem.ReceivedSms)
+                # Since the +CMGR response did not include the SMS's status, see if the default fallback was loaded correctly
+                self.assertEqual(sms.status, gsmmodem.modem.Sms.STATUS_RECEIVED_UNREAD)
+            finally:
+                callbackInfo[0] = True
+        
+        def writeCallback1(data):
+            if data.startswith('AT+CMGR'):
+                self.modem.serial.flushResponseSequence = True
+                self.modem.serial.responseSequence = zteResponse
+
+        self.initModem(smsReceivedCallbackFunc=smsCallbackFunc1)
+        # Fake a "new message" notification
+        self.modem.serial.responseSequence = ['+CMTI: "SM",1\r\n']
+        self.modem.serial.writeCallbackFunc = writeCallback1
+        # Wait for the handler function to finish
+        while callbackInfo[0] == False:
+            time.sleep(0.1)
+        
     def test_receiveStatusReportPduMode(self):
         """ Tests receiving SMS status reports in PDU mode """
         tests = ((3, 'SM',
                   ['+CMGR: 0,,24\r\n', '07917248014000F506B70AA18092020000317071518590803170715185418000\r\n', 'OK\r\n'],
                   Sms.STATUS_RECEIVED_UNREAD, # message read status 
                   '0829200000', # number
+                  'XXX', # SMSC
                   183, # reference
                   datetime(2013, 7, 17, 15, 58, 9, tzinfo=SimpleOffsetTzInfo(2)), # sentTime
                   datetime(2013, 7, 17, 15, 58, 14, tzinfo=SimpleOffsetTzInfo(2)), # deliverTime
                   StatusReport.DELIVERED), # delivery status
+                 (1, 'SM', # This output was captured from a ZTE modem that seems to be broken (PDU is semi-invalid (SMSC length incorrect), and +CMGR output missing status)
+                  ['+CMGR: ,,27\r\n', '0297F1061C0F910B487228297020F5317062419272803170624192138000\r\n', 'OK\r\n'],
+                  Sms.STATUS_RECEIVED_UNREAD,
+                  '+b08427829207025', # <-- note the broken number
+                  'YYY', # SMSC
+                  28,
+                  datetime(2013, 7, 26, 14, 29, 27, tzinfo=SimpleOffsetTzInfo(2)), # sentTime
+                  datetime(2013, 7, 26, 14, 29, 31, tzinfo=SimpleOffsetTzInfo(2)), # deliverTime
+                  StatusReport.DELIVERED),
                  )
         
         callbackDone = [False]
         
-        for index, mem, responseSeq, msgStatus, number, reference, sentTime, deliverTime, deliveryStatus in tests:            
+        for index, mem, responseSeq, msgStatus, number, smsc, reference, sentTime, deliverTime, deliveryStatus in tests:
+            callbackDone[0] = False
             def smsStatusReportCallbackFuncText(sms):
                 try:
                     self.assertIsInstance(sms, gsmmodem.modem.StatusReport)
                     self.assertEqual(sms.status, msgStatus, 'Status report read status incorrect. Expected: "{0}", got: "{1}"'.format(msgStatus, sms.status))
-                    self.assertEqual(sms.number, number, 'SMS sender number incorrect. Expected: "{0}", got: "{1}"'.format(number, sms.number))                    
+                    self.assertEqual(sms.number, number, 'SMS sender number incorrect. Expected: "{0}", got: "{1}"'.format(number, sms.number))
+                    self.assertEqual(sms.smsc, smsc, 'SMSC incorrect. Expected: "{0}", got: "{1}"'.format(smsc, sms.smsc))
                     self.assertEqual(sms.reference, reference, 'Status report SMS reference number incorrect. Expected: "{0}", got: "{1}"'.format(reference, sms.reference))
                     self.assertIsInstance(sms.timeSent, datetime, 'SMS sent time type invalid. Expected: datetime.datetime, got: {0}"'.format(type(sms.timeSent)))
                     self.assertEqual(sms.timeSent, sentTime, 'SMS sent time incorrect. Expected: "{0}", got: "{1}"'.format(sentTime, sms.timeSent))

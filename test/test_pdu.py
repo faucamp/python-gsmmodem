@@ -414,7 +414,14 @@ class TestSmsPdu(unittest.TestCase):
                    'text': 'Hello world!'}),
                  (b'0019000B917228001011F100003170013193008017D474BB3CA787DB70903DCC4E93D3F43C885E9ED301', # absolute validity period
                   {'text': 'Timestamp validity test',
-                   'validity': datetime(2013, 7, 10, 13, 39, tzinfo=SimpleOffsetTzInfo(2))})
+                   'validity': datetime(2013, 7, 10, 13, 39, tzinfo=SimpleOffsetTzInfo(2))}),
+                 # Semi-invalid status report PDU captured from a ZTE modem 
+                 (b'0297F1061C0F910B487228297020F5317062419272803170624192138000',
+                  {'type': 'SMS-STATUS-REPORT',
+                   'number': '+b08427829207025', # <- broken number (invalid PDU data; the reference number is more than a single byte (or they added something))
+                   'reference': 28,
+                   'time': datetime(2013, 7, 26, 14, 29, 27, tzinfo=SimpleOffsetTzInfo(2)),
+                   'discharge': datetime(2013, 7, 26, 14, 29, 31, tzinfo=SimpleOffsetTzInfo(2))})
                  )
 
         for pdu, expected in tests:
