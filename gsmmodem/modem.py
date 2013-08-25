@@ -126,7 +126,7 @@ class GsmModem(SerialComms):
     # Used for parsing SMS message reads (PDU mode)
     CMGR_REGEX_PDU = None
     # Used for parsing USSD event notifications
-    CUSD_REGEX = re.compile(r'^\+CUSD:\s*(\d),"(.*)",(\d+)$', re.DOTALL)
+    CUSD_REGEX = re.compile(r'\+CUSD:\s*(\d),"(.*?)",(\d+)', re.DOTALL)
     # Used for parsing SMS status reports
     CDSI_REGEX = re.compile(r'\+CDSI:\s*"([^"]+)",(\d+)$')
     
@@ -683,11 +683,10 @@ class GsmModem(SerialComms):
 
         # Some modems issue the +CUSD response before the acknowledgment "OK" - check for that
         if len(cusdResponse) > 1:
-            # Look for more than one +CUSD response because of certain modems' strange behaviour
-            cusdMatches = allLinesMatchingPattern(self.CUSD_REGEX, cusdResponse)
-            if len(cusdMatches) > 0:
+            cusdResponseFound = lineStartingWith('+CUSD', cusdResponse) != None
+            if cusdResponseFound:
                 self._ussdSessionEvent = None # Cancel thread sync lock
-                return self._parseCusdResponse(cusdMatches)
+                return self._parseCusdResponse(cusdResponse)
         # Wait for the +CUSD notification message
         if self._ussdSessionEvent.wait(responseTimeout):
             self._ussdSessionEvent = None
@@ -1113,17 +1112,23 @@ class GsmModem(SerialComms):
         """ Handler for USSD event notification line(s) """
         if self._ussdSessionEvent:
             # A sendUssd() call is waiting for this response - parse it
-            cusdMatches = allLinesMatchingPattern(self.CUSD_REGEX, lines)
-            if len(cusdMatches) > 0:
-                self._ussdResponse = self._parseCusdResponse(cusdMatches)
+            self._ussdResponse = self._parseCusdResponse(lines)
             # Notify waiting thread
             self._ussdSessionEvent.set()
     
-    def _parseCusdResponse(self, cusdMatches):
+    def _parseCusdResponse(self, lines):
         """ Parses one or more +CUSD notification lines (for USSD)
         @return: USSD response object
         @rtype: gsmmodem.modem.Ussd
         """
+        if len(lines) > 1:
+            # Issue #21: Some modem/network combinations use \r\n as in-message EOL indicators;
+            # - join lines to compensate for that (thanks to davidjb for the fix)
+            # Also, look for more than one +CUSD response because of certain modems' strange behaviour
+            cusdMatches = list(self.CUSD_REGEX.finditer('\r\n'.join(lines)))
+        else:
+            # Single standard +CUSD response
+            cusdMatches = [self.CUSD_REGEX.match(lines[0])]
         message = None
         sessionActive = True
         if len(cusdMatches) > 1:
