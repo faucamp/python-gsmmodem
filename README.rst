@@ -94,6 +94,22 @@ setup.py by doing::
 This will run all unit tests and report on code coverage statistics.
 
 
+Building documentation
+----------------------
+
+This package contains `Sphinx <http://sphinx-doc.org>`_-based documentation.
+To manually build or test the documentation locally, do the following::
+
+   git clone https://github.com/faucamp/python-gsmmodem.git
+   cd python-gsmmodem
+   pip install .[doc]
+   cd doc
+   make html
+
+For true isolation, you may wish to run the above commands within a
+`virtualenv <http://www.virtualenv.org/>`_, which will help you manage
+this development installation.
+
 License information
 -------------------
 
