@@ -1,6 +1,7 @@
 API
 ===
 
+
 GSM Modem
 ---------
 
@@ -14,3 +15,16 @@ Serial Communications
 .. automodule:: gsmmodem.serial_comms
    :members:
 
+
+PDU
+---
+
+.. automodule:: gsmmodem.pdu
+   :members:
+
+
+Utilities
+---------
+
+.. automodule:: gsmmodem.util
+   :members:

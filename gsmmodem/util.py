@@ -12,8 +12,8 @@ class SimpleOffsetTzInfo(tzinfo):
     def __init__(self, offsetInHours=None):
         """ Constructs a new tzinfo instance using an amount of hours as an offset
         
-        @param offsetInHours: The timezone offset, in hours (may be negative)
-        @type offsetInHours: int or float
+        :param offsetInHours: The timezone offset, in hours (may be negative)
+        :type offsetInHours: int or float
         """
         if offsetInHours != None: #pragma: no cover
             self.offsetInHours = offsetInHours        
@@ -34,11 +34,11 @@ def parseTextModeTimeStr(timeStr):
     (yy = year, MM = month, dd = day, hh = hour, mm = minute, ss = second, zz = time zone
     [Note: the unit of time zone is a quarter of an hour])
     
-    @param timeStr: The time string to parse
-    @type timeStr: str
+    :param timeStr: The time string to parse
+    :type timeStr: str
     
-    @return: datetime object representing the specified time string
-    @rtype: datetime.datetime
+    :return: datetime object representing the specified time string
+    :rtype: datetime.datetime
     """
     msgTime = timeStr[:-3]
     tzOffsetHours = int(int(timeStr[-3:]) * 0.25)
@@ -60,11 +60,11 @@ def lineMatching(regexStr, lines):
 
     Note: if you have a pre-compiled regex pattern, use lineMatchingPattern() instead
 
-    @type regexStr: Regular expression string to use
-    @type lines: List of lines to search
+    :type regexStr: Regular expression string to use
+    :type lines: List of lines to search
 
-    @return: the regular expression match for the first line that matches the specified regex, or None if no match was found
-    @rtype: re.Match
+    :return: the regular expression match for the first line that matches the specified regex, or None if no match was found
+    :rtype: re.Match
     """
     regex = re.compile(regexStr)
     for line in lines:
@@ -80,11 +80,11 @@ def lineMatchingPattern(pattern, lines):
 
     Note: if you are using a regex pattern string (i.e. not already compiled), use lineMatching() instead
 
-    @type pattern: Compiled regular expression pattern to use
-    @type lines: List of lines to search
+    :type pattern: Compiled regular expression pattern to use
+    :type lines: List of lines to search
 
-    @return: the regular expression match for the first line that matches the specified regex, or None if no match was found
-    @rtype: re.Match
+    :return: the regular expression match for the first line that matches the specified regex, or None if no match was found
+    :rtype: re.Match
     """
     for line in lines:
         m = pattern.match(line)
@@ -96,11 +96,11 @@ def lineMatchingPattern(pattern, lines):
 def allLinesMatchingPattern(pattern, lines):
     """ Like lineMatchingPattern, but returns all lines that match the specified pattern
 
-    @type pattern: Compiled regular expression pattern to use
-    @type lines: List of lines to search
+    :type pattern: Compiled regular expression pattern to use
+    :type lines: List of lines to search
 
-    @return: list of re.Match objects for each line matched, or an empty list if none matched
-    @rtype: list
+    :return: list of re.Match objects for each line matched, or an empty list if none matched
+    :rtype: list
     """
     result = []
     for line in lines:
