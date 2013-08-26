@@ -49,8 +49,8 @@ class SmsPduTzInfo(tzinfo):
     
     def __init__(self, pduOffsetStr=None):
         """ 
-        @param pduOffset: 2 semi-octet timezone offset as specified by PDU (see GSM 03.40 spec)
-        @type pduOffset: str 
+        :param pduOffset: 2 semi-octet timezone offset as specified by PDU (see GSM 03.40 spec)
+        :type pduOffset: str 
         
         Note: pduOffsetStr is optional in this constructor due to the special requirement for pickling
         mentioned in the Python docs. It should, however, be used (or otherwise pduOffsetStr must be
@@ -111,8 +111,8 @@ class InformationElement(object):
         """ Decodes a single IE at the current position in the specified
         byte iterator 
         
-        @return: An InformationElement (or subclass) instance for the decoded IE
-        @rtype: InformationElement, or subclass thereof
+        :return: An InformationElement (or subclass) instance for the decoded IE
+        :rtype: InformationElement, or subclass thereof
         """
         iei = next(byteIter)
         ieLen = next(byteIter)
@@ -136,20 +136,24 @@ class InformationElement(object):
 
 class Concatenation(InformationElement):
     """ IE that indicates SMS concatenation.
-    
+
     This implementation handles both 8-bit and 16-bit concatenation
     indication, and exposes the specific useful details of this
     IE as instance variables.
-    
+
     Exposes:
-    reference: CSMS reference number, must be same for all the SMS parts in the CSMS
-    parts: total number of parts. The value shall remain constant for every short
-     message which makes up the concatenated short message. If the value is zero then 
-     the receiving entity shall ignore the whole information element
-    number:  this part's number in the sequence. The value shall start at 1 and
-     increment for every short message which makes up the concatenated short message
+
+    reference
+        CSMS reference number, must be same for all the SMS parts in the CSMS
+    parts
+        total number of parts. The value shall remain constant for every short
+        message which makes up the concatenated short message. If the value is zero then
+        the receiving entity shall ignore the whole information element
+    number
+        this part's number in the sequence. The value shall start at 1 and
+        increment for every short message which makes up the concatenated short message
     """
-    
+
     def __init__(self, iei=0x00, ieLen=0, ieData=None):
         super(Concatenation, self).__init__(iei, ieLen, ieData)
         if ieData != None:
@@ -216,10 +220,10 @@ class Pdu(object):
     
     def __init__(self, data, tpduLength):
         """ Constructor
-        @param data: the raw PDU data (as bytes)
-        @type data: bytearray
-        @param tpduLength: Length (in bytes) of the TPDU
-        @type tpduLength: int
+        :param data: the raw PDU data (as bytes)
+        :type data: bytearray
+        :param tpduLength: Length (in bytes) of the TPDU
+        :type tpduLength: int
         """
         self.data = data
         self.tpduLength = tpduLength
@@ -235,21 +239,21 @@ class Pdu(object):
 def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requestStatusReport=True, rejectDuplicates=False):
     """ Creates an SMS-SUBMIT PDU for sending a message with the specified text to the specified number
     
-    @param number: the destination mobile number
-    @type number: str
-    @param text: the message text
-    @type text: str
-    @param reference: message reference number (see also: rejectDuplicates parameter)
-    @type reference: int
-    @param validity: message validity period (absolute or relative)
-    @type validity: datetime.timedelta (relative) or datetime.datetime (absolute)
-    @param smsc: SMSC number to use (leave None to use default)
-    @type smsc: str
-    @param rejectDuplicates: Flag that controls the TP-RD parameter (messages with same destination and reference may be rejected if True)
-    @type rejectDuplicates: bool
+    :param number: the destination mobile number
+    :type number: str
+    :param text: the message text
+    :type text: str
+    :param reference: message reference number (see also: rejectDuplicates parameter)
+    :type reference: int
+    :param validity: message validity period (absolute or relative)
+    :type validity: datetime.timedelta (relative) or datetime.datetime (absolute)
+    :param smsc: SMSC number to use (leave None to use default)
+    :type smsc: str
+    :param rejectDuplicates: Flag that controls the TP-RD parameter (messages with same destination and reference may be rejected if True)
+    :type rejectDuplicates: bool
             
-    @return: A list of one or more tuples containing the SMS PDU (as a bytearray, and the length of the TPDU part
-    @rtype: list of tuples
+    :return: A list of one or more tuples containing the SMS PDU (as a bytearray, and the length of the TPDU part
+    :rtype: list of tuples
     """     
     tpduFirstOctet = 0x01 # SMS-SUBMIT PDU
     if validity != None:
@@ -351,13 +355,13 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
 def decodeSmsPdu(pdu):
     """ Decodes SMS pdu data and returns a tuple in format (number, text)
     
-    @param pdu: PDU data as a hex string, or a bytearray containing PDU octects
-    @type pdu: str or bytearray
+    :param pdu: PDU data as a hex string, or a bytearray containing PDU octects
+    :type pdu: str or bytearray
     
-    @raise EncodingError: If the specified PDU data cannot be decoded
+    :raise EncodingError: If the specified PDU data cannot be decoded
     
-    @return: The decoded SMS data as a dictionary
-    @rtype: dict    
+    :return: The decoded SMS data as a dictionary
+    :rtype: dict    
     """ 
     try:
         pdu = toByteArray(pdu)
@@ -449,7 +453,7 @@ def _decodeUserData(byteIter, userDataLen, dataCoding, udhPresent):
 
 def _decodeRelativeValidityPeriod(tpVp):
     """ Calculates the relative SMS validity period (based on the table in section 9.2.3.12 of GSM 03.40)
-    @rtype: datetime.timedelta
+    :rtype: datetime.timedelta
     """
     if tpVp <= 143:
         return timedelta(minutes=((tpVp + 1) * 5))
@@ -466,9 +470,9 @@ def _encodeRelativeValidityPeriod(validityPeriod):
     """ Encodes the specified relative validity period timedelta into an integer for use in an SMS PDU
     (based on the table in section 9.2.3.12 of GSM 03.40)
     
-    @param validityPeriod: The validity period to encode
-    @type validityPeriod: datetime.timedelta
-    @rtype: int
+    :param validityPeriod: The validity period to encode
+    :type validityPeriod: datetime.timedelta
+    :rtype: int
     """
     # Python 2.6 does not have timedelta.total_seconds(), so compute it manually
     #seconds = validityPeriod.total_seconds()
@@ -496,11 +500,11 @@ def _encodeTimestamp(timestamp):
     
     Note: the specified timestamp must have a UTC offset set; you can use gsmmodem.util.SimpleOffsetTzInfo for simple cases
     
-    @param timestamp: The timestamp to encode
-    @type timestamp: datetime.datetime
+    :param timestamp: The timestamp to encode
+    :type timestamp: datetime.datetime
     
-    @return: The encoded timestamp
-    @rtype: bytearray
+    :return: The encoded timestamp
+    :rtype: bytearray
     """
     if timestamp.tzinfo == None:
         raise ValueError('Please specify time zone information for the timestamp (e.g. by using gsmmodem.util.SimpleOffsetTzInfo)')
@@ -530,11 +534,11 @@ def _decodeDataCoding(octet):
 def _decodeAddressField(byteIter, smscField=False, log=False):
     """ Decodes the address field at the current position of the bytearray iterator
     
-    @param byteIter: Iterator over bytearray
-    @type byteIter: iter(bytearray) 
+    :param byteIter: Iterator over bytearray
+    :type byteIter: iter(bytearray) 
     
-    @return: Tuple containing the address value and amount of bytes read (value is or None if it is empty (zero-length))
-    @rtype: tuple
+    :return: Tuple containing the address value and amount of bytes read (value is or None if it is empty (zero-length))
+    :rtype: tuple
     """
     addressLen = next(byteIter)
     if addressLen > 0:
@@ -567,11 +571,11 @@ def _decodeAddressField(byteIter, smscField=False, log=False):
 def _encodeAddressField(address, smscField=False):
     """ Encodes the address into an address field
     
-    @param address: The address to encode (phone number or alphanumeric)
-    @type byteIter: str
+    :param address: The address to encode (phone number or alphanumeric)
+    :type byteIter: str
     
-    @return: Encoded SMS PDU address field
-    @rtype: bytearray
+    :return: Encoded SMS PDU address field
+    :rtype: bytearray
     """
     # First, see if this is a number or an alphanumeric string
     toa = 0x80 | 0x00 | 0x01 # Type-of-address start | Unknown type-of-number | ISDN/tel numbering plan
@@ -615,8 +619,8 @@ def _encodeAddressField(address, smscField=False):
 def encodeSemiOctets(number):
     """ Semi-octet encoding algorithm (e.g. for phone numbers)
         
-    @return: bytearray containing the encoded octets
-    @rtype: bytearray
+    :return: bytearray containing the encoded octets
+    :rtype: bytearray
     """
     if len(number) % 2 == 1:
         number = number + 'F' # append the "end" indicator
@@ -626,13 +630,13 @@ def encodeSemiOctets(number):
 def decodeSemiOctets(encodedNumber, numberOfOctets=None):
     """ Semi-octet decoding algorithm(e.g. for phone numbers)
     
-    @param encodedNumber: The semi-octet-encoded telephone number (in bytearray format or hex string)
-    @type encodedNumber: bytearray, str or iter(bytearray)
-    @param numberOfOctets: The expected amount of octets after decoding (i.e. when to stop)
-    @type numberOfOctets: int
+    :param encodedNumber: The semi-octet-encoded telephone number (in bytearray format or hex string)
+    :type encodedNumber: bytearray, str or iter(bytearray)
+    :param numberOfOctets: The expected amount of octets after decoding (i.e. when to stop)
+    :type numberOfOctets: int
     
-    @return: decoded telephone number
-    @rtype: string
+    :return: decoded telephone number
+    :rtype: string
     """
     number = []
     if type(encodedNumber) in (str, bytes):
@@ -657,13 +661,13 @@ def encodeGsm7(plaintext, discardInvalid=False):
     Encodes the specified text string into GSM-7 octets (characters). This method does not pack
     the characters into septets.
     
-    @param text: the text string to encode
-    @param discardInvalid: if True, characters that cannot be encoded will be silently discarded 
+    :param text: the text string to encode
+    :param discardInvalid: if True, characters that cannot be encoded will be silently discarded 
     
-    @raise ValueError: if the text string cannot be encoded using GSM-7 encoding (unless discardInvalid == True)
+    :raise ValueError: if the text string cannot be encoded using GSM-7 encoding (unless discardInvalid == True)
     
-    @return: A bytearray containing the string encoded in GSM-7 encoding
-    @rtype: bytearray
+    :return: A bytearray containing the string encoded in GSM-7 encoding
+    :rtype: bytearray
     """
     result = bytearray()
     if PYTHON_VERSION >= 3: 
@@ -684,11 +688,11 @@ def decodeGsm7(encodedText):
     
     Decodes the specified GSM-7-encoded string into a plaintext string.
     
-    @param encodedText: the text string to encode
-    @type encodedText: bytearray or str
+    :param encodedText: the text string to encode
+    :type encodedText: bytearray or str
     
-    @return: A string containing the decoded text
-    @rtype: str
+    :return: A string containing the decoded text
+    :rtype: str
     """
     result = []
     if type(encodedText) == str:
@@ -711,7 +715,7 @@ def packSeptets(octets, padBits=0):
     Typically the output of encodeGsm7 would be used as input to this function. The resulting
     bytearray contains the original GSM-7 characters packed into septets ready for transmission.
     
-    @rtype: bytearray
+    :rtype: bytearray
     """
     result = bytearray()    
     if type(octets) == str:
@@ -742,13 +746,13 @@ def packSeptets(octets, padBits=0):
 def unpackSeptets(septets, numberOfSeptets=None, prevOctet=None, shift=7):
     """ Unpacks the specified septets into octets 
     
-    @param septets: Iterator or iterable containing the septets packed into octets
-    @type septets: iter(bytearray), bytearray or str
-    @param numberOfSeptets: The amount of septets to unpack (or None for all remaining in "septets")
-    @type numberOfSeptets: int or None
+    :param septets: Iterator or iterable containing the septets packed into octets
+    :type septets: iter(bytearray), bytearray or str
+    :param numberOfSeptets: The amount of septets to unpack (or None for all remaining in "septets")
+    :type numberOfSeptets: int or None
     
-    @return: The septets unpacked into octets
-    @rtype: bytearray
+    :return: The septets unpacked into octets
+    :rtype: bytearray
     """    
     result = bytearray()    
     if type(septets) == str:
@@ -804,10 +808,10 @@ def encodeUcs2(text):
     
     Encodes the specified text string into UCS2-encoded bytes.
     
-    @param text: the text string to encode
+    :param text: the text string to encode
     
-    @return: A bytearray containing the string encoded in UCS2 encoding
-    @rtype: bytearray
+    :return: A bytearray containing the string encoded in UCS2 encoding
+    :rtype: bytearray
     """
     result = bytearray()
     for b in map(ord, text):
