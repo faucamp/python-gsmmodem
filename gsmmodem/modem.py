@@ -382,11 +382,11 @@ class GsmModem(SerialComms):
                 raise PinRequiredError('AT+CPIN')
                
     def write(self, data, waitForResponse=True, timeout=5, parseError=True, writeTerm='\r', expectedResponseTermSeq=None):
-        """ Write data to the modem
-        
-        This method adds the '\r\n' end-of-line sequence to the data parameter, and
-        writes it to the modem
-        
+        """ Write data to the modem.
+
+        This method adds the ``\\r\\n`` end-of-line sequence to the data parameter, and
+        writes it to the modem.
+
         :param data: Command/data to be written to the modem
         :type data: str
         :param waitForResponse: Whether this method should block and return the response from the modem or not
@@ -397,12 +397,12 @@ class GsmModem(SerialComms):
         :type parseError: bool
         :param writeTerm: The terminating sequence to append to the written data
         :type writeTerm: str
-        :param expectedResponseTermSeq: The expected terminating sequence that marks the end of the modem's response (defaults to '\r\n')
+        :param expectedResponseTermSeq: The expected terminating sequence that marks the end of the modem's response (defaults to ``\\r\\n``)
         :type expectedResponseTermSeq: str
 
         :raise CommandError: if the command returns an error (only if parseError parameter is True)
         :raise TimeoutException: if no response to the command was received from the modem
-        
+
         :return: A list containing the response lines from the modem, or None if waitForResponse is False
         :rtype: list
         """
@@ -1240,7 +1240,7 @@ class Call(object):
         
         Note: this is highly device-dependent, and might not work
         
-        :param digits: A str containining one or more DTMF tones to play, e.g. "3" or "*123#"
+        :param digits: A str containining one or more DTMF tones to play, e.g. "3" or "\*123#"
 
         :raise CommandError: if the command failed/is not supported        
         :raise InvalidStateException: if the call has not been answered, or is ended while the command is still executing

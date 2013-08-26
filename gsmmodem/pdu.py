@@ -136,20 +136,24 @@ class InformationElement(object):
 
 class Concatenation(InformationElement):
     """ IE that indicates SMS concatenation.
-    
+
     This implementation handles both 8-bit and 16-bit concatenation
     indication, and exposes the specific useful details of this
     IE as instance variables.
-    
+
     Exposes:
-    reference: CSMS reference number, must be same for all the SMS parts in the CSMS
-    parts: total number of parts. The value shall remain constant for every short
-     message which makes up the concatenated short message. If the value is zero then 
-     the receiving entity shall ignore the whole information element
-    number:  this part's number in the sequence. The value shall start at 1 and
-     increment for every short message which makes up the concatenated short message
+
+    reference
+        CSMS reference number, must be same for all the SMS parts in the CSMS
+    parts
+        total number of parts. The value shall remain constant for every short
+        message which makes up the concatenated short message. If the value is zero then
+        the receiving entity shall ignore the whole information element
+    number
+        this part's number in the sequence. The value shall start at 1 and
+        increment for every short message which makes up the concatenated short message
     """
-    
+
     def __init__(self, iei=0x00, ieLen=0, ieData=None):
         super(Concatenation, self).__init__(iei, ieLen, ieData)
         if ieData != None:
