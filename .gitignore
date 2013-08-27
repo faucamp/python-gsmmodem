@@ -5,6 +5,7 @@
 *.egg-info
 dist
 build
+docs/_build
 
 # Eclipse project info
 .project
@@ -24,3 +25,6 @@ tools/init
 # Unit tests / coverage reports
 .coverage
 htmlcov
+
+# Working copy files
+*.swp

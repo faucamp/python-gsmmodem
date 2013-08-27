@@ -25,8 +25,8 @@ class SerialComms(object):
     def __init__(self, port, baudrate=115200, notifyCallbackFunc=None, fatalErrorCallbackFunc=None, *args, **kwargs):
         """ Constructor
          
-        @param fatalErrorCallbackFunc: function to call if a fatal error occurs in the serial device reading thread
-        @type fatalErrorCallbackFunc: func
+        :param fatalErrorCallbackFunc: function to call if a fatal error occurs in the serial device reading thread
+        :type fatalErrorCallbackFunc: func
         """     
         self.alive = False
         self.port = port
