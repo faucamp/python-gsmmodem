@@ -322,7 +322,7 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
         pdu.extend(_encodeAddressField(number))
         pdu.append(0x00) # Protocol identifier - no higher-level protocol
     
-        pdu.append(alphabet)
+        pdu.append(alphabet if not flashSms else (0x10 if alphabet == 0x00 else 0x18))
         if validityPeriod:
             pdu.extend(validityPeriod)
         
