@@ -309,7 +309,10 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
         if concatHeaderPrototype != None:
             concatHeader = copy(concatHeaderPrototype)
             concatHeader.number = i + 1
-            pduText = text[i*153:(i+1) * 153]
+            if alphabet == 0x00:
+                pduText = text[i*153:(i+1) * 153]
+            elif alphabet == 0x08:
+                pduText = text[i * 67 : (i + 1) * 67]
             udh.extend(concatHeader.encode())
         else:
             pduText = text
