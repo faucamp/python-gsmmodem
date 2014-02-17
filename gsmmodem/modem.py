@@ -381,7 +381,7 @@ class GsmModem(SerialComms):
             else:
                 raise PinRequiredError('AT+CPIN')
                
-    def write(self, data, waitForResponse=True, timeout=5, parseError=True, writeTerm='\r', expectedResponseTermSeq=None):
+    def write(self, data, waitForResponse=True, timeout=20, parseError=True, writeTerm='\r', expectedResponseTermSeq=None):
         """ Write data to the modem.
 
         This method adds the ``\\r\\n`` end-of-line sequence to the data parameter, and
