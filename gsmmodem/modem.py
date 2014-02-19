@@ -49,11 +49,12 @@ class Sms(object):
 class ReceivedSms(Sms):
     """ An SMS message that has been received (MT) """
     
-    def __init__(self, gsmModem, status, number, time, text, smsc=None):
+    def __init__(self, gsmModem, status, number, time, text, smsc=None, udh=None):
         super(ReceivedSms, self).__init__(number, text, smsc)
         self._gsmModem = weakref.proxy(gsmModem)
         self.status = status
         self.time = time
+        self.udh = udh
         
     def reply(self, message):
         """ Convenience method that sends a reply SMS to the sender of this message """
@@ -824,7 +825,7 @@ class GsmModem(SerialComms):
                         self.log.debug('Discarding line from +CMGL response: %s', line)
                     else:
                         if smsDict['type'] == 'SMS-DELIVER':
-                            sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'])
+                            sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh'))
                         elif smsDict['type'] == 'SMS-STATUS-REPORT':
                             sms = StatusReport(self, int(msgStat), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
                         else:
@@ -1063,7 +1064,7 @@ class GsmModem(SerialComms):
             pdu = msgData[1]
             smsDict = decodeSmsPdu(pdu)
             if smsDict['type'] == 'SMS-DELIVER':
-                return ReceivedSms(self, int(stat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'])
+                return ReceivedSms(self, int(stat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh'))
             elif smsDict['type'] == 'SMS-STATUS-REPORT':
                 return StatusReport(self, int(stat), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
             else:
