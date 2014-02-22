@@ -751,13 +751,16 @@ class GsmModem(SerialComms):
         :param unreadOnly: If True, only process unread SMS messages
         :type unreadOnly: boolean
         """
-        states = [Sms.STATUS_RECEIVED_UNREAD]
-        if not unreadOnly:
-            states.insert(0, Sms.STATUS_RECEIVED_READ)
-        for msgStatus in states:
-            messages = self.listStoredSms(status=msgStatus, delete=True)
-            for sms in messages:
-                self.smsReceivedCallback(sms)
+        if self.smsReceivedCallback:
+            states = [Sms.STATUS_RECEIVED_UNREAD]
+            if not unreadOnly:
+                states.insert(0, Sms.STATUS_RECEIVED_READ)
+            for msgStatus in states:
+                messages = self.listStoredSms(status=msgStatus, delete=True)
+                for sms in messages:
+                    self.smsReceivedCallback(sms)
+        else:
+            raise ValueError('GsmModem.smsReceivedCallback not set')
 
     def listStoredSms(self, status=Sms.STATUS_ALL, memory=None, delete=False):
         """ Returns SMS messages currently stored on the device/SIM card.
