@@ -115,5 +115,6 @@ Bundled utilities:
       scripts=['tools/gsmterm.py', 'tools/sendsms.py', 'tools/identify-modem.py'],
       install_requires=requires,
       tests_require=tests_require,
+      extras_require={'docs': ['sphinx']},
       cmdclass = {'test': RunUnitTests,
                   'coverage': RunUnitTestsCoverage})

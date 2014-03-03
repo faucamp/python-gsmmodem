@@ -164,11 +164,11 @@ class GsmModem(SerialComms):
     def connect(self, pin=None):
         """ Opens the port and initializes the modem and SIM card
          
-        @param pin: The SIM card PIN code, if any
-        @type pin: str
+        :param pin: The SIM card PIN code, if any
+        :type pin: str
         
-        @raise PinRequiredError: if the SIM card requires a PIN but none was provided
-        @raise IncorrectPinError: if the specified PIN is incorrect
+        :raise PinRequiredError: if the SIM card requires a PIN but none was provided
+        :raise IncorrectPinError: if the specified PIN is incorrect
         """
         self.log.info('Connecting to modem on port %s at %dbps', self.port, self.baudrate)        
         super(GsmModem, self).connect()
@@ -385,32 +385,32 @@ class GsmModem(SerialComms):
                 raise PinRequiredError('AT+CPIN')
                
     def write(self, data, waitForResponse=True, timeout=5, parseError=True, writeTerm='\r', expectedResponseTermSeq=None):
-        """ Write data to the modem
-        
-        This method adds the '\r\n' end-of-line sequence to the data parameter, and
-        writes it to the modem
-        
-        @param data: Command/data to be written to the modem
-        @type data: str
-        @param waitForResponse: Whether this method should block and return the response from the modem or not
-        @type waitForResponse: bool
-        @param timeout: Maximum amount of time in seconds to wait for a response from the modem
-        @type timeout: int
-        @param parseError: If True, a CommandError is raised if the modem responds with an error (otherwise the response is returned as-is)
-        @type parseError: bool
-        @param writeTerm: The terminating sequence to append to the written data
-        @type writeTerm: str
-        @param expectedResponseTermSeq: The expected terminating sequence that marks the end of the modem's response (defaults to '\r\n')
-        @type expectedResponseTermSeq: str
+        """ Write data to the modem.
 
-        @raise CommandError: if the command returns an error (only if parseError parameter is True)
-        @raise TimeoutException: if no response to the command was received from the modem
-        
-        @return: A list containing the response lines from the modem, or None if waitForResponse is False
-        @rtype: list
+        This method adds the ``\\r\\n`` end-of-line sequence to the data parameter, and
+        writes it to the modem.
+
+        :param data: Command/data to be written to the modem
+        :type data: str
+        :param waitForResponse: Whether this method should block and return the response from the modem or not
+        :type waitForResponse: bool
+        :param timeout: Maximum amount of time in seconds to wait for a response from the modem
+        :type timeout: int
+        :param parseError: If True, a CommandError is raised if the modem responds with an error (otherwise the response is returned as-is)
+        :type parseError: bool
+        :param writeTerm: The terminating sequence to append to the written data
+        :type writeTerm: str
+        :param expectedResponseTermSeq: The expected terminating sequence that marks the end of the modem's response (defaults to ``\\r\\n``)
+        :type expectedResponseTermSeq: str
+
+        :raise CommandError: if the command returns an error (only if parseError parameter is True)
+        :raise TimeoutException: if no response to the command was received from the modem
+
+        :return: A list containing the response lines from the modem, or None if waitForResponse is False
+        :rtype: list
         """
         self.log.debug('write: %s', data)
-        responseLines = SerialComms.write(self, data + writeTerm, waitForResponse=waitForResponse, timeout=timeout, expectedResponseTermSeq=expectedResponseTermSeq)
+        responseLines = super(GsmModem, self).write(data + writeTerm, waitForResponse=waitForResponse, timeout=timeout, expectedResponseTermSeq=expectedResponseTermSeq)
         if self._writeWait > 0: # Sleep a bit if required (some older modems suffer under load)            
             time.sleep(self._writeWait)
         if waitForResponse:
@@ -449,10 +449,10 @@ class GsmModem(SerialComms):
     def signalStrength(self):
         """ Checks the modem's cellular network signal strength
         
-        @raise CommandError: if an error occurs
+        :raise CommandError: if an error occurs
         
-        @return: The network signal strength as an integer between 0 and 99, or -1 if it is unknown
-        @rtype: int
+        :return: The network signal strength as an integer between 0 and 99, or -1 if it is unknown
+        :rtype: int
         """
         csq = self.CSQ_REGEX.match(self.write('AT+CSQ')[0])
         if csq:
@@ -463,17 +463,17 @@ class GsmModem(SerialComms):
 
     @property
     def manufacturer(self):
-        """ @return: The modem's manufacturer's name """
+        """ :return: The modem's manufacturer's name """
         return self.write('AT+CGMI')[0]
     
     @property
     def model(self):
-        """ @return: The modem's model name """
+        """ :return: The modem's model name """
         return self.write('AT+CGMM')[0]
     
     @property
     def revision(self):
-        """ @return: The modem's software revision, or None if not known/supported """
+        """ :return: The modem's software revision, or None if not known/supported """
         try:
             return self.write('AT+CGMR')[0]
         except CommandError:
@@ -481,24 +481,24 @@ class GsmModem(SerialComms):
     
     @property
     def imei(self):
-        """ @return: The modem's serial number (IMEI number) """
+        """ :return: The modem's serial number (IMEI number) """
         return self.write('AT+CGSN')[0]
     
     @property
     def imsi(self):
-        """ @return: The IMSI (International Mobile Subscriber Identity) of the SIM card. The PIN may need to be entered before reading the IMSI """
+        """ :return: The IMSI (International Mobile Subscriber Identity) of the SIM card. The PIN may need to be entered before reading the IMSI """
         return self.write('AT+CIMI')[0]
     
     @property
     def networkName(self):
-        """ @return: the name of the GSM Network Operator to which the modem is connected """
+        """ :return: the name of the GSM Network Operator to which the modem is connected """
         copsMatch = lineMatching(r'^\+COPS: (\d),(\d),"(.+)",{0,1}\d*$', self.write('AT+COPS?')) # response format: +COPS: mode,format,"operator_name",x
         if copsMatch:
             return copsMatch.group(3)
 
     @property
     def supportedCommands(self):
-        """ @return: list of AT commands supported by this modem (without the AT prefix). Returns None if not known """
+        """ :return: list of AT commands supported by this modem (without the AT prefix). Returns None if not known """
         try:
             # AT+CLAC responses differ between modems. Most respond with +CLAC: and then a comma-separated list of commands
             # while others simply return each command on a new line, with no +CLAC: prefix
@@ -518,7 +518,7 @@ class GsmModem(SerialComms):
 
     @property
     def smsTextMode(self):
-        """ @return: True if the modem is set to use text mode for SMS, False if it is set to use PDU mode """
+        """ :return: True if the modem is set to use text mode for SMS, False if it is set to use PDU mode """
         return self._smsTextMode
     @smsTextMode.setter
     def smsTextMode(self, textMode):
@@ -553,7 +553,7 @@ class GsmModem(SerialComms):
             
     @property
     def smsc(self):
-        """ @return: The default SMSC number stored on the SIM card """
+        """ :return: The default SMSC number stored on the SIM card """
         if self._smscNumber == None:
             try:
                 readSmsc = self.write('AT+CSCA?')
@@ -579,14 +579,14 @@ class GsmModem(SerialComms):
         and the signal strength is greater than 0, optionally timing out
         if a timeout was specified
         
-        @param timeout: Maximum time to wait for network coverage, in seconds
-        @type timeout: int or float
+        :param timeout: Maximum time to wait for network coverage, in seconds
+        :type timeout: int or float
 
-        @raise TimeoutException: if a timeout was specified and reached
-        @raise InvalidStateException: if the modem is not going to receive network coverage (SIM blocked, etc)
+        :raise TimeoutException: if a timeout was specified and reached
+        :raise InvalidStateException: if the modem is not going to receive network coverage (SIM blocked, etc)
 
-        @return: the current signal strength
-        @rtype: int
+        :return: the current signal strength
+        :rtype: int
         """
         block = [True]
         if timeout != None:
@@ -627,17 +627,17 @@ class GsmModem(SerialComms):
     def sendSms(self, destination, text, waitForDeliveryReport=False, deliveryTimeout=15):
         """ Send an SMS text message
         
-        @param destination: the recipient's phone number
-        @type destination: str
-        @param text: the message text
-        @type text: str
-        @param waitForDeliveryReport: if True, this method blocks until a delivery report is received for the sent message
-        @type waitForDeliveryReport: boolean
-        @param deliveryReport: the maximum time in seconds to wait for a delivery report (if "waitForDeliveryReport" is True)
-        @type deliveryTimeout: int or float 
+        :param destination: the recipient's phone number
+        :type destination: str
+        :param text: the message text
+        :type text: str
+        :param waitForDeliveryReport: if True, this method blocks until a delivery report is received for the sent message
+        :type waitForDeliveryReport: boolean
+        :param deliveryReport: the maximum time in seconds to wait for a delivery report (if "waitForDeliveryReport" is True)
+        :type deliveryTimeout: int or float 
         
-        @raise CommandError: if an error occurs while attempting to send the message
-        @raise TimeoutException: if the operation times out
+        :raise CommandError: if an error occurs while attempting to send the message
+        :raise TimeoutException: if the operation times out
         """
         if self._smsTextMode:
             self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq='> ')
@@ -669,13 +669,13 @@ class GsmModem(SerialComms):
         """ Starts a USSD session by dialing the the specified USSD string, or \
         sends the specified string in the existing USSD session (if any)
                 
-        @param ussdString: The USSD access number to dial
-        @param responseTimeout: Maximum time to wait a response, in seconds
+        :param ussdString: The USSD access number to dial
+        :param responseTimeout: Maximum time to wait a response, in seconds
         
-        @raise TimeoutException: if no response is received in time
+        :raise TimeoutException: if no response is received in time
         
-        @return: The USSD response message/session (as a Ussd object)
-        @rtype: gsmmodem.modem.Ussd
+        :return: The USSD response message/session (as a Ussd object)
+        :rtype: gsmmodem.modem.Ussd
         """
         self._ussdSessionEvent = threading.Event()
         try:
@@ -701,13 +701,13 @@ class GsmModem(SerialComms):
     def dial(self, number, timeout=5, callStatusUpdateCallbackFunc=None):
         """ Calls the specified phone number using a voice phone call
 
-        @param number: The phone number to dial
-        @param timeout: Maximum time to wait for the call to be established
-        @param callStatusUpdateCallbackFunc: Callback function that is executed if the call's status changes due to
+        :param number: The phone number to dial
+        :param timeout: Maximum time to wait for the call to be established
+        :param callStatusUpdateCallbackFunc: Callback function that is executed if the call's status changes due to
                remote events (i.e. when it is answered, the call is ended by the remote party)
 
-        @return: The outgoing call
-        @rtype: gsmmodem.modem.Call
+        :return: The outgoing call
+        :rtype: gsmmodem.modem.Call
         """
         if self._waitForCallInitUpdate:
             # Wait for the "call originated" notification message
@@ -750,8 +750,8 @@ class GsmModem(SerialComms):
         This is useful if SMS messages were received during a period that
         python-gsmmodem was not running but the modem was powered on.
         
-        @param unreadOnly: If True, only process unread SMS messages
-        @type unreadOnly: boolean
+        :param unreadOnly: If True, only process unread SMS messages
+        :type unreadOnly: boolean
         """
         states = [Sms.STATUS_RECEIVED_UNREAD]
         if not unreadOnly:
@@ -766,15 +766,15 @@ class GsmModem(SerialComms):
         
         The messages are read from the memory set by the "memory" parameter.
         
-        @param status: Filter messages based on this read status; must be 0-4 (see Sms class)
-        @type status: int
-        @param memory: The memory type to read from. If None, use the current default SMS read memory
-        @type memory: str or None
-        @param delete: If True, delete returned messages from the device/SIM card
-        @type delete: bool
+        :param status: Filter messages based on this read status; must be 0-4 (see Sms class)
+        :type status: int
+        :param memory: The memory type to read from. If None, use the current default SMS read memory
+        :type memory: str or None
+        :param delete: If True, delete returned messages from the device/SIM card
+        :type delete: bool
         
-        @return: A list of Sms objects containing the messages read
-        @rtype: list
+        :return: A list of Sms objects containing the messages read
+        :rtype: list
         """
         self._setSmsMemory(readDelete=memory)
         messages = []
@@ -850,14 +850,14 @@ class GsmModem(SerialComms):
         This method simply spawns a separate thread to handle the actual notification
         (in order to release the read thread so that the handlers are able to write back to the modem, etc)
          
-        @param lines The lines that were read
+        :param lines The lines that were read
         """
         threading.Thread(target=self.__threadedHandleModemNotification, kwargs={'lines': lines}).start()
     
     def __threadedHandleModemNotification(self, lines):
         """ Implementation of _handleModemNotification() to be run in a separate thread
         
-        @param lines The lines that were read
+        :param lines The lines that were read
         """
         for line in lines:
             if 'RING' in line:
@@ -1021,15 +1021,15 @@ class GsmModem(SerialComms):
     def readStoredSms(self, index, memory=None):
         """ Reads and returns the SMS message at the specified index
         
-        @param index: The index of the SMS message in the specified memory
-        @type index: int
-        @param memory: The memory type to read from. If None, use the current default SMS read memory
-        @type memory: str or None
+        :param index: The index of the SMS message in the specified memory
+        :type index: int
+        :param memory: The memory type to read from. If None, use the current default SMS read memory
+        :type memory: str or None
         
-        @raise CommandError: if unable to read the stored message
+        :raise CommandError: if unable to read the stored message
         
-        @return: The SMS message
-        @rtype: subclass of gsmmodem.modem.Sms (either ReceivedSms or StatusReport)
+        :return: The SMS message
+        :rtype: subclass of gsmmodem.modem.Sms (either ReceivedSms or StatusReport)
         """
         # Switch to the correct memory type if required
         self._setSmsMemory(readDelete=memory)
@@ -1075,12 +1075,12 @@ class GsmModem(SerialComms):
     def deleteStoredSms(self, index, memory=None):
         """ Deletes the SMS message stored at the specified index in modem/SIM card memory
         
-        @param index: The index of the SMS message in the specified memory
-        @type index: int
-        @param memory: The memory type to delete from. If None, use the current default SMS read/delete memory
-        @type memory: str or None
+        :param index: The index of the SMS message in the specified memory
+        :type index: int
+        :param memory: The memory type to delete from. If None, use the current default SMS read/delete memory
+        :type memory: str or None
         
-        @raise CommandError: if unable to delete the stored message
+        :raise CommandError: if unable to delete the stored message
         """
         self._setSmsMemory(readDelete=memory)
         self.write('AT+CMGD={0},0'.format(index))
@@ -1095,15 +1095,15 @@ class GsmModem(SerialComms):
         3: Delete All READ, SENT and UNSENT messages
         4: Delete All messages (this is the default)
  
-        @param delFlag: Controls what type of messages to delete; see description above.
-        @type delFlag: int
-        @param memory: The memory type to delete from. If None, use the current default SMS read/delete memory
-        @type memory: str or None
-        @param delete: If True, delete returned messages from the device/SIM card
-        @type delete: bool
+        :param delFlag: Controls what type of messages to delete; see description above.
+        :type delFlag: int
+        :param memory: The memory type to delete from. If None, use the current default SMS read/delete memory
+        :type memory: str or None
+        :param delete: If True, delete returned messages from the device/SIM card
+        :type delete: bool
         
-        @raise ValueErrror: if "delFlag" is not in range [1,4]
-        @raise CommandError: if unable to delete the stored messages
+        :raise ValueErrror: if "delFlag" is not in range [1,4]
+        :raise CommandError: if unable to delete the stored messages
         """
         if 0 < delFlag <= 4:
             self._setSmsMemory(readDelete=memory)
@@ -1121,8 +1121,8 @@ class GsmModem(SerialComms):
     
     def _parseCusdResponse(self, lines):
         """ Parses one or more +CUSD notification lines (for USSD)
-        @return: USSD response object
-        @rtype: gsmmodem.modem.Ussd
+        :return: USSD response object
+        :rtype: gsmmodem.modem.Ussd
         """
         if len(lines) > 1:
             # Issue #20: Some modem/network combinations use \r\n as in-message EOL indicators;
@@ -1160,10 +1160,10 @@ class GsmModem(SerialComms):
         """ Poll the status of outgoing calls.    
         This is used for modems that do not have a known set of call status update notifications.
         
-        @param expectedState: The internal state we are waiting for. 0 == initiated, 1 == answered, 2 = hangup
-        @type expectedState: int
+        :param expectedState: The internal state we are waiting for. 0 == initiated, 1 == answered, 2 = hangup
+        :type expectedState: int
         
-        @raise TimeoutException: If a timeout was specified, and has occurred
+        :raise TimeoutException: If a timeout was specified, and has occurred
         """
         callDone = False
         timeLeft = timeout or 999999
@@ -1212,8 +1212,8 @@ class Call(object):
     
     def __init__(self, gsmModem, callId, callType, number, callStatusUpdateCallbackFunc=None):
         """
-        @param gsmModem: GsmModem instance that created this object
-        @param number: The number that is being called        
+        :param gsmModem: GsmModem instance that created this object
+        :param number: The number that is being called        
         """
         self._gsmModem = weakref.proxy(gsmModem)
         self._callStatusUpdateCallbackFunc = callStatusUpdateCallbackFunc
@@ -1243,10 +1243,10 @@ class Call(object):
         
         Note: this is highly device-dependent, and might not work
         
-        @param digits: A str containining one or more DTMF tones to play, e.g. "3" or "*123#"
+        :param digits: A str containining one or more DTMF tones to play, e.g. "3" or "\*123#"
 
-        @raise CommandError: if the command failed/is not supported        
-        @raise InvalidStateException: if the call has not been answered, or is ended while the command is still executing
+        :raise CommandError: if the command failed/is not supported        
+        :raise InvalidStateException: if the call has not been answered, or is ended while the command is still executing
         """        
         if self.answered:
             dtmfCommandBase = self.DTMF_COMMAND_BASE.format(cid=self.id)
@@ -1289,10 +1289,10 @@ class IncomingCall(Call):
     """ Represents an incoming call, conveniently allowing access to call meta information and -control """     
     def __init__(self, gsmModem, number, ton, callerName, callId, callType):
         """
-        @param gsmModem: GsmModem instance that created this object
-        @param number: Caller number
-        @param ton: TON (type of number/address) in integer format
-        @param callType: Type of the incoming call (VOICE, FAX, DATA, etc)
+        :param gsmModem: GsmModem instance that created this object
+        :param number: Caller number
+        :param ton: TON (type of number/address) in integer format
+        :param callType: Type of the incoming call (VOICE, FAX, DATA, etc)
         """
         if type(callType) == str:
             callType = self.CALL_TYPE_MAP[callType] 
@@ -1307,7 +1307,7 @@ class IncomingCall(Call):
     
     def answer(self):
         """ Answer the phone call.        
-        @return: self (for chaining method calls)
+        :return: self (for chaining method calls)
         """
         if self.ringing:
             self._gsmModem.write('ATA')
@@ -1336,9 +1336,9 @@ class Ussd(object):
     def reply(self, message):
         """ Sends a reply to this USSD message in the same USSD session 
         
-        @raise InvalidStateException: if the USSD session is not active (i.e. it has ended)
+        :raise InvalidStateException: if the USSD session is not active (i.e. it has ended)
         
-        @return: The USSD response message/session (as a Ussd object)
+        :return: The USSD response message/session (as a Ussd object)
         """
         if self.sessionActive:
             return self._gsmModem.sendUssd(message)
