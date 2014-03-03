@@ -211,6 +211,9 @@ class GsmModem(SerialComms):
             elif '^DTMF' in commands:
                 # Huawei modems use ^DTMF to send DTMF tones
                 callUpdateTableHint = 1 # Huawei
+            if '^USSDMODE' in commands:
+                # Enable Huawei text-mode USSD
+                self.write('AT^USSDMODE=0', parseError=False)
             if '+WIND' in commands:
                 callUpdateTableHint = 2 # Wavecom
                 enableWind = True

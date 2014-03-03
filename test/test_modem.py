@@ -397,6 +397,25 @@ class TestUssd(unittest.TestCase):
             else:
                 ussd.cancel() # This call shouldn't do anything
             del ussd
+            
+    def test_sendUssd_differentModems(self):
+        """ Tests sendUssd functionality with different modem behaviours (some modems require mode switching) """
+        tests = [('*101#', 'Testing 123')]
+        global FAKE_MODEM
+        for ussdStr, ussdResponse in tests:
+            for fakeModem in fakemodems.createModems():
+                print('*******************************8MODEM:',fakeModem)
+                fakeModem.responses['AT+CUSD=1,"{0}",15\r'.format(ussdStr)] = ['+CUSD: 2,"{0}",15\r\n'.format(ussdResponse), 'OK\r\n']
+                # Init modem and preload SMSC number
+                FAKE_MODEM = fakeModem
+                mockSerial = MockSerialPackage()
+                gsmmodem.serial_comms.serial = mockSerial        
+                modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')
+                modem.connect()
+                response = modem.sendUssd(ussdStr)
+                self.assertEqual(ussdResponse, response.message)
+                modem.close()
+        FAKE_MODEM = None
     
     def test_sendUssdReply(self):
         """ Test replying in a USSD session via Ussd.reply() """

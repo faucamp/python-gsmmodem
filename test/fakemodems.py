@@ -268,6 +268,8 @@ class HuaweiE1752(FakeModem):
 
     def __init__(self):
         super(HuaweiE1752, self).__init__()
+        # This modem uses AT^USSDMODE to control text/PDU mode USSD
+        self._ussdMode = 1
         self.responses = {'AT+CGMI\r': ['huawei\r\n', 'OK\r\n'],
                  'AT+CGMM\r': ['E1752\r\n', 'OK\r\n'],
                  'AT+CGMR\r': ['11.126.13.00.00\r\n', 'OK\r\n'],
@@ -329,6 +331,16 @@ class HuaweiE1752(FakeModem):
                  'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
         self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
         self.dtmfCommandBase = '^DTMF={cid},'
+        
+    def getResponse(self, cmd):
+        # Device defaults to ^USSDMODE == 1
+        if cmd.startswith('AT+CUSD=1') and self._ussdMode == 1: 
+            return ['ERROR\r\n']
+        elif cmd.startswith('AT^USSDMODE='):
+            self._ussdMode = int(cmd[12])
+            return super(HuaweiE1752, self).getResponse(cmd)
+        else:
+            return super(HuaweiE1752, self).getResponse(cmd)
 
     def getAtdResponse(self, number):
         return ['OK\r\n']
