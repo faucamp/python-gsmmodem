@@ -549,7 +549,7 @@ class GsmModem(SerialComms):
                 self.CMGR_SM_DELIVER_REGEX_TEXT = re.compile(r'^\+CMGR: "([^"]+)","([^"]+)",[^,]*,"([^"]+)"$')
                 self.CMGR_SM_REPORT_REGEXT_TEXT = re.compile(r'^\+CMGR: ([^,]*),\d+,(\d+),"{0,1}([^"]*)"{0,1},\d*,"([^"]+)","([^"]+)",(\d+)$')
         elif self.CMGR_REGEX_PDU == None:
-            self.CMGR_REGEX_PDU = re.compile(r'^\+CMGR: (\d*),(\d*),(\d+)$')
+            self.CMGR_REGEX_PDU = re.compile(r'^\+CMGR: (\d*),"{0,1}(\d*)"{0,1},(\d+)$')
             
     @property
     def smsc(self):
@@ -624,7 +624,7 @@ class GsmModem(SerialComms):
             # If this is reached, the timer task has triggered
             raise TimeoutException()
         
-    def sendSms(self, destination, text, waitForDeliveryReport=False, deliveryTimeout=15):
+    def sendSms(self, destination, text, waitForDeliveryReport=False, deliveryTimeout=15, sendFlash=False):
         """ Send an SMS text message
         
         :param destination: the recipient's phone number
@@ -643,7 +643,7 @@ class GsmModem(SerialComms):
             self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq='> ')
             result = lineStartingWith('+CMGS:', self.write(text, timeout=15, writeTerm=chr(26)))
         else:
-            pdus = encodeSmsSubmitPdu(destination, text, reference=self._smsRef)
+            pdus = encodeSmsSubmitPdu(destination, text, reference=self._smsRef, sendFlash=sendFlash)
             for pdu in pdus:
                 self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=3, expectedResponseTermSeq='> ')
                 result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=15, writeTerm=chr(26))) # example: +CMGS: xx
