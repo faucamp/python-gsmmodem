@@ -14,7 +14,7 @@ with open('requirements.txt') as f:
 if sys.version_info[0] == 2 and sys.version_info[1] <= 6:
     tests_require = ['unittest2']
     test_command = ['unit2', 'discover']
-    coverage_command = ['coverage', 'run', '-m', 'unit2', 'discover']
+    coverage_command = ['coverage', 'run', '-m', 'unittest2', 'discover']
 else:
     tests_require = []
     test_command = [sys.executable, '-m', 'unittest', 'discover']
