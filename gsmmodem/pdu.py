@@ -236,7 +236,7 @@ class Pdu(object):
             return str(codecs.encode(self.data, 'hex_codec'), 'ascii').upper() 
 
 
-def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requestStatusReport=True, rejectDuplicates=False):
+def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requestStatusReport=True, rejectDuplicates=False, sendFlash=False):
     """ Creates an SMS-SUBMIT PDU for sending a message with the specified text to the specified number
     
     :param number: the destination mobile number
@@ -325,7 +325,7 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
         pdu.extend(_encodeAddressField(number))
         pdu.append(0x00) # Protocol identifier - no higher-level protocol
     
-        pdu.append(alphabet)
+        pdu.append(alphabet if not sendFlash else (0x10 if alphabet == 0x00 else 0x18))
         if validityPeriod:
             pdu.extend(validityPeriod)
         
