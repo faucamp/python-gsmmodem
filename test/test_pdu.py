@@ -349,14 +349,15 @@ class TestSmsPdu(unittest.TestCase):
 
     def test_encodeSmsSubmit(self):
         """ Tests SMS PDU encoding """
-        tests = (('+27820001111', 'Hello World!', 0, None, None, False, b'0001000B917228001011F100000CC8329BFD065DDF72363904'),
-                 ('+123456789', '世界您好！', 0, timedelta(weeks=52), '+44000000000', False, b'07914400000000F01100099121436587F90008F40A4E16754C60A8597DFF01'),
-                 ('0126541234', 'Test message: local numbers', 13, timedelta(days=3), '12345', True, b'04A12143F5310D0AA110624521430000A91BD4F29C0E6A97E7F3F0B9AC03B1DFE3301BE4AEB7C565F91C'),
-                 ('+27820001111', 'Timestamp validity test', 0, datetime(2013, 7, 10, 13, 39, tzinfo=SimpleOffsetTzInfo(2)), None, False, b'0019000B917228001011F100003170013193008017D474BB3CA787DB70903DCC4E93D3F43C885E9ED301'),
+        tests = (('+27820001111', 'Hello World!', 0, None, None, False, False, b'0001000B917228001011F100000CC8329BFD065DDF72363904'),
+                 ('+27820001111', 'Flash SMS', 0, None, None, False, True, b'0005000B917228001011F10000094676788E064D9B53'),
+                 ('+123456789', '世界您好！', 0, timedelta(weeks=52), '+44000000000', False, False, b'07914400000000F01100099121436587F90008F40A4E16754C60A8597DFF01'),
+                 ('0126541234', 'Test message: local numbers', 13, timedelta(days=3), '12345', True, False, b'04A12143F5310D0AA110624521430000A91BD4F29C0E6A97E7F3F0B9AC03B1DFE3301BE4AEB7C565F91C'),
+                 ('+27820001111', 'Timestamp validity test', 0, datetime(2013, 7, 10, 13, 39, tzinfo=SimpleOffsetTzInfo(2)), None, False, False, b'0019000B917228001011F100003170013193008017D474BB3CA787DB70903DCC4E93D3F43C885E9ED301'),
                  )
-        for number, text, reference, validity, smsc, rejectDuplicates, pduHex in tests:
+        for number, text, reference, validity, smsc, rejectDuplicates, sendFlash, pduHex in tests:
             pdu = bytearray(codecs.decode(pduHex, 'hex_codec'))
-            result = gsmmodem.pdu.encodeSmsSubmitPdu(number, text, reference, validity, smsc, rejectDuplicates)
+            result = gsmmodem.pdu.encodeSmsSubmitPdu(number, text, reference, validity, smsc, rejectDuplicates, sendFlash)
             self.assertIsInstance(result, list)
             self.assertEqual(len(result), 1, 'Only 1 PDU should have been created, but got {0}'.format(len(result)))
             self.assertIsInstance(result[0], gsmmodem.pdu.Pdu)
