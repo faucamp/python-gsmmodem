@@ -422,7 +422,13 @@ class TestSmsPdu(unittest.TestCase):
                    'number': '+b08427829207025', # <- broken number (invalid PDU data; the reference number is more than a single byte (or they added something))
                    'reference': 28,
                    'time': datetime(2013, 7, 26, 14, 29, 27, tzinfo=SimpleOffsetTzInfo(2)),
-                   'discharge': datetime(2013, 7, 26, 14, 29, 31, tzinfo=SimpleOffsetTzInfo(2))})
+                   'discharge': datetime(2013, 7, 26, 14, 29, 31, tzinfo=SimpleOffsetTzInfo(2))}),
+                 (b'07919762020033F1400DD0CDF2396C7EBB010008415072411084618C0500035602010053004D005300200063006F00640065003A00200034003800350036002C00200063006F006E006600690072006D006100740069006F006E0020006F00660020006100730073006F00630069006100740069006F006E0020006200650074007700650065006E0020006100630063006F0075006E007400200061006E00640020004D00650067',
+                  {'type': 'SMS-DELIVER',
+                   'smsc': '+79262000331',
+                   'number': 'Megafon',
+                   'text': 'SMS code: 4856, confirmation of association between account and Meg',
+                   'time': datetime(2014, 5, 27, 14, 1, 48, tzinfo=SimpleOffsetTzInfo(4))})
                  )
 
         for pdu, expected in tests:

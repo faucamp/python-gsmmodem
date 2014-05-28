@@ -4,10 +4,9 @@
 
 from __future__ import unicode_literals
 
-import sys, codecs
+import sys, codecs, math
 from datetime import datetime, timedelta, tzinfo
 from copy import copy
-import codecs
 from .exceptions import EncodingError
 
 # For Python 3 support
@@ -549,7 +548,7 @@ def _decodeAddressField(byteIter, smscField=False, log=False):
         ton = (toa & 0x70) # bits 6,5,4 of type-of-address == type-of-number
         if ton == 0x50: 
             # Alphanumberic number            
-            addressLen /= 2
+            addressLen = int(math.ceil(addressLen / 2.0))
             septets = unpackSeptets(byteIter, addressLen)
             addressValue = decodeGsm7(septets)
             return (addressValue, (addressLen + 2))
