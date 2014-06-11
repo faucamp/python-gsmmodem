@@ -810,7 +810,7 @@ class GsmModem(SerialComms):
                 messages.append(ReceivedSms(self, Sms.TEXT_MODE_STATUS_MAP[msgStatus], number, parseTextModeTimeStr(msgTime), msgText))
                 delMessages.add(int(msgIndex))
         else:
-            cmglRegex = re.compile(r'^\+CMGL:\s*(\d+),(\d+),.*$')
+            cmglRegex = re.compile(r'^\+CMGL:\s*(\d+),\s*(\d+),.*$')
             readPdu = False
             result = self.write('AT+CMGL={0}'.format(status))
             for line in result:
