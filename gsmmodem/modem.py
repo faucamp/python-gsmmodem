@@ -644,7 +644,7 @@ class GsmModem(SerialComms):
             pdus = encodeSmsSubmitPdu(destination, text, reference=self._smsRef, sendFlash=sendFlash)
             for pdu in pdus:
                 self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=3, expectedResponseTermSeq='> ')
-                result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=15, writeTerm=chr(26))) # example: +CMGS: xx
+                result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=60, writeTerm=chr(26))) # example: +CMGS: xx
         if result == None:
             raise CommandError('Modem did not respond with +CMGS response')
         reference = int(result[7:])
