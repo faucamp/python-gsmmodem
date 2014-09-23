@@ -730,7 +730,10 @@ def packSeptets(octets, padBits=0):
         octets = iter(octets)
     shift = padBits
     if padBits == 0:
-        prevSeptet = next(octets)
+        try:
+            prevSeptet = next(octets)
+        except StopIteration:
+            return result
     else:
         prevSeptet = 0x00
     for octet in octets:
@@ -767,6 +770,8 @@ def unpackSeptets(septets, numberOfSeptets=None, prevOctet=None, shift=7):
         septets = iter(septets)    
     if numberOfSeptets == None:        
         numberOfSeptets = MAX_INT # Loop until StopIteration
+    if numberOfSeptets == 0:
+        return result
     i = 0
     for octet in septets:
         i += 1
@@ -776,7 +781,7 @@ def unpackSeptets(septets, numberOfSeptets=None, prevOctet=None, shift=7):
                 result.append(prevOctet >> 1)            
             if i <= numberOfSeptets:
                 result.append(octet & 0x7F)
-                prevOctet = octet                
+                prevOctet = octet
             if i == numberOfSeptets:
                 break
             else:
@@ -789,7 +794,7 @@ def unpackSeptets(septets, numberOfSeptets=None, prevOctet=None, shift=7):
         
         if i == numberOfSeptets:
             break
-    if shift == 7:
+    if shift == 7 and prevOctet:
         b = prevOctet >> (8 - shift)
         if b:
             # The final septet value still needs to be unpacked

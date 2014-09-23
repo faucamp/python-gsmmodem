@@ -47,7 +47,8 @@ class TestGsm7(unittest.TestCase):
     """ Tests the GSM-7 encoding/decoding algorithms """
     
     def setUp(self):
-        self.tests = (('123', bytearray(b'123'), bytearray([49, 217, 12])),
+        self.tests = (('', bytearray(b''), bytearray([])),
+                      ('123', bytearray(b'123'), bytearray([49, 217, 12])),
                       ('12345678', bytearray(b'12345678'), bytearray([49, 217, 140, 86, 179, 221, 112])),
                       ('123456789', bytearray(b'123456789'), bytearray([49, 217, 140, 86, 179, 221, 112, 57])),
                       ('Hello World!', bytearray([0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x20, 0x57, 0x6F, 0x72, 0x6C, 0x64, 0x21]), bytearray([200, 50, 155, 253, 6, 93, 223, 114, 54, 57, 4])),
