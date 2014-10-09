@@ -40,10 +40,11 @@ class Sms(object):
                             'STO SENT': STATUS_STORED_SENT,
                             'ALL': STATUS_ALL}
 
-    def __init__(self, number, text, smsc=None):
+    def __init__(self, number, text, smsc=None, udh=[]):
         self.number = number
         self.text = text
         self.smsc = smsc
+        self.udh = udh
 
 
 class ReceivedSms(Sms):
@@ -827,7 +828,7 @@ class GsmModem(SerialComms):
                         self.log.debug('Discarding line from +CMGL response: %s', line)
                     else:
                         if smsDict['type'] == 'SMS-DELIVER':
-                            sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'])
+                            sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh', []))
                         elif smsDict['type'] == 'SMS-STATUS-REPORT':
                             sms = StatusReport(self, int(msgStat), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
                         else:
@@ -1066,7 +1067,7 @@ class GsmModem(SerialComms):
             pdu = msgData[1]
             smsDict = decodeSmsPdu(pdu)
             if smsDict['type'] == 'SMS-DELIVER':
-                return ReceivedSms(self, int(stat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'])
+                return ReceivedSms(self, int(stat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh', []))
             elif smsDict['type'] == 'SMS-STATUS-REPORT':
                 return StatusReport(self, int(stat), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
             else:
