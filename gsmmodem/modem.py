@@ -40,21 +40,21 @@ class Sms(object):
                             'STO SENT': STATUS_STORED_SENT,
                             'ALL': STATUS_ALL}
 
-    def __init__(self, number, text, smsc=None, udh=[]):
+    def __init__(self, number, text, smsc=None):
         self.number = number
         self.text = text
         self.smsc = smsc
-        self.udh = udh
 
 
 class ReceivedSms(Sms):
     """ An SMS message that has been received (MT) """
     
-    def __init__(self, gsmModem, status, number, time, text, smsc=None):
+    def __init__(self, gsmModem, status, number, time, text, smsc=None, udh=[]):
         super(ReceivedSms, self).__init__(number, text, smsc)
         self._gsmModem = weakref.proxy(gsmModem)
         self.status = status
         self.time = time
+        self.udh = udh
         
     def reply(self, message):
         """ Convenience method that sends a reply SMS to the sender of this message """
