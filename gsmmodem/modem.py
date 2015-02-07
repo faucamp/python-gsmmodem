@@ -826,6 +826,8 @@ class GsmModem(SerialComms):
                         smsDict = decodeSmsPdu(line)
                     except EncodingError:
                         self.log.debug('Discarding line from +CMGL response: %s', line)
+                    except:
+                        pass
                     else:
                         if smsDict['type'] == 'SMS-DELIVER':
                             sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh', []))
