@@ -731,12 +731,12 @@ class GsmModem(SerialComms):
         :rtype: Boolean
         """
         try:
-            queryResponse = self.write('AT+CCFC={0},{1},{2}'.format(fwdType, fwdEnable, fwdNumber), timeout=responseTimeout) # Should respond with "OK"
+            queryResponse = self.write('AT+CCFC={0},{1},"{2}"'.format(fwdType, fwdEnable, fwdNumber), timeout=responseTimeout) # Should respond with "OK"
         except Exception:
             raise
             return False
         print(queryResponse)
-        return True
+        return queryResponse
     
     def dial(self, number, timeout=5, callStatusUpdateCallbackFunc=None):
         """ Calls the specified phone number using a voice phone call
