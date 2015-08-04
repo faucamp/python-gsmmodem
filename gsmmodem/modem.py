@@ -63,7 +63,10 @@ class ReceivedSms(Sms):
         """ Convenience method that sends a SMS to someone else """
         return self._gsmModem.sendSms(dnumber, message)
 
-
+    def getModem(dnumber, message):
+        """ Convenience method that returns the gsm modem instance """
+        return self._gsmModem
+        
 class SentSms(Sms):
     """ An SMS message that has been sent (MO) """
         
@@ -703,7 +706,7 @@ class GsmModem(SerialComms):
             raise TimeoutException()
 
 
-    def checkFowarding(self, querytype):
+    def checkForwarding(self, querytype, timeout=ResponseTimeout):
         """ Check forwarding status: 0=Unconditional, 1=Busy, 2=NoReply, 3=NotReach, 4=AllFwd, 5=AllCondFwd
         :param querytype: The type of forwarding to check
 
@@ -714,6 +717,24 @@ class GsmModem(SerialComms):
             queryResponse = self.write('AT+CCFC={0},2'.format(querytype), timeout=responseTimeout) # Should respond with "OK"
         except Exception:
             raise
+        print(queryResponse)
+        return True
+        
+    
+    def setForwarding(self, fwdType, fwdEnable, fwdNumber, timeout=ResponseTimeout):
+        """ Check forwarding status: 0=Unconditional, 1=Busy, 2=NoReply, 3=NotReach, 4=AllFwd, 5=AllCondFwd
+        :param fwdType: The type of forwarding to set
+        :param fwdEnable: 1 to enable, 0 to disable, 2 to query, 3 to register, 4 to erase
+        :param fwdNumber: Number to forward to
+
+        :return: Success or not
+        :rtype: Boolean
+        """
+        try:
+            queryResponse = self.write('AT+CCFC={0},{1}.{2}'.format(fwdType, fwdEnable, fwdNumber), timeout=responseTimeout) # Should respond with "OK"
+        except Exception:
+            raise
+            return False
         print(queryResponse)
         return True
     
