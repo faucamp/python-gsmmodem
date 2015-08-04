@@ -706,7 +706,7 @@ class GsmModem(SerialComms):
             raise TimeoutException()
 
 
-    def checkForwarding(self, querytype, timeout=15):
+    def checkForwarding(self, querytype, responseTimeout=15):
         """ Check forwarding status: 0=Unconditional, 1=Busy, 2=NoReply, 3=NotReach, 4=AllFwd, 5=AllCondFwd
         :param querytype: The type of forwarding to check
 
@@ -721,7 +721,7 @@ class GsmModem(SerialComms):
         return True
         
     
-    def setForwarding(self, fwdType, fwdEnable, fwdNumber, timeout=15):
+    def setForwarding(self, fwdType, fwdEnable, fwdNumber, responseTimeout=15):
         """ Check forwarding status: 0=Unconditional, 1=Busy, 2=NoReply, 3=NotReach, 4=AllFwd, 5=AllCondFwd
         :param fwdType: The type of forwarding to set
         :param fwdEnable: 1 to enable, 0 to disable, 2 to query, 3 to register, 4 to erase
