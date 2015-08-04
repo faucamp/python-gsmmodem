@@ -731,7 +731,7 @@ class GsmModem(SerialComms):
         :rtype: Boolean
         """
         try:
-            queryResponse = self.write('AT+CCFC={0},{1}.{2}'.format(fwdType, fwdEnable, fwdNumber), timeout=responseTimeout) # Should respond with "OK"
+            queryResponse = self.write('AT+CCFC={0},{1},{2}'.format(fwdType, fwdEnable, fwdNumber), timeout=responseTimeout) # Should respond with "OK"
         except Exception:
             raise
             return False
