@@ -701,6 +701,21 @@ class GsmModem(SerialComms):
         else: # Response timed out
             self._ussdSessionEvent = None            
             raise TimeoutException()
+
+
+    def checkFowarding(self, querytype):
+        """ Check forwarding status: 0=Unconditional, 1=Busy, 2=NoReply, 3=NotReach, 4=AllFwd, 5=AllCondFwd
+        :param querytype: The type of forwarding to check
+
+        :return: Status
+        :rtype: Boolean
+        """
+        try:
+            queryResponse = self.write('AT+CCFC={0},2'.format(querytype), timeout=responseTimeout) # Should respond with "OK"
+        except Exception:
+            raise
+        print(queryResponse)
+        return True
     
     def dial(self, number, timeout=5, callStatusUpdateCallbackFunc=None):
         """ Calls the specified phone number using a voice phone call
