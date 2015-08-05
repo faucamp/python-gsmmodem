@@ -63,7 +63,7 @@ class ReceivedSms(Sms):
         """ Convenience method that sends a SMS to someone else """
         return self._gsmModem.sendSms(dnumber, message)
 
-    def getModem(dnumber, message):
+    def getModem():
         """ Convenience method that returns the gsm modem instance """
         return self._gsmModem
         
