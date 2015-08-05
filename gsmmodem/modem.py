@@ -59,11 +59,11 @@ class ReceivedSms(Sms):
         """ Convenience method that sends a reply SMS to the sender of this message """
         return self._gsmModem.sendSms(self.number, message)
 
-    def sendSms(dnumber, message):
+    def sendSms(self, dnumber, message):
         """ Convenience method that sends a SMS to someone else """
         return self._gsmModem.sendSms(dnumber, message)
 
-    def getModem():
+    def getModem(self):
         """ Convenience method that returns the gsm modem instance """
         return self._gsmModem
         
