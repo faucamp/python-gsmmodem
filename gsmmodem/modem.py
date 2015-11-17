@@ -338,7 +338,7 @@ class GsmModem(SerialComms):
         
         if self._smsReadSupported:
             try:
-                self.write('AT+CNMI=2,1,0,2') # Set message notifications
+                self.write('AT+CNMI=2,1,0,1') # Set message notifications
             except CommandError:
                 # Message notifications not supported
                 self._smsReadSupported = False
