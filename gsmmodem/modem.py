@@ -4,6 +4,7 @@
 
 import sys, re, logging, weakref, time, threading, abc, codecs
 from datetime import datetime
+from time import sleep
 
 from .serial_comms import SerialComms
 from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException, TimeoutException, PinRequiredError, IncorrectPinError, SmscNumberUnknownError
@@ -130,11 +131,12 @@ class GsmModem(SerialComms):
     # Used for parsing SMS status reports
     CDSI_REGEX = re.compile(r'\+CDSI:\s*"([^"]+)",(\d+)$')
     
-    def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallback=None):
+    def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallback=None, AT_CNMI=""):
         super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification)
         self.incomingCallCallback = incomingCallCallbackFunc or self._placeholderCallback
         self.smsReceivedCallback = smsReceivedCallbackFunc or self._placeholderCallback
         self.smsStatusReportCallback = smsStatusReportCallback or self._placeholderCallback
+        self.AT_CNMI = AT_CNMI or "2,1,0,2"
         # Flag indicating whether caller ID for incoming call notification has been set up
         self._callingLineIdentification = False
         # Flag indicating whether incoming call notifications have extended information
@@ -161,7 +163,7 @@ class GsmModem(SerialComms):
         self._smsMemWrite = None # Preferred message storage memory for writes (<mem2> parameter used for +CPMS)
         self._smsReadSupported = True # Whether or not reading SMS messages is supported via AT commands
 
-    def connect(self, pin=None):
+    def connect(self, pin=None, waitingForModemToStartInSeconds=0):
         """ Opens the port and initializes the modem and SIM card
          
         :param pin: The SIM card PIN code, if any
@@ -170,8 +172,13 @@ class GsmModem(SerialComms):
         :raise PinRequiredError: if the SIM card requires a PIN but none was provided
         :raise IncorrectPinError: if the specified PIN is incorrect
         """
-        self.log.info('Connecting to modem on port %s at %dbps', self.port, self.baudrate)        
+
+        self.log.info('Connecting to modem on port %s at %dbps', self.port, self.baudrate)    
         super(GsmModem, self).connect()
+
+        if waitingForModemToStartInSeconds > 0:
+            sleep(waitingForModemToStartInSeconds)
+
         # Send some initialization commands to the modem
         try:        
             self.write('ATZ') # reset configuration
@@ -338,7 +345,7 @@ class GsmModem(SerialComms):
         
         if self._smsReadSupported:
             try:
-                self.write('AT+CNMI=2,1,0,2') # Set message notifications
+                self.write('AT+CNMI=' + self.AT_CNMI)  # Set message notifications
             except CommandError:
                 # Message notifications not supported
                 self._smsReadSupported = False
@@ -384,7 +391,7 @@ class GsmModem(SerialComms):
             else:
                 raise PinRequiredError('AT+CPIN')
                
-    def write(self, data, waitForResponse=True, timeout=5, parseError=True, writeTerm='\r', expectedResponseTermSeq=None):
+    def write(self, data, waitForResponse=True, timeout=10, parseError=True, writeTerm='\r', expectedResponseTermSeq=None):
         """ Write data to the modem.
 
         This method adds the ``\\r\\n`` end-of-line sequence to the data parameter, and
