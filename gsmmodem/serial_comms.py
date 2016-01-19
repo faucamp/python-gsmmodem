@@ -92,7 +92,10 @@ class SerialComms(object):
             while self.alive:
                 data = self.serial.read(1)
                 if isinstance(data, bytes):
-                    data = data.decode()
+                    try:
+                        data = data.decode()
+                    except UnicodeDecodeError:
+                        data = ''
                 if data != '': # check for timeout
                     #print >> sys.stderr, ' RX:', data,'({0})'.format(ord(data))
                     rxBuffer.append(data)
