@@ -177,7 +177,12 @@ class GsmModem(SerialComms):
         super(GsmModem, self).connect()
 
         if waitingForModemToStartInSeconds > 0:
-            sleep(waitingForModemToStartInSeconds)
+            while waitingForModemToStartInSeconds > 0:
+                try:
+                    self.write('AT', waitForResponse=True, timeout=0.5)
+                    break
+                except TimeoutException:
+                    waitingForModemToStartInSeconds -= 0.5
 
         # Send some initialization commands to the modem
         try:        
@@ -509,7 +514,7 @@ class GsmModem(SerialComms):
         try:
             # AT+CLAC responses differ between modems. Most respond with +CLAC: and then a comma-separated list of commands
             # while others simply return each command on a new line, with no +CLAC: prefix
-            response = self.write('AT+CLAC')
+            response = self.write('AT+CLAC', timeout=10)
             if len(response) == 2: # Single-line response, comma separated
                 commands = response[0]
                 if commands.startswith('+CLAC'):
