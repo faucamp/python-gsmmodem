@@ -128,7 +128,7 @@ class GsmModem(SerialComms):
     # Used for parsing caller ID announcements for incoming calls. Group 1 is the number
     CLIP_REGEX = re.compile(b'^\+CLIP:\s*"(\+{0,1}\d+)",(\d+).*$')
     # Used for parsing new SMS message indications
-    CMTI_REGEX = re.compile(b'^\+CMTI:\s*"([^"]+)",(\d+)$')
+    CMTI_REGEX = re.compile(b'^\+CMTI:\s*"([^"]+)",\s*(\d+)$')
     # Used for parsing SMS message reads (text mode)
     CMGR_SM_DELIVER_REGEX_TEXT = None
     # Used for parsing SMS status report message reads (text mode)
@@ -564,7 +564,7 @@ class GsmModem(SerialComms):
                 self.CMGR_SM_DELIVER_REGEX_TEXT = re.compile(b'^\+CMGR: "([^"]+)","([^"]+)",[^,]*,"([^"]+)"$')
                 self.CMGR_SM_REPORT_REGEXT_TEXT = re.compile(b'^\+CMGR: ([^,]*),\d+,(\d+),"{0,1}([^"]*)"{0,1},\d*,"([^"]+)","([^"]+)",(\d+)$')
         elif self.CMGR_REGEX_PDU == None:
-            self.CMGR_REGEX_PDU = re.compile(b'^\+CMGR: (\d*),"{0,1}([^"]*)"{0,1},(\d+)$')
+            self.CMGR_REGEX_PDU = re.compile(b'^\+CMGR:\s*(\d*),\s*"{0,1}([^"]*)"{0,1},\s*(\d+)$')
             
     @property
     def smsc(self):
