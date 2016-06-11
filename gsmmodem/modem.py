@@ -10,14 +10,24 @@ from .exceptions import CommandError, InvalidStateException, CmeError, CmsError,
 from .pdu import encodeSmsSubmitPdu, decodeSmsPdu
 from .util import SimpleOffsetTzInfo, lineStartingWith, allLinesMatchingPattern, parseTextModeTimeStr
 
-from . import compat # For Python 2.6 compatibility
+#from . import compat # For Python 2.6 compatibility
 from gsmmodem.util import lineMatching
 from gsmmodem.exceptions import EncodingError
 PYTHON_VERSION = sys.version_info[0]
+
+CTRLZ = chr(26)
+TERMINATOR = '\r'
+
+
 if PYTHON_VERSION >= 3:
     xrange = range
     dictValuesIter = dict.values
     dictItemsIter = dict.items
+    unicode = str
+    TERMINATOR = b'\r'
+    CTRLZ = b'\x1a'
+    
+    
 else: #pragma: no cover
     dictValuesIter = dict.itervalues
     dictItemsIter = dict.iteritems
@@ -300,7 +310,7 @@ class GsmModem(SerialComms):
         # Some modems delete the SMSC number when setting text-mode SMS parameters; preserve it if needed
         if currentSmscNumber != None:
             self._smscNumber = None # clear cache
-        self.write('AT+CSMP=49,167,0,0', parseError=False) # Enable delivery reports
+        self.write('AT+CSMP=49,167,0,8', parseError=False) # Enable delivery reports
         # ...check SMSC again to ensure it did not change
         if currentSmscNumber != None and self.smsc != currentSmscNumber:
             self.smsc = currentSmscNumber
@@ -384,7 +394,7 @@ class GsmModem(SerialComms):
             else:
                 raise PinRequiredError('AT+CPIN')
                
-    def write(self, data, waitForResponse=True, timeout=5, parseError=True, writeTerm='\r', expectedResponseTermSeq=None):
+    def write(self, data, waitForResponse=True, timeout=5, parseError=True, writeTerm=TERMINATOR, expectedResponseTermSeq=None):
         """ Write data to the modem.
 
         This method adds the ``\\r\\n`` end-of-line sequence to the data parameter, and
@@ -409,6 +419,11 @@ class GsmModem(SerialComms):
         :return: A list containing the response lines from the modem, or None if waitForResponse is False
         :rtype: list
         """
+        
+        if isinstance(data, unicode):
+            data = bytes(data,"ascii")
+        
+            
         self.log.debug('write: %s', data)
         responseLines = super(GsmModem, self).write(data + writeTerm, waitForResponse=waitForResponse, timeout=timeout, expectedResponseTermSeq=expectedResponseTermSeq)
         if self._writeWait > 0: # Sleep a bit if required (some older modems suffer under load)            
@@ -640,13 +655,13 @@ class GsmModem(SerialComms):
         :raise TimeoutException: if the operation times out
         """
         if self._smsTextMode:
-            self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq='> ')
-            result = lineStartingWith('+CMGS:', self.write(text, timeout=15, writeTerm=chr(26)))
+            self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq=b'> ')
+            result = lineStartingWith('+CMGS:', self.write(text, timeout=15, writeTerm=CTRLZ))
         else:
             pdus = encodeSmsSubmitPdu(destination, text, reference=self._smsRef, sendFlash=sendFlash)
             for pdu in pdus:
-                self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=3, expectedResponseTermSeq='> ')
-                result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=15, writeTerm=chr(26))) # example: +CMGS: xx
+                self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=3, expectedResponseTermSeq=b'> ')
+                result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=15, writeTerm=CTRLZ)) # example: +CMGS: xx
         if result == None:
             raise CommandError('Modem did not respond with +CMGS response')
         reference = int(result[7:])
