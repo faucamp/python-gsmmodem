@@ -88,7 +88,7 @@ class SerialComms(object):
         try:
             readTermSeq = list(self.RX_EOL_SEQ)
             readTermLen = len(readTermSeq)
-            rxBuffer = []
+            rxBuffer = bytearray()
             while self.alive:
                 data = self.serial.read(1)
                 if data != '': # check for timeout
@@ -96,15 +96,15 @@ class SerialComms(object):
                     rxBuffer.append(data)
                     if rxBuffer[-readTermLen:] == readTermSeq:                        
                         # A line (or other logical segment) has been read
-                        line = ''.join(rxBuffer[:-readTermLen])
-                        rxBuffer = []
+                        line = bytes(rxBuffer[:-readTermLen])
+                        rxBuffer = bytearray()
                         if len(line) > 0:                          
                             #print 'calling handler'                      
                             self._handleLineRead(line)
                     elif self._expectResponseTermSeq:
                         if rxBuffer[-len(self._expectResponseTermSeq):] == self._expectResponseTermSeq:
-                            line = ''.join(rxBuffer) 
-                            rxBuffer = []
+                            line = bytes(rxBuffer) 
+                            rxBuffer = bytearray()
                             self._handleLineRead(line, checkForResponseTerm=False)                                                
             #else:
                 #' <RX timeout>'
@@ -121,7 +121,7 @@ class SerialComms(object):
         with self._txLock:            
             if waitForResponse:
                 if expectedResponseTermSeq:
-                    self._expectResponseTermSeq = list(expectedResponseTermSeq) 
+                    self._expectResponseTermSeq = bytearray(expectedResponseTermSeq) 
                 self._response = []
                 self._responseEvent = threading.Event()                
                 self.serial.write(data)
