@@ -42,9 +42,12 @@ class SerialComms(object):
         self.notifyCallback = notifyCallbackFunc or self._placeholderCallback        
         self.fatalErrorCallback = fatalErrorCallbackFunc or self._placeholderCallback
         
+        self.com_args = args
+        self.com_kwargs = kwargs
+        
     def connect(self):
         """ Connects to the device and starts the read thread """                
-        self.serial = serial.Serial(port=self.port, baudrate=self.baudrate, timeout=self.timeout)
+        self.serial = serial.Serial(port=self.port, baudrate=self.baudrate, timeout=self.timeout,*self.com_args,**self.com_kwargs)
         # Start read thread
         self.alive = True 
         self.rxThread = threading.Thread(target=self._readLoop)

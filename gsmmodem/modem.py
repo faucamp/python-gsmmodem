@@ -140,8 +140,8 @@ class GsmModem(SerialComms):
     # Used for parsing SMS status reports
     CDSI_REGEX = re.compile(r'\+CDSI:\s*"([^"]+)",(\d+)$')
     
-    def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallback=None):
-        super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification)
+    def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallback=None,*a,**kw):
+        super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification,*a,**kw)
         self.incomingCallCallback = incomingCallCallbackFunc or self._placeholderCallback
         self.smsReceivedCallback = smsReceivedCallbackFunc or self._placeholderCallback
         self.smsStatusReportCallback = smsStatusReportCallback or self._placeholderCallback
