@@ -16,9 +16,9 @@ class SerialComms(object):
     log = logging.getLogger('gsmmodem.serial_comms.SerialComms')
     
     # End-of-line read terminator
-    RX_EOL_SEQ = '\r\n'
+    RX_EOL_SEQ = b'\r\n'
     # End-of-response terminator
-    RESPONSE_TERM = re.compile(r'^OK|ERROR|(\+CM[ES] ERROR: \d+)|(COMMAND NOT SUPPORT)$')
+    RESPONSE_TERM = re.compile(b'^OK|ERROR|(\+CM[ES] ERROR: \d+)|(COMMAND NOT SUPPORT)$')
     # Default timeout for serial port reads (in seconds)
     timeout = 1
         
@@ -94,7 +94,7 @@ class SerialComms(object):
             rxBuffer = bytearray()
             while self.alive:
                 data = self.serial.read(1)
-                if data != '': # check for timeout
+                if data : # check for timeout
                     #print >> sys.stderr, ' RX:', data,'({0})'.format(ord(data))
                     rxBuffer.append(ord(data))
                     if rxBuffer[-readTermLen:] == readTermSeq:
