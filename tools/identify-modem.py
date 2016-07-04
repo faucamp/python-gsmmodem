@@ -21,7 +21,8 @@ def parseArgs():
     parser.add_argument('port', metavar='PORT', help='port to which the GSM modem is connected; a number or a device name.')
     parser.add_argument('-b', '--baud', metavar='BAUDRATE', default=115200, help='set baud rate')
     parser.add_argument('-p', '--pin', metavar='PIN', default=None, help='SIM card PIN')
-    parser.add_argument('-d', '--debug',  action='store_true', help='dump modem debug information (for python-gsmmodem development)')    
+    parser.add_argument('-d', '--debug',  action='store_true', help='dump modem debug information (for python-gsmmodem development)')
+    parser.add_argument('-w', '--wait', type=int, default=0, help='Wait for modem to start, in seconds')
     return parser.parse_args()
 
 def parseArgsPy26():
@@ -32,6 +33,7 @@ def parseArgsPy26():
     parser.add_option('-b', '--baud', metavar='BAUDRATE', default=115200, help='set baud rate')
     parser.add_option('-p', '--pin', metavar='PIN', default=None, help='SIM card PIN')
     parser.add_option('-d', '--debug',  action='store_true', help='dump modem debug information (for python-gsmmodem development)')
+    parser.add_option('-w', '--wait', type=int, default=0, help='Wait for modem to start, in seconds')
     options, args = parser.parse_args()
     if len(args) != 1:    
         parser.error('Incorrect number of arguments - please specify a PORT to connect to, e.g. {0} /dev/ttyUSB0'.format(sys.argv[0]))
@@ -46,7 +48,7 @@ def main():
     
     print('Connecting to GSM modem on {0}...'.format(args.port))
     try:
-        modem.connect(args.pin)
+        modem.connect(args.pin, waitingForModemToStartInSeconds=args.wait)
     except PinRequiredError:
         sys.stderr.write('Error: SIM card PIN required. Please specify a PIN with the -p argument.\n')
         sys.exit(1)
