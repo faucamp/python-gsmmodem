@@ -761,6 +761,7 @@ class GsmModem(SerialComms):
         try:
             encodedText = encodeGsm7(text)
         except ValueError:
+            encodedText = None
             self.smsTextMode = False
 
         # Check message length
@@ -772,6 +773,14 @@ class GsmModem(SerialComms):
             self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq='> ')
             result = lineStartingWith('+CMGS:', self.write(text, timeout=15, writeTerm=chr(26)))
         else:
+            # Set GSM modem SMS encoding format
+            # Encode message text and set data coding scheme based on text contents
+            if encodedText == None:
+                # Cannot encode text using GSM-7; use UCS2 instead
+                self.smsEncoding = 'UCS2'
+            else:
+                self.smsEncoding = 'GSM'  
+
             pdus = encodeSmsSubmitPdu(destination, text, reference=self._smsRef, sendFlash=sendFlash)
             for pdu in pdus:
                 self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=3, expectedResponseTermSeq='> ')
