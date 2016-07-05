@@ -770,8 +770,8 @@ class GsmModem(SerialComms):
 
         # Send SMS via AT commands
         if self._smsTextMode:
-            self.write('AT+CMGS="{0}"'.format(destination), timeout=3, expectedResponseTermSeq='> ')
-            result = lineStartingWith('+CMGS:', self.write(text, timeout=15, writeTerm=chr(26)))
+            self.write('AT+CMGS="{0}"'.format(destination), timeout=5, expectedResponseTermSeq='> ')
+            result = lineStartingWith('+CMGS:', self.write(text, timeout=35, writeTerm=chr(26)))
         else:
             # Set GSM modem SMS encoding format
             # Encode message text and set data coding scheme based on text contents
@@ -779,12 +779,12 @@ class GsmModem(SerialComms):
                 # Cannot encode text using GSM-7; use UCS2 instead
                 self.smsEncoding = 'UCS2'
             else:
-                self.smsEncoding = 'GSM'  
+                self.smsEncoding = 'GSM'
 
             pdus = encodeSmsSubmitPdu(destination, text, reference=self._smsRef, sendFlash=sendFlash)
             for pdu in pdus:
-                self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=3, expectedResponseTermSeq='> ')
-                result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=15, writeTerm=chr(26))) # example: +CMGS: xx
+                self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=5, expectedResponseTermSeq='> ')
+                result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=35, writeTerm=chr(26))) # example: +CMGS: xx
         if result == None:
             raise CommandError('Modem did not respond with +CMGS response')
         reference = int(result[7:])
