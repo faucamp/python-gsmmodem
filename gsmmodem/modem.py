@@ -582,7 +582,7 @@ class GsmModem(SerialComms):
 
         # Extract encoding names list
         try:
-            enc_list = enc_list[0]  # Get the first line
+            enc_list = response[0]  # Get the first line
             enc_list = enc_list[6:] # Remove '+CSCS' prefix
             # Extract AT list in format ("str", "str2", "str3")
             enc_list = enc_list.split('(')[1]
@@ -631,13 +631,13 @@ class GsmModem(SerialComms):
             return False
 
         # Check if command is available
-        if self._commands == None:
-            self.smsSupportedEncoding()
+        if self._smsSupportedEncodingNames == None:
+            self.smsSupportedEncoding
 
         # Check if desired encoding is available
         if encoding in self._smsSupportedEncodingNames:
             # Set encoding
-            response = self.write('AT+CSCS={0}'.format(encoding))
+            response = self.write('AT+CSCS="{0}"'.format(encoding))
             if len(response) == 1:
                 if response[0].lower() == 'ok':
                     self._smsEncoding = encoding
@@ -761,11 +761,11 @@ class GsmModem(SerialComms):
         try:
             encodedText = encodeGsm7(text)
         except ValueError:
-            self.smsTextMode(False)
+            self.smsTextMode = False
 
         # Check message length
         if len(text) > 160:
-            self.smsTextMode(False)
+            self.smsTextMode = False
 
         # Send SMS via AT commands
         if self._smsTextMode:
