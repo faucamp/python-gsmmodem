@@ -129,6 +129,7 @@ class GsmModem(SerialComms):
     CUSD_REGEX = re.compile(r'\+CUSD:\s*(\d),"(.*?)",(\d+)', re.DOTALL)
     # Used for parsing SMS status reports
     CDSI_REGEX = re.compile(r'\+CDSI:\s*"([^"]+)",(\d+)$')
+    CDS_REGEX  = re.compile(r'\+CDS:\s*([0-9]+)"$')
     
     def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallback=None):
         super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification)
@@ -340,9 +341,12 @@ class GsmModem(SerialComms):
             try:
                 self.write('AT+CNMI=2,1,0,2') # Set message notifications
             except CommandError:
-                # Message notifications not supported
-                self._smsReadSupported = False
-                self.log.warning('Incoming SMS notifications not supported by modem. SMS receiving unavailable.')
+                try:
+                    self.write('AT+CNMI=2,1,0,1,0') # Set message notifications, using TE for delivery reports <ds>
+                except CommandError:
+                    # Message notifications not supported
+                    self._smsReadSupported = False
+                    self.log.warning('Incoming SMS notifications not supported by modem. SMS receiving unavailable.')
         
         # Incoming call notification setup
         try:
@@ -859,6 +863,7 @@ class GsmModem(SerialComms):
         
         :param lines The lines that were read
         """
+        next_line_is_te_statusreport = False
         for line in lines:
             if 'RING' in line:
                 # Incoming call (or existing call is ringing)
@@ -875,6 +880,17 @@ class GsmModem(SerialComms):
             elif line.startswith('+CDSI'):
                 # SMS status report
                 self._handleSmsStatusReport(line)
+                return
+            elif line.startswith('+CDS'):
+                # SMS status report at next line
+                next_line_is_te_statusreport = True
+                cdsMatch = self.CDS_REGEX.match(line)
+                if cdsMatch:
+                    next_line_is_te_statusreport_length = int(cdsMatch.group(1))
+                else:
+                    next_line_is_te_statusreport_length = -1
+            elif next_line_is_te_statusreport:
+                self._handleSmsStatusReportTe(next_line_is_te_statusreport_length, line)
                 return
             else:
                 # Check for call status updates            
@@ -1017,7 +1033,29 @@ class GsmModem(SerialComms):
             else:
                 # Nothing is waiting for this report directly - use callback
                 self.smsStatusReportCallback(report)
-    
+
+    def _handleSmsStatusReportTe(self, length, notificationLine):
+        """ Handler for TE SMS status reports """
+        self.log.debug('TE SMS status report received')
+        try:
+            smsDict = decodeSmsPdu(notificationLine)
+        except EncodingError:
+            self.log.debug('Discarding notification line from +CDS response: %s', notificationLine)
+        else:
+            if smsDict['type'] == 'SMS-STATUS-REPORT':
+                report = StatusReport(self, int(smsDict['status']), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
+            else:
+                raise CommandError('Invalid PDU type for readStoredSms(): {0}'.format(smsDict['type']))
+        # Update sent SMS status if possible
+        if report.reference in self.sentSms:
+            self.sentSms[report.reference].report = report
+        if self._smsStatusReportEvent:
+            # A sendSms() call is waiting for this response - notify waiting thread
+            self._smsStatusReportEvent.set()
+        else:
+            # Nothing is waiting for this report directly - use callback
+            self.smsStatusReportCallback(report)
+
     def readStoredSms(self, index, memory=None):
         """ Reads and returns the SMS message at the specified index
         
