@@ -91,6 +91,11 @@ class SerialComms(object):
             rxBuffer = []
             while self.alive:
                 data = self.serial.read(1)
+                if isinstance(data, bytes):
+                    try:
+                        data = data.decode()
+                    except UnicodeDecodeError:
+                        data = ''
                 if data != '': # check for timeout
                     #print >> sys.stderr, ' RX:', data,'({0})'.format(ord(data))
                     rxBuffer.append(data)
@@ -118,6 +123,8 @@ class SerialComms(object):
             self.fatalErrorCallback(e)
         
     def write(self, data, waitForResponse=True, timeout=5, expectedResponseTermSeq=None):
+        if isinstance(data, str):
+            data = data.encode()
         with self._txLock:            
             if waitForResponse:
                 if expectedResponseTermSeq:
