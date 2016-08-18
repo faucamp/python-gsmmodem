@@ -93,8 +93,8 @@ class SerialComms(object):
             readTermLen = len(readTermSeq)
             rxBuffer = bytearray()
             while self.alive:
-                data = self.serial.read(1)
-                if data : # check for timeout
+                data = self.serial.read(1).decode() #Python 3.x compatibility
+                if data != '': # check for timeout
                     #print >> sys.stderr, ' RX:', data,'({0})'.format(ord(data))
                     rxBuffer.append(ord(data))
                     if rxBuffer[-readTermLen:] == readTermSeq:
