@@ -150,10 +150,10 @@ class GsmModem(SerialComms):
     CDSI_REGEX = re.compile(b'\+CDSI:\s*"([^"]+)",(\d+)$')
     CDS_REGEX  = re.compile(b'\+CDS:\s*([0-9]+)"$')
     
-    def __init__(self, port, baudrate=115200, incomingCallCallback=None, smsReceivedCallback=None, smsStatusReportCallback=None, requestDelivery=True, AT_CNMI="", *a, **kw):
-        super(GsmModem, self).__init__(port, baudrate, notifyCallback=self._handleModemNotification, *a, **kw)
-        self.incomingCallCallback = incomingCallCallback or self._placeholderCallback
-        self.smsReceivedCallback = smsReceivedCallback
+    def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallback=None, requestDelivery=True, AT_CNMI="", *a, **kw):
+        super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification, *a, **kw)
+        self.incomingCallCallback = incomingCallCallbackFunc or self._placeholderCallback
+        self.smsReceivedCallback = smsReceivedCallbackFunc
         self.smsStatusReportCallback = smsStatusReportCallback
         self.requestDelivery = requestDelivery
         self.AT_CNMI = AT_CNMI or "2,1,0,2"
