@@ -816,7 +816,7 @@ def encodeUcs2(text):
     :rtype: bytearray
     """
     result = bytearray()
-    text = text.decode('UTF-8')
+    
     for b in map(ord, text):
         result.append(b >> 8)
         result.append(b & 0xFF)
