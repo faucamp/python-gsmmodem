@@ -16,9 +16,9 @@ class SerialComms(object):
     log = logging.getLogger('gsmmodem.serial_comms.SerialComms')
     
     # End-of-line read terminator
-    RX_EOL_SEQ = '\r\n'
+    RX_EOL_SEQ = b'\r\n'
     # End-of-response terminator
-    RESPONSE_TERM = re.compile(r'^OK|ERROR|(\+CM[ES] ERROR: \d+)|(COMMAND NOT SUPPORT)$')
+    RESPONSE_TERM = re.compile(b'^OK|ERROR|(\+CM[ES] ERROR: \d+)|(COMMAND NOT SUPPORT)$')
     # Default timeout for serial port reads (in seconds)
     timeout = 1
         
@@ -42,9 +42,12 @@ class SerialComms(object):
         self.notifyCallback = notifyCallbackFunc or self._placeholderCallback        
         self.fatalErrorCallback = fatalErrorCallbackFunc or self._placeholderCallback
         
+        self.com_args = args
+        self.com_kwargs = kwargs
+        
     def connect(self):
         """ Connects to the device and starts the read thread """                
-        self.serial = serial.Serial(port=self.port, baudrate=self.baudrate, timeout=self.timeout)
+        self.serial = serial.Serial(port=self.port, baudrate=self.baudrate, timeout=self.timeout,*self.com_args,**self.com_kwargs)
         # Start read thread
         self.alive = True 
         self.rxThread = threading.Thread(target=self._readLoop)
@@ -86,30 +89,25 @@ class SerialComms(object):
         Reads lines from the connected device
         """
         try:
-            readTermSeq = list(self.RX_EOL_SEQ)
+            readTermSeq = bytearray(self.RX_EOL_SEQ)
             readTermLen = len(readTermSeq)
-            rxBuffer = []
+            rxBuffer = bytearray()
             while self.alive:
                 data = self.serial.read(1)
-                if isinstance(data, bytes):
-                    try:
-                        data = data.decode()
-                    except UnicodeDecodeError:
-                        data = ''
-                if data != '': # check for timeout
+                if data : # check for timeout
                     #print >> sys.stderr, ' RX:', data,'({0})'.format(ord(data))
-                    rxBuffer.append(data)
-                    if rxBuffer[-readTermLen:] == readTermSeq:                        
+                    rxBuffer.append(ord(data))
+                    if rxBuffer[-readTermLen:] == readTermSeq:
                         # A line (or other logical segment) has been read
-                        line = ''.join(rxBuffer[:-readTermLen])
-                        rxBuffer = []
+                        line = bytes(rxBuffer[:-readTermLen])
+                        rxBuffer = bytearray()
                         if len(line) > 0:                          
                             #print 'calling handler'                      
                             self._handleLineRead(line)
                     elif self._expectResponseTermSeq:
                         if rxBuffer[-len(self._expectResponseTermSeq):] == self._expectResponseTermSeq:
-                            line = ''.join(rxBuffer) 
-                            rxBuffer = []
+                            line = bytes(rxBuffer) 
+                            rxBuffer = bytearray()
                             self._handleLineRead(line, checkForResponseTerm=False)                                                
             #else:
                 #' <RX timeout>'
@@ -128,7 +126,7 @@ class SerialComms(object):
         with self._txLock:            
             if waitForResponse:
                 if expectedResponseTermSeq:
-                    self._expectResponseTermSeq = list(expectedResponseTermSeq) 
+                    self._expectResponseTermSeq = bytearray(expectedResponseTermSeq) 
                 self._response = []
                 self._responseEvent = threading.Event()                
                 self.serial.write(data)
