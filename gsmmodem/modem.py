@@ -60,11 +60,12 @@ class Sms(object):
 class ReceivedSms(Sms):
     """ An SMS message that has been received (MT) """
 
-    def __init__(self, gsmModem, status, number, time, text, smsc=None):
+    def __init__(self, gsmModem, status, number, time, text, smsc=None, udh=None):
         super(ReceivedSms, self).__init__(number, text, smsc)
         self._gsmModem = weakref.proxy(gsmModem)
         self.status = status
         self.time = time
+        self.udh = udh
 
     def reply(self, message):
         """ Convenience method that sends a reply SMS to the sender of this message """
@@ -149,11 +150,11 @@ class GsmModem(SerialComms):
     CDSI_REGEX = re.compile(b'\+CDSI:\s*"([^"]+)",(\d+)$')
     CDS_REGEX  = re.compile(b'\+CDS:\s*([0-9]+)"$')
     
-    def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallback=None, requestDelivery=True, AT_CNMI="", *a, **kw):
-        super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification, *a, **kw)
-        self.incomingCallCallback = incomingCallCallbackFunc or self._placeholderCallback
-        self.smsReceivedCallback = smsReceivedCallbackFunc or self._placeholderCallback
-        self.smsStatusReportCallback = smsStatusReportCallback or self._placeholderCallback
+    def __init__(self, port, baudrate=115200, incomingCallCallback=None, smsReceivedCallback=None, smsStatusReportCallback=None, requestDelivery=True, AT_CNMI="", *a, **kw):
+        super(GsmModem, self).__init__(port, baudrate, notifyCallback=self._handleModemNotification, *a, **kw)
+        self.incomingCallCallback = incomingCallCallback or self._placeholderCallback
+        self.smsReceivedCallback = smsReceivedCallback
+        self.smsStatusReportCallback = smsStatusReportCallback
         self.requestDelivery = requestDelivery
         self.AT_CNMI = AT_CNMI or "2,1,0,2"
         # Flag indicating whether caller ID for incoming call notification has been set up
@@ -379,7 +380,7 @@ class GsmModem(SerialComms):
             del cpmsSupport
             del cpmsLine
 
-        if self._smsReadSupported:
+        if self._smsReadSupported and (self.smsReceivedCallback or self.smsStatusReportCallback):
             try:
                 self.write('AT+CNMI=' + self.AT_CNMI)  # Set message notifications
             except CommandError:
@@ -761,7 +762,7 @@ class GsmModem(SerialComms):
         checkCreg = True
         while block[0]:
             if checkCreg:
-                cregResult = lineMatching(b'^\+CREG:\s*(\d),(\d)$', self.write('AT+CREG?', parseError=False)) # example result: +CREG: 0,1
+                cregResult = lineMatching(b'^\+CREG:\s*(\d),(\d)(,[^,]*,[^,]*)?$', self.write('AT+CREG?', parseError=False)) # example result: +CREG: 0,1
                 if cregResult:
                     status = int(cregResult.group(2))
                     if status in (1, 5):
@@ -915,12 +916,12 @@ class GsmModem(SerialComms):
         print(queryResponse)
         return queryResponse
     
-    def dial(self, number, timeout=5, callStatusUpdateCallbackFunc=None):
+    def dial(self, number, timeout=5, callStatusUpdateCallback=None):
         """ Calls the specified phone number using a voice phone call
 
         :param number: The phone number to dial
         :param timeout: Maximum time to wait for the call to be established
-        :param callStatusUpdateCallbackFunc: Callback function that is executed if the call's status changes due to
+        :param callStatusUpdateCallback: Callback function that is executed if the call's status changes due to
                remote events (i.e. when it is answered, the call is ended by the remote party)
 
         :return: The outgoing call
@@ -940,7 +941,7 @@ class GsmModem(SerialComms):
             self.log.debug("Not waiting for outgoing call init update message")
             callId = len(self.activeCalls) + 1
             callType = 0 # Assume voice
-            call = Call(self, callId, callType, number, callStatusUpdateCallbackFunc)
+            call = Call(self, callId, callType, number, callStatusUpdateCallback)
             self.activeCalls[callId] = call
             return call
 
@@ -951,7 +952,7 @@ class GsmModem(SerialComms):
         if self._dialEvent.wait(timeout):
             self._dialEvent = None
             callId, callType = self._dialResponse
-            call = Call(self, callId, callType, number, callStatusUpdateCallbackFunc)
+            call = Call(self, callId, callType, number, callStatusUpdateCallback)
             self.activeCalls[callId] = call
             return call
         else: # Call establishing timed out
@@ -970,13 +971,16 @@ class GsmModem(SerialComms):
         :param unreadOnly: If True, only process unread SMS messages
         :type unreadOnly: boolean
         """
-        states = [Sms.STATUS_RECEIVED_UNREAD]
-        if not unreadOnly:
-            states.insert(0, Sms.STATUS_RECEIVED_READ)
-        for msgStatus in states:
-            messages = self.listStoredSms(status=msgStatus, delete=True)
-            for sms in messages:
-                self.smsReceivedCallback(sms)
+        if self.smsReceivedCallback:
+            states = [Sms.STATUS_RECEIVED_UNREAD]
+            if not unreadOnly:
+                states.insert(0, Sms.STATUS_RECEIVED_READ)
+            for msgStatus in states:
+                messages = self.listStoredSms(status=msgStatus, delete=True)
+                for sms in messages:
+                    self.smsReceivedCallback(sms)
+        else:
+            raise ValueError('GsmModem.smsReceivedCallback not set')
 
     def listStoredSms(self, status=Sms.STATUS_ALL, memory=None, delete=False):
         """ Returns SMS messages currently stored on the device/SIM card.
@@ -1044,7 +1048,7 @@ class GsmModem(SerialComms):
                         self.log.debug('Discarding line from +CMGL response: %s', line)
                     else:
                         if smsDict['type'] == 'SMS-DELIVER':
-                            sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'])
+                            sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh'))
                         elif smsDict['type'] == 'SMS-STATUS-REPORT':
                             sms = StatusReport(self, int(msgStat), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
                         else:
@@ -1240,14 +1244,19 @@ class GsmModem(SerialComms):
     def _handleSmsReceived(self, notificationLine):
         """ Handler for "new SMS" unsolicited notification line """
         self.log.debug('SMS message received')
-        cmtiMatch = self.CMTI_REGEX.match(notificationLine)
-        if cmtiMatch:
-            msgMemory = cmtiMatch.group(1)
-            msgIndex = cmtiMatch.group(2)
-            sms = self.readStoredSms(msgIndex, msgMemory)
-            self.deleteStoredSms(msgIndex)
-            self.smsReceivedCallback(sms)
-
+        if self.smsReceivedCallback is not None:
+            cmtiMatch = self.CMTI_REGEX.match(notificationLine)
+            if cmtiMatch:
+                msgMemory = cmtiMatch.group(1)
+                msgIndex = cmtiMatch.group(2)
+                sms = self.readStoredSms(msgIndex, msgMemory)
+                try:
+                    self.smsReceivedCallback(sms)
+                except Exception:
+                    self.log.error('error in smsReceivedCallback', exc_info=True)
+                else:
+                    self.deleteStoredSms(msgIndex)
+    
     def _handleSmsStatusReport(self, notificationLine):
         """ Handler for SMS status reports """
         self.log.debug('SMS status report received')
@@ -1263,8 +1272,14 @@ class GsmModem(SerialComms):
             if self._smsStatusReportEvent:
                 # A sendSms() call is waiting for this response - notify waiting thread
                 self._smsStatusReportEvent.set()
-            else:
+            elif self.smsStatusReportCallback:
                 # Nothing is waiting for this report directly - use callback
+                try:
+                    self.smsStatusReportCallback(report)
+                except Exception:
+                    self.log.error('error in smsStatusReportCallback', exc_info=True)
+
+    
                 self.smsStatusReportCallback(report)
 
     def _handleSmsStatusReportTe(self, length, notificationLine):
@@ -1337,7 +1352,7 @@ class GsmModem(SerialComms):
             pdu = msgData[1]
             smsDict = decodeSmsPdu(pdu)
             if smsDict['type'] == 'SMS-DELIVER':
-                return ReceivedSms(self, int(stat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'])
+                return ReceivedSms(self, int(stat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh'))
             elif smsDict['type'] == 'SMS-STATUS-REPORT':
                 return StatusReport(self, int(stat), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
             else:
@@ -1355,6 +1370,8 @@ class GsmModem(SerialComms):
         """
         self._setSmsMemory(readDelete=memory)
         self.write('AT+CMGD={0},0'.format(index))
+        # TODO: make a check how many params are supported by the modem and use the right command. For example, Siemens MC35, TC35 take only one parameter.
+        #self.write('AT+CMGD={0}'.format(index))
 
     def deleteMultipleStoredSms(self, delFlag=4, memory=None):
         """ Deletes all SMS messages that have the specified read status.
@@ -1423,10 +1440,6 @@ class GsmModem(SerialComms):
             message = cusdMatches[0].group(2)
         return Ussd(self, sessionActive, message)
 
-    def _placeHolderCallback(self, *args):
-        """ Does nothing """
-        self.log.debug('called with args: {0}'.format(args))
-
     def _pollCallStatus(self, expectedState, callId=None, timeout=None):
         """ Poll the status of outgoing calls.
         This is used for modems that do not have a known set of call status update notifications.
@@ -1481,13 +1494,13 @@ class Call(object):
     DTMF_COMMAND_BASE = '+VTS='
     dtmfSupport = False # Indicates whether or not DTMF tones can be sent in calls
 
-    def __init__(self, gsmModem, callId, callType, number, callStatusUpdateCallbackFunc=None):
+    def __init__(self, gsmModem, callId, callType, number, callStatusUpdateCallback=None):
         """
         :param gsmModem: GsmModem instance that created this object
         :param number: The number that is being called
         """
         self._gsmModem = weakref.proxy(gsmModem)
-        self._callStatusUpdateCallbackFunc = callStatusUpdateCallbackFunc
+        self._callStatusUpdateCallback = callStatusUpdateCallback
         # Unique ID of this call
         self.id = callId
         # Call type (VOICE == 0, etc)
@@ -1506,8 +1519,8 @@ class Call(object):
     @answered.setter
     def answered(self, answered):
         self._answered = answered
-        if self._callStatusUpdateCallbackFunc:
-            self._callStatusUpdateCallbackFunc(self)
+        if self._callStatusUpdateCallback:
+            self._callStatusUpdateCallback(self)
 
     def sendDtmfTone(self, tones):
         """ Send one or more DTMF tones to the remote party (only allowed for an answered call)

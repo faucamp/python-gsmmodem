@@ -533,6 +533,12 @@ def _decodeDataCoding(octet):
     # We ignore other coding groups
     return 0
 
+def nibble2octet(o):
+    if o % 2:
+        return o / 2 + 1
+    else:
+        return o / 2
+
 def _decodeAddressField(byteIter, smscField=False, log=False):
     """ Decodes the address field at the current position of the bytearray iterator
 
@@ -548,7 +554,7 @@ def _decodeAddressField(byteIter, smscField=False, log=False):
         ton = (toa & 0x70) # bits 6,5,4 of type-of-address == type-of-number
         if ton == 0x50:
             # Alphanumberic number
-            addressLen = int(math.ceil(addressLen / 2.0))
+            addressLen = nibble2octet(addressLen)
             septets = unpackSeptets(byteIter, addressLen)
             addressValue = decodeGsm7(septets)
             return (addressValue, (addressLen + 2))
@@ -558,10 +564,7 @@ def _decodeAddressField(byteIter, smscField=False, log=False):
             if smscField:
                 addressValue = decodeSemiOctets(byteIter, addressLen-1)
             else:
-                if addressLen % 2:
-                    addressLen = int(addressLen / 2) + 1
-                else:
-                    addressLen = int(addressLen / 2)
+                addressLen = nibble2octet(addressLen)
                 addressValue = decodeSemiOctets(byteIter, addressLen)
                 addressLen += 1 # for the return value, add the toa byte
             if ton == 0x10: # International number
@@ -726,7 +729,10 @@ def packSeptets(octets, padBits=0):
         octets = iter(octets)
     shift = padBits
     if padBits == 0:
-        prevSeptet = next(octets)
+        try:
+            prevSeptet = next(octets)
+        except StopIteration:
+            return result
     else:
         prevSeptet = 0x00
     for octet in octets:
@@ -763,6 +769,8 @@ def unpackSeptets(septets, numberOfSeptets=None, prevOctet=None, shift=7):
         septets = iter(septets)
     if numberOfSeptets == None:
         numberOfSeptets = MAX_INT # Loop until StopIteration
+    if numberOfSeptets == 0:
+        return result
     i = 0
     for octet in septets:
         i += 1
@@ -785,7 +793,7 @@ def unpackSeptets(septets, numberOfSeptets=None, prevOctet=None, shift=7):
 
         if i == numberOfSeptets:
             break
-    if shift == 7:
+    if shift == 7 and prevOctet:
         b = prevOctet >> (8 - shift)
         if b:
             # The final septet value still needs to be unpacked
