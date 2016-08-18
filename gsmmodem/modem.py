@@ -144,7 +144,7 @@ class GsmModem(SerialComms):
     # Used for parsing SMS message reads (PDU mode)
     CMGR_REGEX_PDU = None
     # Used for parsing USSD event notifications
-    CUSD_REGEX = re.compile(b'\+CUSD:\s*(\d),"(.*?)",(\d+)', re.DOTALL)
+    CUSD_REGEX = re.compile(b'\+CUSD:\s*(\d),\s*"(.*?)",\s*(\d+)', re.DOTALL)
     # Used for parsing SMS status reports
     CDSI_REGEX = re.compile(b'\+CDSI:\s*"([^"]+)",(\d+)$')
     CDS_REGEX  = re.compile(b'\+CDS:\s*([0-9]+)"$')
