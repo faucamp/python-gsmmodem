@@ -184,6 +184,8 @@ class GsmModem(SerialComms):
         self._smsEncoding = 'GSM' # Default SMS encoding
         self._smsSupportedEncodingNames = None # List of available encoding names
         self._commands = None # List of supported AT commands
+        #Pool of detected DTMF
+        self.dtmfpool = []
 
     def connect(self, pin=None, waitingForModemToStartInSeconds=0):
         """ Opens the port and initializes the modem and SIM card
@@ -271,6 +273,10 @@ class GsmModem(SerialComms):
 
         # Attempt to identify modem type directly (if not already) - for outgoing call status updates
         if callUpdateTableHint == 0:
+            if 'simcom' in self.manufacturer.lower() : #simcom modems support DTMF and don't support AT+CLAC
+                Call.dtmfSupport = True 
+                self.write('AT+DDET=1')                # enable detect incoming DTMF
+
             if self.manufacturer.lower() == 'huawei':
                 callUpdateTableHint = 1 # huawei
             else:
@@ -1099,6 +1105,10 @@ class GsmModem(SerialComms):
             elif next_line_is_te_statusreport:
                 self._handleSmsStatusReportTe(next_line_is_te_statusreport_length, line)
                 return
+            elif line.startswith('+DTMF'):
+                # New incoming DTMF 
+                self._handleIncomingDTMF(line)
+                return
             else:
                 # Check for call status updates
                 for updateRegex, handlerFunc in self._callStatusUpdates:
@@ -1108,8 +1118,24 @@ class GsmModem(SerialComms):
                         handlerFunc(match)
                         return
         # If this is reached, the notification wasn't handled
-        self.log.debug('Unhandled unsolicited modem notification: %s', lines)
-
+        self.log.debug('Unhandled unsolicited modem notification: %s', lines)    
+    
+    #Simcom modem able detect incoming DTMF
+    def _handleIncomingDTMF(self,line):
+        self.log.debug('Handling incoming DTMF')
+        
+        try:
+            dtmf_num=line.split(':')[1].replace(" ","")
+            self.dtmfpool.append(dtmf_num)
+            self.log.debug('DTMF number is {0}'.format(dtmf_num))
+        except:
+            self.log.debug('Error parce DTMF number on line {0}'.format(line))
+    def GetIncomingDTMF(self):
+        if (len(self.dtmfpool)==0):
+            return None
+        else:
+            return self.dtmfpool.pop(0)
+    
     def _handleIncomingCall(self, lines):
         self.log.debug('Handling incoming call')
         ringLine = lines.pop(0)
@@ -1496,13 +1522,11 @@ class Call(object):
         if self.answered:
             dtmfCommandBase = self.DTMF_COMMAND_BASE.format(cid=self.id)
             toneLen = len(tones)
-            if len(tones) > 1:
-                cmd = ('AT{0}{1};{0}' + ';{0}'.join(tones[1:])).format(dtmfCommandBase, tones[0])
-            else:
-                cmd = 'AT{0}{1}'.format(dtmfCommandBase, tones)
-            try:
-                self._gsmModem.write(cmd, timeout=(5 + toneLen))
-            except CmeError as e:
+            for tone in list(tones):     
+              try:
+                 self._gsmModem.write('AT{0}{1}'.format(dtmfCommandBase,tone), timeout=(5 + toneLen))
+             
+              except CmeError as e:
                 if e.code == 30:
                     # No network service - can happen if call is ended during DTMF transmission (but also if DTMF is sent immediately after call is answered)
                     raise InterruptedException('No network service', e)
