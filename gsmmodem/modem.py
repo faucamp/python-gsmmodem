@@ -1048,6 +1048,8 @@ class GsmModem(SerialComms):
                         self.log.debug('Discarding line from +CMGL response: %s', line)
                     except:
                         pass
+                        # dirty fix warning: https://github.com/yuriykashin/python-gsmmodem/issues/1
+                        # todo: make better fix
                     else:
                         if smsDict['type'] == 'SMS-DELIVER':
                             sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh', []))
