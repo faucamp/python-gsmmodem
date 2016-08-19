@@ -31,7 +31,8 @@ Bundled utilities:
 Requirements
 ------------
 
-- Python 2.6 or later
+- Python 2.7 or later
+- Python 3.3 or later
 - pyserial
 
 
@@ -100,7 +101,7 @@ Building documentation
 This package contains `Sphinx <http://sphinx-doc.org>`_-based documentation.
 To manually build or test the documentation locally, do the following::
 
-   git clone https://github.com/faucamp/python-gsmmodem.git
+   git clone https://github.com/babca/python-gsmmodem.git
    cd python-gsmmodem
    pip install .[doc]
    cd doc
