@@ -565,7 +565,7 @@ class GsmModem(SerialComms):
             else:
                 self.log.debug('Unhandled +CLAC response: {0}'.format(response))
                 return None
-        except TimeoutException:
+        except (TimeoutException, CommandError):
             # Try interactive command recognition
             commands = []
             checkable_commands = ['^CVOICE', '+VTS', '^DTMF', '^USSDMODE', '+WIND', '+ZPAS', '+CSCS']
@@ -589,8 +589,6 @@ class GsmModem(SerialComms):
 
             # Return found commands
             return commands
-        except CommandError:
-            return None
 
     @property
     def smsTextMode(self):
