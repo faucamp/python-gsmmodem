@@ -153,8 +153,8 @@ class GsmModem(SerialComms):
     def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallback=None, requestDelivery=True, AT_CNMI="", *a, **kw):
         super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification, *a, **kw)
         self.incomingCallCallback = incomingCallCallbackFunc or self._placeholderCallback
-        self.smsReceivedCallback = smsReceivedCallbackFunc
-        self.smsStatusReportCallback = smsStatusReportCallback
+        self.smsReceivedCallback = smsReceivedCallbackFunc or self._placeholderCallback
+        self.smsStatusReportCallback = smsStatusReportCallback or self._placeholderCallback
         self.requestDelivery = requestDelivery
         self.AT_CNMI = AT_CNMI or "2,1,0,2"
         # Flag indicating whether caller ID for incoming call notification has been set up
@@ -565,7 +565,7 @@ class GsmModem(SerialComms):
             else:
                 self.log.debug('Unhandled +CLAC response: {0}'.format(response))
                 return None
-        except TimeoutException:
+        except (TimeoutException, CommandError):
             # Try interactive command recognition
             commands = []
             checkable_commands = ['^CVOICE', '+VTS', '^DTMF', '^USSDMODE', '+WIND', '+ZPAS', '+CSCS']
@@ -589,8 +589,6 @@ class GsmModem(SerialComms):
 
             # Return found commands
             return commands
-        except CommandError:
-            return None
 
     @property
     def smsTextMode(self):
@@ -1443,6 +1441,10 @@ class GsmModem(SerialComms):
             sessionActive = cusdMatches[0].group(1) == '1'
             message = cusdMatches[0].group(2)
         return Ussd(self, sessionActive, message)
+
+    def _placeHolderCallback(self, *args):
+        """ Does nothing """
+        self.log.debug('called with args: {0}'.format(args))
 
     def _pollCallStatus(self, expectedState, callId=None, timeout=None):
         """ Poll the status of outgoing calls.
