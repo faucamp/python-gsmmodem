@@ -20,7 +20,7 @@ else:
     test_command = [sys.executable, '-m', 'unittest', 'discover']
     coverage_command = ['coverage', 'run', '-m', 'unittest', 'discover']
 
-VERSION = 0.10
+VERSION = "0.10"
 
 class RunUnitTests(Command):
     """ run unit tests """
@@ -58,15 +58,15 @@ class RunUnitTestsCoverage(Command):
             subprocess.call(['coverage', 'report'])
         raise SystemExit(errno)
 
-setup(name='python-gsmmodem',
+setup(name='python-gsmmodem-new',
       version='{0}'.format(VERSION),
       description='Control an attached GSM modem: send/receive SMS messages, handle calls, etc',      
       license='LGPLv3+',
       author='Francois Aucamp',
       author_email='francois.aucamp@gmail.com',
       
-      url='https://github.com/faucamp/python-gsmmodem',
-      download_url='https://github.com/faucamp/python-gsmmodem/archive/{0}.tar.gz'.format(VERSION),
+      url='https://github.com/babca/python-gsmmodem',
+      download_url='https://github.com/babca/python-gsmmodem/archive/{0}.tar.gz'.format(VERSION),
  
       long_description="""\
 python-gsmmodem is a module that allows easy control of a GSM modem attached
