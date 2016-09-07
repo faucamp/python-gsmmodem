@@ -39,45 +39,48 @@ Requirements
 How to install this package
 ---------------------------
 
-There are two ways to install ``python-gsmmodem``:
+There are two ways to install ``python-gsmmodem-new`` package:
 
 Automatic installation
 ~~~~~~~~~~~~~~~~~~~~~~
 
 ::
 
-    pip install python-gsmmodem
+    pip install python-gsmmodem-new
 
 `pip <http://www.pip-installer.org>`_ will automatically download and install
 all dependencies, as required. You can also utilise ``easy_install`` in the
 same manner as using ``pip`` above.  
 
-If you are utilising ``python-gsmmodem`` as part of another project,
+If you are utilising ``python-gsmmodem-new`` as part of another project,
 add it to your ``install_requires`` section of your ``setup.py`` file and
 upon your project's installation, it will be pulled in automatically.
 
-Manual installation
-~~~~~~~~~~~~~~~~~~~
+Manual installation from PyPI
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Download and extract the ``python-gsmmodem`` archive from `PyPI
-<https://pypi.python.org/pypi/python-gsmmodem>`_ for the current release
-version, or clone from `GitHub <https://github.com/faucamp/python-gsmmodem>`_.
+Download and extract the ``python-gsmmodem-new`` archive from `PyPI
+<https://pypi.python.org/pypi/python-gsmmodem-new>`_ for the current release
+version, or clone from GitHub::
+
+    git clone https://github.com/babca/python-gsmmodem.git
+
 Next, do this::
 
     python setup.py install
 
-Note that ``python-gsmmodem`` relies on ``pyserial`` for serial communications: 
+Note that ``python-gsmmodem-new`` package relies on ``pyserial`` for serial communications: 
 http://pyserial.sourceforge.net
 
 
 Testing the package
 -------------------
 
-.. |Build Status| image::  https://travis-ci.org/faucamp/python-gsmmodem.png?branch=master
-.. _Build Status: https://travis-ci.org/faucamp/python-gsmmodem
+.. |Build Status| image::  https://travis-ci.org/babca/python-gsmmodem.png?branch=master
+.. _Build Status: https://travis-ci.org/babca/python-gsmmodem
 
 
-.. |Coverage Status| image::  https://coveralls.io/repos/faucamp/python-gsmmodem/badge.png?branch=master
+.. |Coverage Status| image::  https://coveralls.io/repos/babca/python-gsmmodem/badge.png?branch=master
 .. _Coverage Status: https://coveralls.io/r/faucamp/python-gsmmodem
 
 |Build Status|_ |Coverage Status|_
