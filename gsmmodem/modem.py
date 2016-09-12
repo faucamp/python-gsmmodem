@@ -19,6 +19,8 @@ PYTHON_VERSION = sys.version_info[0]
 CTRLZ = chr(26)
 TERMINATOR = '\r'
 
+def d(obj):
+    return obj.decode() if type(obj) == bytes else obj
 
 if PYTHON_VERSION >= 3:
     xrange = range
@@ -334,7 +336,7 @@ class GsmModem(SerialComms):
         self.write('AT+CMGF={0}'.format(1 if self._smsTextMode else 0)) # Switch to text or PDU mode for SMS messages
         self._compileSmsRegexes()
         if self._smscNumber != None:
-            self.write('AT+CSCA="{0}"'.format(self._smscNumber)) # Set default SMSC number
+            self.write('AT+CSCA="{0}"'.format(d(self._smscNumber))) # Set default SMSC number
             currentSmscNumber = self._smscNumber
         else:
             currentSmscNumber = self.smsc
@@ -427,7 +429,7 @@ class GsmModem(SerialComms):
                 raise timeout
         if cpinResponse != b'+CPIN: READY':
             if pin != None:
-                self.write('AT+CPIN="{0}"'.format(pin))
+                self.write('AT+CPIN="{0}"'.format(d(pin)))
             else:
                 raise PinRequiredError('AT+CPIN')
 
@@ -682,7 +684,7 @@ class GsmModem(SerialComms):
         # Check if desired encoding is available
         if encoding in self._smsSupportedEncodingNames:
             # Set encoding
-            response = self.write('AT+CSCS="{0}"'.format(encoding))
+            response = self.write('AT+CSCS="{0}"'.format(d(encoding)))
             if len(response) == 1:
                 if response[0].lower() == 'ok':
                     self._smsEncoding = encoding
@@ -696,11 +698,11 @@ class GsmModem(SerialComms):
         if write != None and write != self._smsMemWrite:
             self.write()
             readDel = readDelete or self._smsMemReadDelete
-            self.write('AT+CPMS="{0}","{1}"'.format(readDel, write))
+            self.write('AT+CPMS="{0}","{1}"'.format(d(readDel), d(write)))
             self._smsMemReadDelete = readDel
             self._smsMemWrite = write
         elif readDelete != None and readDelete != self._smsMemReadDelete:
-            self.write('AT+CPMS="{0}"'.format(readDelete))
+            self.write('AT+CPMS="{0}"'.format(d(readDelete)))
             self._smsMemReadDelete = readDelete
 
     def _compileSmsRegexes(self):
@@ -730,7 +732,7 @@ class GsmModem(SerialComms):
         """ Set the default SMSC number to use when sending SMS messages """
         if smscNumber != self._smscNumber:
             if self.alive:
-                self.write('AT+CSCA="{0}"'.format(smscNumber))
+                self.write('AT+CSCA="{0}"'.format(d(smscNumber)))
             self._smscNumber = smscNumber
 
     def waitForNetworkCoverage(self, timeout=None):
@@ -815,7 +817,7 @@ class GsmModem(SerialComms):
 
         # Send SMS via AT commands
         if self._smsTextMode:
-            self.write('AT+CMGS="{0}"'.format(destination), timeout=5, expectedResponseTermSeq=b'> ')
+            self.write('AT+CMGS="{0}"'.format(d(destination)), timeout=5, expectedResponseTermSeq=b'> ')
             result = lineStartingWith(b'+CMGS:', self.write(text, timeout=35, writeTerm=CTRLZ))
         else:
             # Set GSM modem SMS encoding format
@@ -862,7 +864,7 @@ class GsmModem(SerialComms):
         """
         self._ussdSessionEvent = threading.Event()
         try:
-            cusdResponse = self.write('AT+CUSD=1,"{0}",15'.format(ussdString), timeout=responseTimeout) # Should respond with "OK"
+            cusdResponse = self.write('AT+CUSD=1,"{0}",15'.format(d(ussdString)), timeout=responseTimeout) # Should respond with "OK"
         except Exception:
             self._ussdSessionEvent = None # Cancel the thread sync lock
             raise
@@ -890,7 +892,7 @@ class GsmModem(SerialComms):
         :rtype: Boolean
         """
         try:
-            queryResponse = self.write('AT+CCFC={0},2'.format(querytype), timeout=responseTimeout) # Should respond with "OK"
+            queryResponse = self.write('AT+CCFC={0},2'.format(d(querytype)), timeout=responseTimeout) # Should respond with "OK"
         except Exception:
             raise
         print(queryResponse)
@@ -907,7 +909,7 @@ class GsmModem(SerialComms):
         :rtype: Boolean
         """
         try:
-            queryResponse = self.write('AT+CCFC={0},{1},"{2}"'.format(fwdType, fwdEnable, fwdNumber), timeout=responseTimeout) # Should respond with "OK"
+            queryResponse = self.write('AT+CCFC={0},{1},"{2}"'.format(d(fwdType), d(fwdEnable), d(fwdNumber)), timeout=responseTimeout) # Should respond with "OK"
         except Exception:
             raise
             return False
@@ -929,13 +931,13 @@ class GsmModem(SerialComms):
             # Wait for the "call originated" notification message
             self._dialEvent = threading.Event()
             try:
-                self.write('ATD{0};'.format(number), timeout=timeout, waitForResponse=self._waitForAtdResponse)
+                self.write('ATD{0};'.format(d(number)), timeout=timeout, waitForResponse=self._waitForAtdResponse)
             except Exception:
                 self._dialEvent = None # Cancel the thread sync lock
                 raise
         else:
             # Don't wait for a call init update - base the call ID on the number of active calls
-            self.write('ATD{0};'.format(number), timeout=timeout, waitForResponse=self._waitForAtdResponse)
+            self.write('ATD{0};'.format(d(number)), timeout=timeout, waitForResponse=self._waitForAtdResponse)
             self.log.debug("Not waiting for outgoing call init update message")
             callId = len(self.activeCalls) + 1
             callType = 0 # Assume voice
@@ -1006,7 +1008,7 @@ class GsmModem(SerialComms):
                     break
             else:
                 raise ValueError('Invalid status value: {0}'.format(status))
-            result = self.write('AT+CMGL="{0}"'.format(statusStr))
+            result = self.write('AT+CMGL="{0}"'.format(d(statusStr)))
             msgLines = []
             msgIndex = msgStatus = number = msgTime = None
             for line in result:
@@ -1031,7 +1033,7 @@ class GsmModem(SerialComms):
         else:
             cmglRegex = re.compile(b'^\+CMGL:\s*(\d+),\s*(\d+),.*$')
             readPdu = False
-            result = self.write('AT+CMGL={0}'.format(status))
+            result = self.write('AT+CMGL={0}'.format(d(status)))
             for line in result:
                 if not readPdu:
                     cmglMatch = cmglRegex.match(line)
@@ -1321,7 +1323,7 @@ class GsmModem(SerialComms):
         """
         # Switch to the correct memory type if required
         self._setSmsMemory(readDelete=memory)
-        msgData = self.write('AT+CMGR={0}'.format(index))
+        msgData = self.write('AT+CMGR={0}'.format(d(index)))
         # Parse meta information
         if self._smsTextMode:
             cmgrMatch = self.CMGR_SM_DELIVER_REGEX_TEXT.match(msgData[0])
@@ -1371,7 +1373,7 @@ class GsmModem(SerialComms):
         :raise CommandError: if unable to delete the stored message
         """
         self._setSmsMemory(readDelete=memory)
-        self.write('AT+CMGD={0},0'.format(index))
+        self.write('AT+CMGD={0},0'.format(d(index)))
         # TODO: make a check how many params are supported by the modem and use the right command. For example, Siemens MC35, TC35 take only one parameter.
         #self.write('AT+CMGD={0}'.format(index))
 
@@ -1397,7 +1399,7 @@ class GsmModem(SerialComms):
         """
         if 0 < delFlag <= 4:
             self._setSmsMemory(readDelete=memory)
-            self.write('AT+CMGD=1,{0}'.format(delFlag))
+            self.write('AT+CMGD=1,{0}'.format(d(delFlag)))
         else:
             raise ValueError('"delFlag" must be in range [1,4]')
 
@@ -1543,7 +1545,7 @@ class Call(object):
             toneLen = len(tones)
             for tone in list(tones):     
               try:
-                 self._gsmModem.write('AT{0}{1}'.format(dtmfCommandBase,tone), timeout=(5 + toneLen))
+                 self._gsmModem.write('AT{0}{1}'.format(d(dtmfCommandBase),d(tone)), timeout=(5 + toneLen))
              
               except CmeError as e:
                 if e.code == 30:
