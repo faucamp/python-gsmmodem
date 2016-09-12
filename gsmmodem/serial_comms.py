@@ -47,7 +47,8 @@ class SerialComms(object):
         
     def connect(self):
         """ Connects to the device and starts the read thread """                
-        self.serial = serial.Serial(port=self.port, baudrate=self.baudrate, timeout=self.timeout,*self.com_args,**self.com_kwargs)
+        self.serial = serial.Serial(dsrdtr=True, rtscts=True, port=self.port, baudrate=self.baudrate,
+                                    timeout=self.timeout,*self.com_args,**self.com_kwargs)
         # Start read thread
         self.alive = True 
         self.rxThread = threading.Thread(target=self._readLoop)
