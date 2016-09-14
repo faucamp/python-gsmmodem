@@ -59,13 +59,8 @@ upon your project's installation, it will be pulled in automatically.
 Manual installation of the latest "stable" release from PyPI
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Download and extract the ``python-gsmmodem-new`` archive from `PyPI
-<https://pypi.python.org/pypi/python-gsmmodem-new>`_ for the current release
-version, or clone from GitHub::
-
-    git clone https://github.com/babca/python-gsmmodem.git
-
-Next, do this::
+Download a ``python-gsmmodem-new`` archive from `PyPI
+<https://pypi.python.org/pypi/python-gsmmodem-new>`_, extract it and install the package with command::
 
     python setup.py install
 
