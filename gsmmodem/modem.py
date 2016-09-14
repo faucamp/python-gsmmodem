@@ -416,7 +416,7 @@ class GsmModem(SerialComms):
         """ Unlocks the SIM card using the specified PIN (if necessary, else does nothing) """
         # Unlock the SIM card if needed
         try:
-            cpinResponse = lineStartingWith(b'+CPIN', self.write('AT+CPIN?', timeout=0.25))
+            cpinResponse = lineStartingWith(b'+CPIN', self.write('AT+CPIN?', timeout=15))
         except TimeoutException as timeout:
             # Wavecom modems do not end +CPIN responses with "OK" (github issue #19) - see if just the +CPIN response was returned
             if timeout.data != None:
