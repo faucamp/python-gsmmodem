@@ -570,7 +570,7 @@ class GsmModem(SerialComms):
         except (TimeoutException, CommandError):
             # Try interactive command recognition
             commands = []
-            checkable_commands = ['^CVOICE', '+VTS', '^DTMF', '^USSDMODE', '+WIND', '+ZPAS', '+CSCS']
+            checkable_commands = ['^CVOICE', '+VTS', '^DTMF', '^USSDMODE', '+WIND', '+ZPAS', '+CSCS', '+CNUM']
 
             # Check if modem is still alive
             try:
@@ -735,6 +735,55 @@ class GsmModem(SerialComms):
                 self.write('AT+CSCA="{0}"'.format(d(smscNumber)))
             self._smscNumber = smscNumber
 
+    @property
+    def ownNumber(self):
+        """ Query subscriber phone number.
+
+        It must be stored on SIM by operator.
+        If is it not stored already, it usually is possible to store the number by user.
+        
+                :raise TimeoutException: if a timeout was specified and reached
+
+
+        :return: Subscriber SIM phone number. Returns None if not known
+        :rtype: int
+        """
+
+        try:
+            if "+CNUM" in self._commands:
+                response = self.write('AT+CNUM')
+            else:
+                # temporarily switch to "own numbers" phonebook, read position 1 and than switch back
+                response = self.write('AT+CPBS?')
+                selected_phonebook = response[0][6:].split('"')[1] # first line, remove the +CSCS: prefix, split, first parameter
+                
+                if selected_phonebook is not "ON":
+                    self.write('AT+CPBS="ON"')
+                
+                response = self.write("AT+CPBR=1")
+                self.write('AT+CPBS="{0}"'.format(selected_phonebook))
+                
+            if response is "OK": # command is supported, but no number is set
+                return None
+            elif len(response) == 2: # OK and phone number. Actual number is in the first line, second parameter, and is placed inside quotation marks
+                first_line = response[0]
+                second_param = first_line.split(',')[1]
+                return second_param[1:-1]
+            elif len(response) > 2: # Multi-line response
+                self.log.debug('Unhandled +CNUM/+CPBS response: {0}'.format(response))
+                return None
+            
+        except (TimeoutException, CommandError):
+            raise
+
+    @ownNumber.setter
+    def ownNumber(self, phone_number):
+        actual_phonebook = self.write('AT+CPBS?')
+        if actual_phonebook is not "ON": 
+            self.write('AT+CPBS="ON"')
+        self.write('AT+CPBW=1,"' + phone_number + '"')
+
+
     def waitForNetworkCoverage(self, timeout=None):
         """ Block until the modem has GSM network coverage.
 
@@ -749,7 +798,6 @@ class GsmModem(SerialComms):
         :raise InvalidStateException: if the modem is not going to receive network coverage (SIM blocked, etc)
 
         :return: the current signal strength
-        :rtype: int
         """
         block = [True]
         if timeout != None:
