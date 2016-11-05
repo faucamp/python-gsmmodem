@@ -138,6 +138,8 @@ class GsmModem(SerialComms):
     CSQ_REGEX = re.compile(b'^\+CSQ:\s*(\d+),')
     # Used for parsing caller ID announcements for incoming calls. Group 1 is the number
     CLIP_REGEX = re.compile(b'^\+CLIP:\s*"(\+{0,1}\d+)",(\d+).*$')
+    # Used for parsing own number. Group 1 is the number
+    CNUM_REGEX = re.compile(b'^\+CNUM:\s*".*?","(\+{0,1}\d+)",(\d+).*$')
     # Used for parsing new SMS message indications
     CMTI_REGEX = re.compile(b'^\+CMTI:\s*"([^"]+)",\s*(\d+)$')
     # Used for parsing SMS message reads (text mode)
@@ -766,9 +768,13 @@ class GsmModem(SerialComms):
             if response is "OK": # command is supported, but no number is set
                 return None
             elif len(response) == 2: # OK and phone number. Actual number is in the first line, second parameter, and is placed inside quotation marks
-                first_line = response[0]
-                second_param = first_line.split(',')[1]
-                return second_param[1:-1]
+                cnumLine = response[0]
+                cnumMatch = self.CNUM_REGEX.match(cnumLine)
+                if cnumMatch:
+                    return cnumMatch.group(1)
+                else:
+                    self.log.debug('Error parse +CNUM response: {0}'.format(response))
+                    return None
             elif len(response) > 2: # Multi-line response
                 self.log.debug('Unhandled +CNUM/+CPBS response: {0}'.format(response))
                 return None
@@ -1185,7 +1191,7 @@ class GsmModem(SerialComms):
             self.dtmfpool.append(dtmf_num)
             self.log.debug('DTMF number is {0}'.format(dtmf_num))
         except:
-            self.log.debug('Error parce DTMF number on line {0}'.format(line))
+            self.log.debug('Error parse DTMF number on line {0}'.format(line))
     def GetIncomingDTMF(self):
         if (len(self.dtmfpool)==0):
             return None
