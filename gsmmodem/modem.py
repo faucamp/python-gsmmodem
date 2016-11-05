@@ -654,7 +654,7 @@ class GsmModem(SerialComms):
 
             if len(response) == 2:
                 encoding = response[0]
-                if encoding.startswith('+CSCS'):
+                if encoding.startswith(b'+CSCS'):
                     encoding = encoding[6:].split('"') # remove the +CSCS: prefix before splitting
                     if len(encoding) == 3:
                         self._smsEncoding = encoding[1]
@@ -1150,7 +1150,7 @@ class GsmModem(SerialComms):
                 # SMS status report
                 self._handleSmsStatusReport(line)
                 return
-            elif line.startswith('+CDS'):
+            elif line.startswith(b'+CDS'):
                 # SMS status report at next line
                 next_line_is_te_statusreport = True
                 cdsMatch = self.CDS_REGEX.match(line)
@@ -1161,7 +1161,7 @@ class GsmModem(SerialComms):
             elif next_line_is_te_statusreport:
                 self._handleSmsStatusReportTe(next_line_is_te_statusreport_length, line)
                 return
-            elif line.startswith('+DTMF'):
+            elif line.startswith(b'+DTMF'):
                 # New incoming DTMF 
                 self._handleIncomingDTMF(line)
                 return
@@ -1194,7 +1194,7 @@ class GsmModem(SerialComms):
     
     def _handleIncomingCall(self, lines):
         self.log.debug('Handling incoming call')
-        ringLine = lines.pop(0)
+        ringLine = d(lines.pop(0))
         if self._extendedIncomingCallIndication:
             try:
                 callType = ringLine.split(' ', 1)[1]
