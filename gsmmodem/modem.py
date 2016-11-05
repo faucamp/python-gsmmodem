@@ -1194,7 +1194,7 @@ class GsmModem(SerialComms):
     
     def _handleIncomingCall(self, lines):
         self.log.debug('Handling incoming call')
-        ringLine = lines.pop(0)
+        ringLine = d(lines.pop(0))
         if self._extendedIncomingCallIndication:
             try:
                 callType = ringLine.split(' ', 1)[1]
