@@ -181,6 +181,7 @@ class GsmModem(SerialComms):
         self._pollCallStatusRegex = None # Regular expression used when polling outgoing call status
         self._writeWait = 0 # Time (in seconds to wait after writing a command (adjusted when 515 errors are detected)
         self._smsTextMode = False # Storage variable for the smsTextMode property
+        self._gsmBusy = 0 # Storage variable for the GSMBUSY property
         self._smscNumber = None # Default SMSC number
         self._smsRef = 0 # Sent SMS reference counter
         self._smsMemReadDelete = None # Preferred message storage memory for reads/deletes (<mem1> parameter used for +CPMS)
@@ -715,7 +716,26 @@ class GsmModem(SerialComms):
                 self.CMGR_SM_REPORT_REGEXT_TEXT = re.compile(b'^\+CMGR: ([^,]*),\d+,(\d+),"{0,1}([^"]*)"{0,1},\d*,"([^"]+)","([^"]+)",(\d+)$')
         elif self.CMGR_REGEX_PDU == None:
             self.CMGR_REGEX_PDU = re.compile(b'^\+CMGR:\s*(\d*),\s*"{0,1}([^"]*)"{0,1},\s*(\d+)$')
-            
+
+    @property
+    def gsmBusy(self):
+        """ :return: Current GSMBUSY state """
+        try:
+            response = self.write('AT+GSMBUSY?')
+            response = d(response[0]) # Get the first line
+            response = response[10] # Remove '+GSMBUSY: ' prefix
+            self._gsmBusy = response
+        except:
+            pass # If error is related to ME funtionality: +CME ERROR: <error>
+        return self._gsmBusy
+    @gsmBusy.setter
+    def gsmBusy(self, gsmBusy):
+        """ Sete GSMBUSY state """
+        if gsmBusy != self._gsmBusy:
+            if self.alive:
+                self.write('AT+GSMBUSY="{0}"'.format(d(gsmBusy)))
+            self._gsmBusy = gsmBusy
+
     @property
     def smsc(self):
         """ :return: The default SMSC number stored on the SIM card """
