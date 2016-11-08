@@ -631,7 +631,7 @@ class GsmModem(SerialComms):
 
         # Extract encoding names list
         try:
-            enc_list = response[0]  # Get the first line
+            enc_list = d(response[0])  # Get the first line
             enc_list = enc_list[6:] # Remove '+CSCS' prefix
             # Extract AT list in format ("str", "str2", "str3")
             enc_list = enc_list.split('(')[1]
