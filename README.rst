@@ -1,5 +1,5 @@
-python-gsmmodem 
-===============
+python-gsmmodem-new v0.11
+=========================
 *GSM modem module for Python*
 
 python-gsmmodem is a module that allows easy control of a GSM modem attached
