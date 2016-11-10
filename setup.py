@@ -20,7 +20,7 @@ else:
     test_command = [sys.executable, '-m', 'unittest', 'discover']
     coverage_command = ['coverage', 'run', '-m', 'unittest', 'discover']
 
-VERSION = "0.10"
+VERSION = "0.11"
 
 class RunUnitTests(Command):
     """ run unit tests """
