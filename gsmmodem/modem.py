@@ -137,7 +137,7 @@ class GsmModem(SerialComms):
     # Used for parsing signal strength query responses
     CSQ_REGEX = re.compile(b'^\+CSQ:\s*(\d+),')
     # Used for parsing caller ID announcements for incoming calls. Group 1 is the number
-    CLIP_REGEX = re.compile(b'^\+CLIP:\s*"(\+{0,1}\d+)",(\d+).*$')
+    CLIP_REGEX = re.compile(b'^\+CLIP:\s*"\+{0,1}(\d+)",(\d+).*$')
     # Used for parsing own number. Group 1 is the number
     CNUM_REGEX = re.compile(b'^\+CNUM:\s*".*?","(\+{0,1}\d+)",(\d+).*$')
     # Used for parsing new SMS message indications
@@ -1240,7 +1240,7 @@ class GsmModem(SerialComms):
             clipLine = lines.pop(0)
             clipMatch = self.CLIP_REGEX.match(clipLine)
             if clipMatch:
-                callerNumber = clipMatch.group(1)
+                callerNumber = b'+' + clipMatch.group(1)
                 ton = clipMatch.group(2)
                 #TODO: re-add support for this
                 callerName = None
