@@ -16,8 +16,8 @@ from gsmmodem.util import lineMatching
 from gsmmodem.exceptions import EncodingError
 PYTHON_VERSION = sys.version_info[0]
 
-CTRLZ = chr(26)
-TERMINATOR = '\r'
+CTRLZ = b'\x1a'
+TERMINATOR = b'\r'
 
 def d(obj):
     return obj.decode() if type(obj) == bytes else obj
@@ -27,10 +27,6 @@ if PYTHON_VERSION >= 3:
     dictValuesIter = dict.values
     dictItemsIter = dict.items
     unicode = str
-    TERMINATOR = b'\r'
-    CTRLZ = b'\x1a'
-
-
 else: #pragma: no cover
     dictValuesIter = dict.itervalues
     dictItemsIter = dict.iteritems
@@ -463,8 +459,7 @@ class GsmModem(SerialComms):
         """
 
         if isinstance(data, unicode):
-            data = bytes(data,"ascii")
-
+            data = data.encode()
 
         self.log.debug('write: %s', data)
         responseLines = super(GsmModem, self).write(data + writeTerm, waitForResponse=waitForResponse, timeout=timeout, expectedResponseTermSeq=expectedResponseTermSeq)
