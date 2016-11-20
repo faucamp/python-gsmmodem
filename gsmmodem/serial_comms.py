@@ -18,7 +18,7 @@ class SerialComms(object):
     # End-of-line read terminator
     RX_EOL_SEQ = b'\r\n'
     # End-of-response terminator
-    RESPONSE_TERM = re.compile(b'^OK|ERROR|(\+CM[ES] ERROR: \d+)|(COMMAND NOT SUPPORT)$')
+    RESPONSE_TERM = re.compile('^OK|ERROR|(\+CM[ES] ERROR: \d+)|(COMMAND NOT SUPPORT)$')
     # Default timeout for serial port reads (in seconds)
     timeout = 1
 
@@ -100,14 +100,14 @@ class SerialComms(object):
                     rxBuffer.append(ord(data))
                     if rxBuffer[-readTermLen:] == readTermSeq:
                         # A line (or other logical segment) has been read
-                        line = bytes(rxBuffer[:-readTermLen])
+                        line = rxBuffer[:-readTermLen].decode()
                         rxBuffer = bytearray()
                         if len(line) > 0:
                             #print 'calling handler'
                             self._handleLineRead(line)
                     elif self._expectResponseTermSeq:
                         if rxBuffer[-len(self._expectResponseTermSeq):] == self._expectResponseTermSeq:
-                            line = bytes(rxBuffer)
+                            line = rxBuffer.decode()
                             rxBuffer = bytearray()
                             self._handleLineRead(line, checkForResponseTerm=False)
             #else:
@@ -122,12 +122,11 @@ class SerialComms(object):
             self.fatalErrorCallback(e)
 
     def write(self, data, waitForResponse=True, timeout=5, expectedResponseTermSeq=None):
-        if isinstance(data, str):
-            data = data.encode()
+        data = data.encode()
         with self._txLock:
             if waitForResponse:
                 if expectedResponseTermSeq:
-                    self._expectResponseTermSeq = bytearray(expectedResponseTermSeq)
+                    self._expectResponseTermSeq = bytearray(expectedResponseTermSeq.encode())
                 self._response = []
                 self._responseEvent = threading.Event()
                 self.serial.write(data)
