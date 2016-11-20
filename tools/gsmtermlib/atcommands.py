@@ -124,7 +124,7 @@ When <mode>=2, this command must be viewed in conjunction with the V.25ter comma
 1: registered, home network.\n2: not registered, ME currently searching for a new operator to register to.\n\
 3: registration denied.\n4: unknown.\n5: registered, roaming.'),
                                             ('<lac>', 'string type; two byte location area code in hexadecimal format'),
-                                            ('<ci>', 'string type; two byte cell ID in hexadecimal format')), 
+                                            ('<ci>', 'string type; two byte cell ID in hexadecimal format')),
              'This command is used by the application to ascertain the registration status of the device.')),
 ('AT+WOPN', (c[2], 'Read Operator Name')),
 ('AT+WOPN', (c[2], 'Selection of Preferred PLMN List')),

@@ -13,30 +13,30 @@ else: #pragma: no cover
 
 
 class Trie(object):
-        
+
     def __init__(self, key=None, value=None):
-        self.slots = {}        
+        self.slots = {}
         self.key = key
         self.value = value
 
     def __setitem__(self, key, value):
-        if key == None:            
+        if key == None:
             raise ValueError('Key may not be None')
-    
+
         if len(key) == 0:
-            # All of the original key's chars have been nibbled away            
+            # All of the original key's chars have been nibbled away
             self.value = value
             self.key = ''
-            return        
-        
+            return
+
         c = key[0]
-        
+
         if c not in self.slots:
             # Unused slot - no collision
             if self.key != None and len(self.key) > 0:
                 # This was a "leaf" previously - create a new branch for its current value
                 branchC = self.key[0]
-                branchKey = self.key[1:] if len(self.key) > 1 else ''                            
+                branchKey = self.key[1:] if len(self.key) > 1 else ''
                 self.slots[branchC] = Trie(branchKey, self.value)
                 self.key = None
                 self.value = None
@@ -45,15 +45,15 @@ class Trie(object):
                 else:
                     self.slots[c][key[1:]] = value
             else:
-                # Store specified value in a new branch and return                
+                # Store specified value in a new branch and return
                 self.slots[c] = Trie(key[1:], value)
         else:
             trie = self.slots[c]
-            trie[key[1:]] = value             
+            trie[key[1:]] = value
 
 
     def __delitem__(self, key):
-        if key == None:            
+        if key == None:
             raise ValueError('Key may not be None')
         if len(key) == 0:
             if self.key == '':
@@ -75,9 +75,9 @@ class Trie(object):
                 del trie[key[1:]]
         else:
             raise KeyError(key)
-                
+
     def __getitem__(self, key):
-        if key == None:            
+        if key == None:
             raise ValueError('Key may not be None')
         if len(key) == 0:
             if self.key == '':
@@ -85,7 +85,7 @@ class Trie(object):
                 return self.value
             else:
                 raise KeyError(key)
-        c = key[0]        
+        c = key[0]
         if c in self.slots:
             trie = self.slots[c]
             return trie[key[1:]]
@@ -118,13 +118,13 @@ class Trie(object):
         """ Private implementation method. Use keys() instead. """
         global dictItemsIter
         result = [prefix + self.key] if self.key != None else []
-        for key, trie in dictItemsIter(self.slots):        
-            result.extend(trie._allKeys(prefix + key))        
+        for key, trie in dictItemsIter(self.slots):
+            result.extend(trie._allKeys(prefix + key))
         return result
 
     def keys(self, prefix=None):
-        """ Return all or possible keys in this trie 
-        
+        """ Return all or possible keys in this trie
+
         If prefix is None, return all keys.
         If prefix is a string, return all keys that start with this string
         """
@@ -132,7 +132,7 @@ class Trie(object):
             return self._allKeys('')
         else:
             return self._filteredKeys(prefix, '')
-    
+
     def _filteredKeys(self, key, prefix):
         global dictKeysIter
         global dictItemsIter
@@ -140,7 +140,7 @@ class Trie(object):
             result = [prefix + self.key] if self.key != None else []
             for c, trie in dictItemsIter(self.slots):
                 result.extend(trie._allKeys(prefix + c))
-        else:        
+        else:
             c = key[0]
             if c in dictKeysIter(self.slots):
                 result = []
@@ -178,9 +178,8 @@ class Trie(object):
                 return self.slots[c]._longestCommonPrefix(key[1:], prefix + c)
             else:
                 return '' # nothing starts with the specified prefix
-    
+
     def __iter__(self):
         for k in list(self.keys()):
             yield k
         raise StopIteration
-    
