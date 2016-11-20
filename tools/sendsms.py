@@ -24,7 +24,7 @@ def parseArgs():
     parser.add_argument('--CNMI', default='', help='Set the CNMI of the modem, used for message notifications')
     parser.add_argument('destination', metavar='DESTINATION', help='destination mobile number')
     return parser.parse_args()
-    
+
 def parseArgsPy26():
     """ Argument parser for Python 2.6 """
     from gsmtermlib.posoptparse import PosOptionParser, Option
@@ -35,9 +35,9 @@ def parseArgsPy26():
     parser.add_option('-d', '--deliver', action='store_true', help='wait for SMS delivery report')
     parser.add_option('-w', '--wait', type=int, default=0, help='Wait for modem to start, in seconds')
     parser.add_option('--CNMI', default='', help='Set the CNMI of the modem, used for message notifications')
-    parser.add_positional_argument(Option('--destination', metavar='DESTINATION', help='destination mobile number'))    
+    parser.add_positional_argument(Option('--destination', metavar='DESTINATION', help='destination mobile number'))
     options, args = parser.parse_args()
-    if len(args) != 1:    
+    if len(args) != 1:
         parser.error('Incorrect number of arguments - please specify a DESTINATION to send to, e.g. {0} 012789456'.format(sys.argv[0]))
     else:
         options.destination = args[0]
@@ -51,7 +51,7 @@ def main():
     modem = GsmModem(args.port, args.baud, AT_CNMI=args.CNMI)
     # Uncomment the following line to see what the modem is doing:
     #logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
-    
+
     print('Connecting to GSM modem on {0}...'.format(args.port))
     try:
         modem.connect(args.pin, waitingForModemToStartInSeconds=args.wait)

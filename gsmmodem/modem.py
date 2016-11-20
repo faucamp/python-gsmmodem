@@ -29,8 +29,8 @@ if PYTHON_VERSION >= 3:
     unicode = str
     TERMINATOR = b'\r'
     CTRLZ = b'\x1a'
-    
-    
+
+
 else: #pragma: no cover
     dictValuesIter = dict.itervalues
     dictItemsIter = dict.iteritems
@@ -80,7 +80,7 @@ class ReceivedSms(Sms):
     def getModem(self):
         """ Convenience method that returns the gsm modem instance """
         return self._gsmModem
-        
+
 class SentSms(Sms):
     """ An SMS message that has been sent (MO) """
 
@@ -153,7 +153,7 @@ class GsmModem(SerialComms):
     # Used for parsing SMS status reports
     CDSI_REGEX = re.compile(b'\+CDSI:\s*"([^"]+)",(\d+)$')
     CDS_REGEX  = re.compile(b'\+CDS:\s*([0-9]+)"$')
-    
+
     def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallback=None, requestDelivery=True, AT_CNMI="", *a, **kw):
         super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification, *a, **kw)
         self.incomingCallCallback = incomingCallCallbackFunc or self._placeholderCallback
@@ -280,7 +280,7 @@ class GsmModem(SerialComms):
         # Attempt to identify modem type directly (if not already) - for outgoing call status updates
         if callUpdateTableHint == 0:
             if b'simcom' in self.manufacturer.lower() : #simcom modems support DTMF and don't support AT+CLAC
-                Call.dtmfSupport = True 
+                Call.dtmfSupport = True
                 self.write('AT+DDET=1')                # enable detect incoming DTMF
 
             if self.manufacturer.lower() == 'huawei':
@@ -395,7 +395,7 @@ class GsmModem(SerialComms):
                     # Message notifications not supported
                     self._smsReadSupported = False
                     self.log.warning('Incoming SMS notifications not supported by modem. SMS receiving unavailable.')
-        
+
         # Incoming call notification setup
         try:
             self.write('AT+CLIP=1') # Enable calling line identification presentation
@@ -461,11 +461,11 @@ class GsmModem(SerialComms):
         :return: A list containing the response lines from the modem, or None if waitForResponse is False
         :rtype: list
         """
-        
+
         if isinstance(data, unicode):
             data = bytes(data,"ascii")
-        
-            
+
+
         self.log.debug('write: %s', data)
         responseLines = super(GsmModem, self).write(data + writeTerm, waitForResponse=waitForResponse, timeout=timeout, expectedResponseTermSeq=expectedResponseTermSeq)
         if self._writeWait > 0: # Sleep a bit if required (some older modems suffer under load)
@@ -763,7 +763,7 @@ class GsmModem(SerialComms):
 
         It must be stored on SIM by operator.
         If is it not stored already, it usually is possible to store the number by user.
-        
+
                 :raise TimeoutException: if a timeout was specified and reached
 
 
@@ -778,13 +778,13 @@ class GsmModem(SerialComms):
                 # temporarily switch to "own numbers" phonebook, read position 1 and than switch back
                 response = self.write('AT+CPBS?')
                 selected_phonebook = response[0][6:].split('"')[1] # first line, remove the +CSCS: prefix, split, first parameter
-                
+
                 if selected_phonebook is not "ON":
                     self.write('AT+CPBS="ON"')
-                
+
                 response = self.write("AT+CPBR=1")
                 self.write('AT+CPBS="{0}"'.format(selected_phonebook))
-                
+
             if response is "OK": # command is supported, but no number is set
                 return None
             elif len(response) == 2: # OK and phone number. Actual number is in the first line, second parameter, and is placed inside quotation marks
@@ -798,14 +798,14 @@ class GsmModem(SerialComms):
             elif len(response) > 2: # Multi-line response
                 self.log.debug('Unhandled +CNUM/+CPBS response: {0}'.format(response))
                 return None
-            
+
         except (TimeoutException, CommandError):
             raise
 
     @ownNumber.setter
     def ownNumber(self, phone_number):
         actual_phonebook = self.write('AT+CPBS?')
-        if actual_phonebook is not "ON": 
+        if actual_phonebook is not "ON":
             self.write('AT+CPBS="ON"')
         self.write('AT+CPBW=1,"' + phone_number + '"')
 
@@ -971,8 +971,8 @@ class GsmModem(SerialComms):
             raise
         print(queryResponse)
         return True
-        
-    
+
+
     def setForwarding(self, fwdType, fwdEnable, fwdNumber, responseTimeout=15):
         """ Check forwarding status: 0=Unconditional, 1=Busy, 2=NoReply, 3=NotReach, 4=AllFwd, 5=AllCondFwd
         :param fwdType: The type of forwarding to set
@@ -989,7 +989,7 @@ class GsmModem(SerialComms):
             return False
         print(queryResponse)
         return queryResponse
-    
+
     def dial(self, number, timeout=5, callStatusUpdateCallbackFunc=None):
         """ Calls the specified phone number using a voice phone call
 
@@ -1188,7 +1188,7 @@ class GsmModem(SerialComms):
                 self._handleSmsStatusReportTe(next_line_is_te_statusreport_length, line)
                 return
             elif line.startswith(b'+DTMF'):
-                # New incoming DTMF 
+                # New incoming DTMF
                 self._handleIncomingDTMF(line)
                 return
             else:
@@ -1200,12 +1200,12 @@ class GsmModem(SerialComms):
                         handlerFunc(match)
                         return
         # If this is reached, the notification wasn't handled
-        self.log.debug('Unhandled unsolicited modem notification: %s', lines)    
-    
+        self.log.debug('Unhandled unsolicited modem notification: %s', lines)
+
     #Simcom modem able detect incoming DTMF
     def _handleIncomingDTMF(self,line):
         self.log.debug('Handling incoming DTMF')
-        
+
         try:
             dtmf_num=line.split(':')[1].replace(" ","")
             self.dtmfpool.append(dtmf_num)
@@ -1217,7 +1217,7 @@ class GsmModem(SerialComms):
             return None
         else:
             return self.dtmfpool.pop(0)
-    
+
     def _handleIncomingCall(self, lines):
         self.log.debug('Handling incoming call')
         ringLine = d(lines.pop(0))
@@ -1334,7 +1334,7 @@ class GsmModem(SerialComms):
                     self.log.error('error in smsReceivedCallback', exc_info=True)
                 else:
                     self.deleteStoredSms(msgIndex)
-    
+
     def _handleSmsStatusReport(self, notificationLine):
         """ Handler for SMS status reports """
         self.log.debug('SMS status report received')
@@ -1357,7 +1357,7 @@ class GsmModem(SerialComms):
                 except Exception:
                     self.log.error('error in smsStatusReportCallback', exc_info=True)
 
-    
+
                 self.smsStatusReportCallback(report)
 
     def _handleSmsStatusReportTe(self, length, notificationLine):
@@ -1617,10 +1617,10 @@ class Call(object):
         if self.answered:
             dtmfCommandBase = self.DTMF_COMMAND_BASE.format(cid=self.id)
             toneLen = len(tones)
-            for tone in list(tones):     
+            for tone in list(tones):
               try:
                  self._gsmModem.write('AT{0}{1}'.format(d(dtmfCommandBase),d(tone)), timeout=(5 + toneLen))
-             
+
               except CmeError as e:
                 if e.code == 30:
                     # No network service - can happen if call is ended during DTMF transmission (but also if DTMF is sent immediately after call is answered)

@@ -13,14 +13,14 @@ BAUDRATE = 115200
 PIN = None # SIM card PIN (if any)
 
 from gsmmodem.modem import GsmModem
-    
+
 def main():
     print('Initializing modem...')
     # Uncomment the following line to see what the modem is doing:
     logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
     modem = GsmModem(PORT, BAUDRATE)
     modem.connect(PIN)
-    
+
     number = modem.ownNumber
     print("The SIM card phone number is:")
     print(number)

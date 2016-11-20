@@ -1,5 +1,5 @@
 """ PosOptionParser class gotten from Douglas Mayle at StackOverflow:
-http://stackoverflow.com/a/664614/1980416 
+http://stackoverflow.com/a/664614/1980416
 
 Used for positional argument support similar to argparse (for Python 2.6 compatibility)
 """
