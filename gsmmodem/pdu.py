@@ -63,7 +63,7 @@ class SmsPduTzInfo(tzinfo):
         # See if the timezone difference is positive/negative by checking MSB of first semi-octet
         tzHexVal = int(pduOffsetStr, 16)
         if tzHexVal & 0x80 == 0: # positive
-            self._offset = timedelta(minutes=(int(pduOffsetStr) * 15))
+            self._offset = timedelta(minutes=(int(pduOffsetStr, 16) * 15))
         else: # negative
             self._offset = timedelta(minutes=(int('{0:0>2X}'.format(tzHexVal & 0x7F)) * -15))
 
