@@ -858,7 +858,7 @@ class GsmModem(SerialComms):
         :type text: str
         :param waitForDeliveryReport: if True, this method blocks until a delivery report is received for the sent message
         :type waitForDeliveryReport: boolean
-        :param deliveryReport: the maximum time in seconds to wait for a delivery report (if "waitForDeliveryReport" is True)
+        :param deliveryTimeout: the maximum time in seconds to wait for a delivery report (if "waitForDeliveryReport" is True)
         :type deliveryTimeout: int or float
 
         :raise CommandError: if an error occurs while attempting to send the message
