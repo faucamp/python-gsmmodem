@@ -22,7 +22,9 @@ def parseArgs():
     parser.add_argument('-d', '--deliver', action='store_true', help='wait for SMS delivery report')
     parser.add_argument('-w', '--wait', type=int, default=0, help='Wait for modem to start, in seconds')
     parser.add_argument('--CNMI', default='', help='Set the CNMI of the modem, used for message notifications')
+    parser.add_argument('--debug', action='store_true', help='turn on debug (serial port dump)')
     parser.add_argument('destination', metavar='DESTINATION', help='destination mobile number')
+    parser.add_argument('message', nargs='?', metavar='MESSAGE', help='message to send, defaults to stdin-prompt')
     return parser.parse_args()
 
 def parseArgsPy26():
@@ -41,6 +43,7 @@ def parseArgsPy26():
         parser.error('Incorrect number of arguments - please specify a DESTINATION to send to, e.g. {0} 012789456'.format(sys.argv[0]))
     else:
         options.destination = args[0]
+        options.message = None
         return options
 
 def main():
@@ -49,9 +52,10 @@ def main():
         sys.stderr.write('Error: No port specified. Please specify the port to which the GSM modem is connected using the -i argument.\n')
         sys.exit(1)
     modem = GsmModem(args.port, args.baud, AT_CNMI=args.CNMI)
-    # Uncomment the following line to see what the modem is doing:
-    #logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
-
+    if args.debug:
+        # enable dump on serial port
+        logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
+    
     print('Connecting to GSM modem on {0}...'.format(args.port))
     try:
         modem.connect(args.pin, waitingForModemToStartInSeconds=args.wait)
@@ -69,8 +73,11 @@ def main():
         modem.close()
         sys.exit(1)
     else:
-        print('\nPlease type your message and press enter to send it:')
-        text = raw_input('> ')
+        if args.message is None:
+            print('\nPlease type your message and press enter to send it:')
+            text = raw_input('> ')
+        else:
+            text = args.message
         if args.deliver:
             print ('\nSending SMS and waiting for delivery report...')
         else:
