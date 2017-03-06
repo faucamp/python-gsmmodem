@@ -24,6 +24,7 @@ else: #pragma: no cover
     toByteArray = lambda x: bytearray(x.decode('hex')) if type(x) in (str, unicode) else x
     rawStrToByteArray = bytearray
 
+TEXT_MODE = ('\n\r !\"#%&\'()*+,-./0123456789:;<=>?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz') # TODO: Check if all of them are supported inside text mode
 # Tables can be found at: http://en.wikipedia.org/wiki/GSM_03.38#GSM_7_bit_default_alphabet_and_extension_table_of_3GPP_TS_23.038_.2F_GSM_03.38
 GSM7_BASIC = ('@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ`¿abcdefghijklmnopqrstuvwxyzäöñüà')
 GSM7_EXTENDED = {chr(0xFF): 0x0A,
@@ -688,10 +689,10 @@ def encodeTextMode(plaintext):
     if PYTHON_VERSION >= 3:
         plaintext = str(plaintext)
     for char in plaintext:
-        idx = GSM7_BASIC.find(char)
+        idx = TEXT_MODE.find(char)
         if idx != -1:
             continue
-        elif not discardInvalid:
+        else:
             raise ValueError('Cannot encode char "{0}" inside text mode'.format(char))
 
     if len(plaintext) > MAX_MESSAGE_LENGTH[0x00]:
