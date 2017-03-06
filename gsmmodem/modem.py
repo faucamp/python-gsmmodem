@@ -8,7 +8,7 @@ from time import sleep
 
 from .serial_comms import SerialComms
 from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException, TimeoutException, PinRequiredError, IncorrectPinError, SmscNumberUnknownError
-from .pdu import encodeSmsSubmitPdu, decodeSmsPdu, encodeGsm7
+from .pdu import encodeSmsSubmitPdu, decodeSmsPdu, encodeGsm7, encodeTextMode
 from .util import SimpleOffsetTzInfo, lineStartingWith, allLinesMatchingPattern, parseTextModeTimeStr
 
 #from . import compat # For Python 2.6 compatibility
@@ -866,22 +866,23 @@ class GsmModem(SerialComms):
         """
 
         # Check input text to select appropriate mode (text or PDU)
-        # Check encoding
-        try:
-            encodedText = encodeGsm7(text)
-        except ValueError:
-            encodedText = None
-            self.smsTextMode = False
-
-        # Check message length
-        if len(text) > 160:
-            self.smsTextMode = False
-
-        # Send SMS via AT commands
         if self._smsTextMode:
+            try:
+                encodedText = encodeTextMode(text)
+            except ValueError:
+                self._smsTextMode = False
+
+        if self._smsTextMode:
+            # Send SMS via AT commands
             self.write('AT+CMGS="{0}"'.format(destination), timeout=5, expectedResponseTermSeq='> ')
             result = lineStartingWith('+CMGS:', self.write(text, timeout=35, writeTerm=CTRLZ))
         else:
+            # Check encoding
+            try:
+                encodedText = encodeGsm7(text)
+            except ValueError:
+                encodedText = None
+
             # Set GSM modem SMS encoding format
             # Encode message text and set data coding scheme based on text contents
             if encodedText == None:
@@ -890,17 +891,26 @@ class GsmModem(SerialComms):
             else:
                 self.smsEncoding = 'GSM'
 
+            # Encode text into PDUs
             pdus = encodeSmsSubmitPdu(destination, text, reference=self._smsRef, sendFlash=sendFlash)
+
+            # Send SMS PDUs via AT commands
             for pdu in pdus:
                 self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=5, expectedResponseTermSeq='> ')
                 result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=35, writeTerm=CTRLZ)) # example: +CMGS: xx
+
         if result == None:
             raise CommandError('Modem did not respond with +CMGS response')
+
+        # Keep SMS reference number in order to pair delivery reports with sent message
         reference = int(result[7:])
         self._smsRef = reference + 1
         if self._smsRef > 255:
             self._smsRef = 0
+
+        # Create sent SMS object for future delivery checks
         sms = SentSms(destination, text, reference)
+
         # Add a weak-referenced entry for this SMS (allows us to update the SMS state if a status report is received)
         self.sentSms[reference] = sms
         if waitForDeliveryReport:
