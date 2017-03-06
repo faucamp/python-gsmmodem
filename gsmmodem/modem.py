@@ -581,7 +581,10 @@ class GsmModem(SerialComms):
                     continue
 
             # Return found commands
-            return commands
+            if len(commands) == 0:
+                return None
+            else:
+                return commands
 
     @property
     def smsTextMode(self):

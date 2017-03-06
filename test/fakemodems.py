@@ -99,7 +99,8 @@ class GenericTestModem(FakeModem):
                           'AT+WIND?\r': ['ERROR\r\n'],
                           'AT+WIND=50\r': ['ERROR\r\n'],
                           'AT+ZPAS?\r': ['ERROR\r\n'],
-                          'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']} 
+                          'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n'],
+                          'AT\r': ['OK\r\n']}
 
     def getResponse(self, cmd):
         if not self._pinLock and cmd == 'AT+CLCC\r':
