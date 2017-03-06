@@ -1321,28 +1321,42 @@ class TestSms(unittest.TestCase):
             self.assertEqual(sms.reference, ref, 'Sent SMS reference incorrect. Expected "{0}", got "{1}"'.format(ref, sms.reference))
             self.assertEqual(sms.status, gsmmodem.modem.SentSms.ENROUTE, 'Sent SMS status should have been {0} ("ENROUTE"), but is: {1}'.format(gsmmodem.modem.SentSms.ENROUTE, sms.status))
         self.modem.close()
-        
+
     def test_sendSmsPduMode(self):
         """ Tests sending a SMS messages in PDU mode """
         self.initModem(None)
         self.modem.smsTextMode = False # Set modem to PDU mode
+        self.modem._smsEncoding = "GSM"
         self.assertFalse(self.modem.smsTextMode)
+        self.firstSMS = True
         for number, message, index, smsTime, smsc, pdu, sms_deliver_tpdu_length, ref, mem in self.tests:
             self.modem._smsRef = ref
             calcPdu = gsmmodem.pdu.encodeSmsSubmitPdu(number, message, ref)[0]
             pduHex = codecs.encode(compat.str(calcPdu.data), 'hex_codec').upper()
             if PYTHON_VERSION >= 3:
                 pduHex = str(pduHex, 'ascii')
-            
+
             def writeCallbackFunc(data):
+                def writeCallbackFuncReadCSCS(data):
+                    self.assertEqual('AT+CSCS=?\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSCS=?', data))
+                    self.firstSMS = False
+
                 def writeCallbackFunc2(data):
+                    self.assertEqual('AT+CMGS={0}\r'.format(calcPdu.tpduLength), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS={0}'.format(calcPdu.tpduLength), data))
+                    self.modem.serial.writeCallbackFunc = writeCallbackFunc3
+                    self.modem.serial.flushResponseSequence = False
+                    self.modem.serial.responseSequence = ['> \r\n', '+CMGS: {0}\r\n'.format(ref), 'OK\r\n']
+
+                def writeCallbackFunc3(data):
                     self.assertEqual('{0}{1}'.format(pduHex, chr(26)), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('{0}{1}'.format(pduHex, chr(26)), data))
-                    self.modem.serial.flushResponseSequence = True                
-                self.assertEqual('AT+CMGS={0}\r'.format(calcPdu.tpduLength), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS={0}'.format(calcPdu.tpduLength), data))
+                    self.modem.serial.flushResponseSequence = True
+
+                if self.firstSMS:
+                    return writeCallbackFuncReadCSCS(data)
+                self.assertEqual('AT+CSCS="{0}"\r'.format(self.modem._smsEncoding), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSCS="{0}"'.format(self.modem._smsEncoding), data))
                 self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
-            self.modem.serial.flushResponseSequence = False
-            self.modem.serial.responseSequence = ['> \r\n', '+CMGS: {0}\r\n'.format(ref), 'OK\r\n']            
             sms = self.modem.sendSms(number, message)
             self.assertIsInstance(sms, gsmmodem.modem.SentSms)
             self.assertEqual(sms.number, number, 'Sent SMS has invalid number. Expected "{0}", got "{1}"'.format(number, sms.number))
@@ -1351,34 +1365,46 @@ class TestSms(unittest.TestCase):
             self.assertEqual(sms.reference, ref, 'Sent SMS reference incorrect. Expected "{0}", got "{1}"'.format(ref, sms.reference))
             self.assertEqual(sms.status, gsmmodem.modem.SentSms.ENROUTE, 'Sent SMS status should have been {0} ("ENROUTE"), but is: {1}'.format(gsmmodem.modem.SentSms.ENROUTE, sms.status))
         self.modem.close()
-    
+
     def test_sendSmsResponseMixedWithUnsolictedMessages(self):
         """ Tests sending a SMS messages (PDU mode), but with unsolicted messages mixed into the modem responses
         - the only difference here is that the modem's responseSequence contains unsolicted messages
         taken from github issue #11
         """
         self.initModem(None)
-        self.modem.smsTextMode = False # Set modem to PDU mode        
+        self.modem.smsTextMode = False # Set modem to PDU mode
+        self.modem._smsEncoding = "GSM"
+        self.firstSMS = True
         for number, message, index, smsTime, smsc, pdu, sms_deliver_tpdu_length, ref, mem in self.tests:
             self.modem._smsRef = ref
             calcPdu = gsmmodem.pdu.encodeSmsSubmitPdu(number, message, ref)[0]
             pduHex = codecs.encode(compat.str(calcPdu.data), 'hex_codec').upper()
             if PYTHON_VERSION >= 3:
                 pduHex = str(pduHex, 'ascii')
-            
+
             def writeCallbackFunc(data):
+                def writeCallbackFuncReadCSCS(data):
+                    self.assertEqual('AT+CSCS=?\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSCS=?', data))
+                    self.firstSMS = False
+
                 def writeCallbackFunc2(data):
+                    self.assertEqual('AT+CMGS={0}\r'.format(calcPdu.tpduLength), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS={0}'.format(calcPdu.tpduLength), data))
+                    self.modem.serial.writeCallbackFunc = writeCallbackFunc3
+                    self.modem.serial.flushResponseSequence = True
+                    # Note thee +ZDONR and +ZPASR unsolicted messages in the "response"
+                    self.modem.serial.responseSequence = ['+ZDONR: "METEOR",272,3,"CS_ONLY","ROAM_OFF"\r\n', '+ZPASR: "UMTS"\r\n', '> \r\n']
+
+                def writeCallbackFunc3(data):
                     self.assertEqual('{0}{1}'.format(pduHex, chr(26)), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('{0}{1}'.format(pduHex, chr(26)), data))
                     # Note thee +ZDONR and +ZPASR unsolicted messages in the "response"
                     self.modem.serial.responseSequence =  ['+ZDONR: "METEOR",272,3,"CS_ONLY","ROAM_OFF"\r\n', '+ZPASR: "UMTS"\r\n', '+ZDONR: "METEOR",272,3,"CS_PS","ROAM_OFF"\r\n', '+ZPASR: "UMTS"\r\n', '+CMGS: {0}\r\n'.format(ref), 'OK\r\n']
-                self.assertEqual('AT+CMGS={0}\r'.format(calcPdu.tpduLength), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS={0}'.format(calcPdu.tpduLength), data))
+
+                if self.firstSMS:
+                    return writeCallbackFuncReadCSCS(data)
+                self.assertEqual('AT+CSCS="{0}"\r'.format(self.modem._smsEncoding), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSCS="{0}"'.format(self.modem._smsEncoding), data))
                 self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
-            self.modem.serial.flushResponseSequence = True
-            
-            # Note thee +ZDONR and +ZPASR unsolicted messages in the "response"
-            self.modem.serial.responseSequence = ['+ZDONR: "METEOR",272,3,"CS_ONLY","ROAM_OFF"\r\n', '+ZPASR: "UMTS"\r\n', '> \r\n']
-                        
             sms = self.modem.sendSms(number, message)
             self.assertIsInstance(sms, gsmmodem.modem.SentSms)
             self.assertEqual(sms.number, number, 'Sent SMS has invalid number. Expected "{0}", got "{1}"'.format(number, sms.number))
