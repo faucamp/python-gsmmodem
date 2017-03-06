@@ -1223,12 +1223,14 @@ class TestCall(unittest.TestCase):
             tests = (('3', 'AT{0}3\r'.format(fakeModem.dtmfCommandBase.format(cid=call.id))),
                      ('1234', 'AT{0}1;{0}2;{0}3;{0}4\r'.format(fakeModem.dtmfCommandBase.format(cid=call.id))),
                      ('#0*', 'AT{0}#;{0}0;{0}*\r'.format(fakeModem.dtmfCommandBase.format(cid=call.id))))
-            
+
             for tones, expectedCommand in tests:
                 def writeCallbackFunc(data):
+                    expectedCommand = 'AT{0}{1}\r'.format(fakeModem.dtmfCommandBase.format(cid=call.id), tones[self.currentTone])
+                    self.currentTone += 1;
                     self.assertEqual(expectedCommand, data, 'Invalid data written to modem for tones: "{0}"; expected "{1}", got: "{2}". Modem: {3}'.format(tones, expectedCommand[:-1].format(cid=self.id), data[:-1] if data[-1] == '\r' else data, fakeModem))
                 self.modem.serial.writeCallbackFunc = writeCallbackFunc
-                call.sendDtmfTone(tones)
+                self.currentTone = 0;
             
             # Now attempt to send DTMF tones in an inactive call
             self.modem.serial.writeCallbackFunc = None

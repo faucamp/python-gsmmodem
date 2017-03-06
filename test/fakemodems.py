@@ -95,9 +95,12 @@ class GenericTestModem(FakeModem):
         self._callId = None
         self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
         self.responses = {'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
+                          'AT+CLAC=?\r': ['ERROR\r\n'],
                           'AT+CLAC\r': ['ERROR\r\n'],
+                          'AT+WIND=?\r': ['ERROR\r\n'],
                           'AT+WIND?\r': ['ERROR\r\n'],
                           'AT+WIND=50\r': ['ERROR\r\n'],
+                          'AT+ZPAS=?\r': ['ERROR\r\n'],
                           'AT+ZPAS?\r': ['ERROR\r\n'],
                           'AT+CSCS=?\r': ['+CSCS: ("GSM",UCS2")\r\n', 'OK\r\n'],
                           'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n'],
@@ -381,7 +384,9 @@ class QualcommM6280(FakeModem):
                  'AT+CGMR\r': ['M6280_V1.0.0 M6280_V1.0.0 1 [Sep 4 2008 12:00:00]\r\n', 'OK\r\n'],
                  'AT+CIMI\r': ['111111111111111\r\n', 'OK\r\n'],
                  'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],
+                 'AT+CLAC=?\r': ['ERROR\r\n'],
                  'AT+CLAC\r': ['ERROR\r\n'],
+                 'AT+WIND=?\r': ['ERROR\r\n'],
                  'AT+WIND?\r': ['ERROR\r\n'],
                  'AT+WIND=50\r': ['ERROR\r\n'],
                  'AT+ZPAS?\r':  ['+BEARTYPE: "UMTS","CS_PS"\r\n', 'OK\r\n'],
@@ -543,10 +548,14 @@ class NokiaN79(GenericTestModem):
                  'AT+CGMR\r': ['V ICPR72_08w44.1\r\n', '24-11-08\r\n', 'RM-348\r\n', '(c) Nokia\r\n', '11.049\r\n', 'OK\r\n'],
                  'AT+CIMI\r': ['111111111111111\r\n', 'OK\r\n'],
                  'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],
+                 'AT+CNMI=?\r': ['ERROR\r\n'], # SMS reading and notifications not supported
                  'AT+CNMI=2,1,0,2\r': ['ERROR\r\n'], # SMS reading and notifications not supported
+                 'AT+CLAC=?\r': ['ERROR\r\n'],
                  'AT+CLAC\r': ['ERROR\r\n'],
+                 'AT+WIND=?\r': ['ERROR\r\n'],
                  'AT+WIND?\r': ['ERROR\r\n'],
                  'AT+WIND=50\r': ['ERROR\r\n'],
+                 'AT+ZPAS=?\r': ['ERROR\r\n'],
                  'AT+ZPAS?\r': ['ERROR\r\n'],
                  'AT+CPMS="SM","SM","SR"\r': ['ERROR\r\n'],
                  'AT+CPMS=?\r': ['+CPMS: (),(),()\r\n', 'OK\r\n'], # not supported
