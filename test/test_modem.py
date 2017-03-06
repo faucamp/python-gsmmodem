@@ -680,6 +680,7 @@ class TestEdgeCases(unittest.TestCase):
         global FAKE_MODEM            
         FAKE_MODEM = copy(fakemodems.GenericTestModem())
         FAKE_MODEM.responses['AT+CNMI=2,1,0,2\r'] = ['ERROR\r\n']
+        FAKE_MODEM.responses['AT+CNMI=2,1,0,1,0\r'] = ['ERROR\r\n']
         # This should pass without any problem, and AT+CNMI=2,1,0,2 should at least have been attempted during connect()
         cnmiWritten = [False]
         def writeCallbackFunc(data):
