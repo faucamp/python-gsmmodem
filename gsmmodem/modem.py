@@ -8,7 +8,7 @@ from time import sleep
 
 from .serial_comms import SerialComms
 from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException, TimeoutException, PinRequiredError, IncorrectPinError, SmscNumberUnknownError
-from .pdu import encodeSmsSubmitPdu, decodeSmsPdu, encodeGsm7
+from .pdu import encodeSmsSubmitPdu, decodeSmsPdu, encodeGsm7, encodeTextMode
 from .util import SimpleOffsetTzInfo, lineStartingWith, allLinesMatchingPattern, parseTextModeTimeStr
 
 #from . import compat # For Python 2.6 compatibility
@@ -866,30 +866,38 @@ class GsmModem(SerialComms):
         """
 
         # Check input text to select appropriate mode (text or PDU)
-        # Check encoding
-        try:
-            encodedText = encodeGsm7(text)
-        except ValueError:
-            encodedText = None
+        if self._smsTextMode:
+            try:
+                encodedText = encodeTextMode(text)
+            except ValueError:
+                self._smsTextMode = False
 
-        # Force binary mode for simplicity. Text mode is not necessary.
-        self.smsTextMode = False
-
-        # Set GSM modem SMS encoding format
-        # Encode message text and set data coding scheme based on text contents
-        if encodedText == None:
-            # Cannot encode text using GSM-7; use UCS2 instead
-            self.smsEncoding = 'UCS2'
+        if self._smsTextMode:
+            # Send SMS via AT commands
+            self.write('AT+CMGS="{0}"'.format(destination), timeout=5, expectedResponseTermSeq='> ')
+            result = lineStartingWith('+CMGS:', self.write(text, timeout=35, writeTerm=CTRLZ))
         else:
-            self.smsEncoding = 'GSM'
+            # Check encoding
+            try:
+                encodedText = encodeGsm7(text)
+            except ValueError:
+                encodedText = None
 
-        # Encode text into PDUs
-        pdus = encodeSmsSubmitPdu(destination, text, reference=self._smsRef, sendFlash=sendFlash)
+            # Set GSM modem SMS encoding format
+            # Encode message text and set data coding scheme based on text contents
+            if encodedText == None:
+                # Cannot encode text using GSM-7; use UCS2 instead
+                self.smsEncoding = 'UCS2'
+            else:
+                self.smsEncoding = 'GSM'
 
-        # Send SMS PDUs via AT commands
-        for pdu in pdus:
-            self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=5, expectedResponseTermSeq='> ')
-            result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=35, writeTerm=CTRLZ)) # example: +CMGS: xx
+            # Encode text into PDUs
+            pdus = encodeSmsSubmitPdu(destination, text, reference=self._smsRef, sendFlash=sendFlash)
+
+            # Send SMS PDUs via AT commands
+            for pdu in pdus:
+                self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=5, expectedResponseTermSeq='> ')
+                result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=35, writeTerm=CTRLZ)) # example: +CMGS: xx
 
         if result == None:
             raise CommandError('Modem did not respond with +CMGS response')

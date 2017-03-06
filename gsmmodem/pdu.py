@@ -673,6 +673,32 @@ def decodeSemiOctets(encodedNumber, numberOfOctets=None):
                 break
     return ''.join(number)
 
+def encodeTextMode(plaintext):
+    """ Text mode checker
+
+    Tests whther SMS could be sent in text mode
+
+    :param text: the text string to encode
+
+    :raise ValueError: if the text string cannot be sent in text mode
+
+    :return: Passed string
+    :rtype: str
+    """
+    if PYTHON_VERSION >= 3:
+        plaintext = str(plaintext)
+    for char in plaintext:
+        idx = GSM7_BASIC.find(char)
+        if idx != -1:
+            continue
+        elif not discardInvalid:
+            raise ValueError('Cannot encode char "{0}" inside text mode'.format(char))
+
+    if len(plaintext) > MAX_MESSAGE_LENGTH[0x00]:
+        raise ValueError('Massage is too long for inside text mode (maximum {0} characters)'.format(MAX_MESSAGE_LENGTH[0x00]))
+
+    return plaintext
+
 def encodeGsm7(plaintext, discardInvalid=False):
     """ GSM-7 text encoding algorithm
 
