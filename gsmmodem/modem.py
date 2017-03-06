@@ -1646,7 +1646,7 @@ class IncomingCall(Call):
         :param ton: TON (type of number/address) in integer format
         :param callType: Type of the incoming call (VOICE, FAX, DATA, etc)
         """
-        if type(callType) == str:
+        if callType in self.CALL_TYPE_MAP:
             callType = self.CALL_TYPE_MAP[callType]
         super(IncomingCall, self).__init__(gsmModem, callId, callType, number)
         # Type attribute of the incoming call
