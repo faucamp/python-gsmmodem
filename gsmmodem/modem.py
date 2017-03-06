@@ -871,36 +871,38 @@ class GsmModem(SerialComms):
             encodedText = encodeGsm7(text)
         except ValueError:
             encodedText = None
-            self.smsTextMode = False
 
-        # Check message length
-        if len(text) > 160:
-            self.smsTextMode = False
+        # Force binary mode for simplicity. Text mode is not necessary.
+        self.smsTextMode = False
 
-        # Send SMS via AT commands
-        if self._smsTextMode:
-            self.write('AT+CMGS="{0}"'.format(destination), timeout=5, expectedResponseTermSeq='> ')
-            result = lineStartingWith('+CMGS:', self.write(text, timeout=35, writeTerm=CTRLZ))
+        # Set GSM modem SMS encoding format
+        # Encode message text and set data coding scheme based on text contents
+        if encodedText == None:
+            # Cannot encode text using GSM-7; use UCS2 instead
+            self.smsEncoding = 'UCS2'
         else:
-            # Set GSM modem SMS encoding format
-            # Encode message text and set data coding scheme based on text contents
-            if encodedText == None:
-                # Cannot encode text using GSM-7; use UCS2 instead
-                self.smsEncoding = 'UCS2'
-            else:
-                self.smsEncoding = 'GSM'
+            self.smsEncoding = 'GSM'
 
-            pdus = encodeSmsSubmitPdu(destination, text, reference=self._smsRef, sendFlash=sendFlash)
-            for pdu in pdus:
-                self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=5, expectedResponseTermSeq='> ')
-                result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=35, writeTerm=CTRLZ)) # example: +CMGS: xx
+        # Encode text into PDUs
+        pdus = encodeSmsSubmitPdu(destination, text, reference=self._smsRef, sendFlash=sendFlash)
+
+        # Send SMS PDUs via AT commands
+        for pdu in pdus:
+            self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=5, expectedResponseTermSeq='> ')
+            result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=35, writeTerm=CTRLZ)) # example: +CMGS: xx
+
         if result == None:
             raise CommandError('Modem did not respond with +CMGS response')
+
+        # Keep SMS reference number in order to pair delivery reports with sent message
         reference = int(result[7:])
         self._smsRef = reference + 1
         if self._smsRef > 255:
             self._smsRef = 0
+
+        # Create sent SMS object for future delivery checks
         sms = SentSms(destination, text, reference)
+
         # Add a weak-referenced entry for this SMS (allows us to update the SMS state if a status report is received)
         self.sentSms[reference] = sms
         if waitForDeliveryReport:

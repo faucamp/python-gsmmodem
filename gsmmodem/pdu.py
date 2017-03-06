@@ -43,6 +43,11 @@ MAX_MESSAGE_LENGTH = {0x00: 160, # GSM-7
                       0x04: 140, # 8-bit
                       0x08: 70}  # UCS2
 
+# Maximum message sizes for each data coding for multipart messages
+MAX_MULTIPART_MESSAGE_LENGTH = {0x00: 153, # GSM-7
+                                0x04: 133, # 8-bit TODO: Check this value!
+                                0x08: 67}  # UCS2
+
 class SmsPduTzInfo(tzinfo):
     """ Simple implementation of datetime.tzinfo for handling timestamp GMT offsets specified in SMS PDUs """
 
@@ -276,19 +281,29 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
 
     # Encode message text and set data coding scheme based on text contents
     try:
-        encodedText = encodeGsm7(text)
+        encodedTextLength = len(encodeGsm7(text))
     except ValueError:
         # Cannot encode text using GSM-7; use UCS2 instead
+        encodedTextLength = len(text)
         alphabet = 0x08 # UCS2
     else:
         alphabet = 0x00 # GSM-7
 
     # Check if message should be concatenated
-    if len(text) > MAX_MESSAGE_LENGTH[alphabet]:
+    if encodedTextLength > MAX_MESSAGE_LENGTH[alphabet]:
         # Text too long for single PDU - add "concatenation" User Data Header
         concatHeaderPrototype = Concatenation()
         concatHeaderPrototype.reference = reference
-        pduCount = int(len(text) / MAX_MESSAGE_LENGTH[alphabet]) + 1
+
+        # Devide whole text into parts
+        if alphabet == 0x00:
+            pduTextParts = divideTextGsm7(text)
+        elif alphabet == 0x08:
+            pduTextParts = divideTextUcs2(text)
+        else:
+            raise NotImplementedError
+
+        pduCount = len(pduTextParts)
         concatHeaderPrototype.parts  = pduCount
         tpduFirstOctet |= 0x40
     else:
@@ -308,10 +323,8 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
         if concatHeaderPrototype != None:
             concatHeader = copy(concatHeaderPrototype)
             concatHeader.number = i + 1
-            if alphabet == 0x00:
-                pduText = text[i*153:(i+1) * 153]
-            elif alphabet == 0x08:
-                pduText = text[i * 67 : (i + 1) * 67]
+            pduText = pduTextParts[i]
+            pduTextLength = len(pduText)
             udh.extend(concatHeader.encode())
         else:
             pduText = text
@@ -714,6 +727,49 @@ def decodeGsm7(encodedText):
             result.append(GSM7_BASIC[b])
     return ''.join(result)
 
+def divideTextGsm7(plainText):
+    """ GSM7 message dividing algorithm
+
+    Divides text into list of chunks that could be stored in a single, GSM7-encoded SMS message.
+
+    :param plainText: the text string to divide
+    :type plainText: str
+
+    :return: A list of strings
+    :rtype: list of str
+    """
+    result = []
+
+    plainStartPtr = 0
+    plainStopPtr  = 0
+    chunkByteSize = 0
+
+    if PYTHON_VERSION >= 3:
+        plaintext = str(plaintext)
+    while plainStopPtr < len(plainText):
+        char = plainText[plainStopPtr]
+        idx = GSM7_BASIC.find(char)
+        if idx != -1:
+            chunkByteSize = chunkByteSize + 1;
+        elif char in GSM7_EXTENDED:
+            chunkByteSize = chunkByteSize + 2;
+        elif not discardInvalid:
+            raise ValueError('Cannot encode char "{0}" using GSM-7 encoding'.format(char))
+
+        plainStopPtr = plainStopPtr + 1
+        if chunkByteSize > MAX_MULTIPART_MESSAGE_LENGTH[0x00]:
+            plainStopPtr = plainStopPtr - 1
+
+        if chunkByteSize >= MAX_MULTIPART_MESSAGE_LENGTH[0x00]:
+            result.append(plainText[plainStartPtr:plainStopPtr])
+            plainStartPtr = plainStopPtr
+            chunkByteSize = 0
+
+    if chunkByteSize > 0:
+        result.append(plainText[plainStartPtr:])
+
+    return result
+
 def packSeptets(octets, padBits=0):
     """ Packs the specified octets into septets
 
@@ -824,8 +880,33 @@ def encodeUcs2(text):
     :rtype: bytearray
     """
     result = bytearray()
-    
+
     for b in map(ord, text):
         result.append(b >> 8)
         result.append(b & 0xFF)
+    return result
+
+def divideTextUcs2(plainText):
+    """ UCS-2 message dividing algorithm
+
+    Divides text into list of chunks that could be stored in a single, UCS-2 -encoded SMS message.
+
+    :param plainText: the text string to divide
+    :type plainText: str
+
+    :return: A list of strings
+    :rtype: list of str
+    """
+    result = []
+    resultLength = 0
+
+    fullChunksCount = int(len(plainText) / MAX_MULTIPART_MESSAGE_LENGTH[0x08])
+    for i in range(fullChunksCount):
+        result.append(plainText[i * MAX_MULTIPART_MESSAGE_LENGTH[0x08] : (i + 1) * MAX_MULTIPART_MESSAGE_LENGTH[0x08]])
+        resultLength  = resultLength + MAX_MULTIPART_MESSAGE_LENGTH[0x08]
+
+    # Add last, not fully filled chunk
+    if resultLength < len(plainText):
+        result.append(plainText[resultLength:])
+
     return result
