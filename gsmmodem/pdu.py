@@ -533,12 +533,6 @@ def _decodeDataCoding(octet):
     # We ignore other coding groups
     return 0
 
-def nibble2octet(o):
-    if o % 2:
-        return o / 2 + 1
-    else:
-        return o / 2
-
 def _decodeAddressField(byteIter, smscField=False, log=False):
     """ Decodes the address field at the current position of the bytearray iterator
 
@@ -554,7 +548,7 @@ def _decodeAddressField(byteIter, smscField=False, log=False):
         ton = (toa & 0x70) # bits 6,5,4 of type-of-address == type-of-number
         if ton == 0x50:
             # Alphanumberic number
-            addressLen = nibble2octet(addressLen)
+            addressLen = int(math.ceil(addressLen / 2.0))
             septets = unpackSeptets(byteIter, addressLen)
             addressValue = decodeGsm7(septets)
             return (addressValue, (addressLen + 2))
@@ -564,7 +558,10 @@ def _decodeAddressField(byteIter, smscField=False, log=False):
             if smscField:
                 addressValue = decodeSemiOctets(byteIter, addressLen-1)
             else:
-                addressLen = nibble2octet(addressLen)
+                if addressLen % 2:
+                    addressLen = int(addressLen / 2) + 1
+                else:
+                    addressLen = int(addressLen / 2)
                 addressValue = decodeSemiOctets(byteIter, addressLen)
                 addressLen += 1 # for the return value, add the toa byte
             if ton == 0x10: # International number
