@@ -4,7 +4,7 @@
 
 from __future__ import unicode_literals
 
-import sys, codecs, math
+import sys, codecs
 from datetime import datetime, timedelta, tzinfo
 from copy import copy
 from .exceptions import EncodingError
