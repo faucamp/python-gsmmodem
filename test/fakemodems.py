@@ -6,7 +6,7 @@ from copy import copy
 class FakeModem(object):
     """ Abstract base class for fake modem descriptors """
     __metaclass__ = abc.ABCMeta
-    
+
     def __init__(self):
         self.responses = {}
         self.commandsNoPinRequired = []
@@ -19,13 +19,13 @@ class FakeModem(object):
         self.deviceBusyErrorCounter = 0 # Number of times to issue a "Device busy" error
         self.cfun = 1 # +CFUN value to report back
         self.dtmfCommandBase = '+VTS='
-    
+
     def getResponse(self, cmd):
         if self.deviceBusyErrorCounter > 0:
             self.deviceBusyErrorCounter -= 1
             return ['+CME ERROR: 515\r\n']
         if self._pinLock and not cmd.startswith('AT+CPIN'):
-            if cmd not in self.commandsNoPinRequired:                
+            if cmd not in self.commandsNoPinRequired:
                 return copy(self.pinRequiredErrorResponse)
 
         if cmd.startswith('AT+CPIN="'):
@@ -35,7 +35,7 @@ class FakeModem(object):
             return ['+CME ERROR: 14\r\n']
         if cmd == 'AT+CFUN?\r' and self.cfun != -1:
             return ['+CFUN: {0}\r\n'.format(self.cfun), 'OK\r\n']
-        elif cmd == 'AT+CSCA?\r':                
+        elif cmd == 'AT+CSCA?\r':
             if self.smscNumber != None:
                 return ['+CSCA: "{0}",145\r\n'.format(self.smscNumber), 'OK\r\n']
             else:
@@ -52,7 +52,7 @@ class FakeModem(object):
     def pinLock(self, pinLock):
         self._pinLock = pinLock
         if self._pinLock == True:
-            self.responses['AT+CPIN?\r'] = ['+CPIN: SIM PIN\r\n', 'OK\r\n']            
+            self.responses['AT+CPIN?\r'] = ['+CPIN: SIM PIN\r\n', 'OK\r\n']
         else:
             self.responses['AT+CPIN?\r'] = ['+CPIN: READY\r\n', 'OK\r\n']
 
@@ -63,15 +63,15 @@ class FakeModem(object):
     @abc.abstractmethod
     def getPreCallInitWaitSequence(self):
         return [0.1]
-    
+
     @abc.abstractmethod
     def getCallInitNotification(self, callId, callType):
         return ['+WIND: 5,1\r\n', '+WIND: 2\r\n']
-    
+
     @abc.abstractmethod
     def getRemoteAnsweredNotification(self, callId, callType):
         return ['OK\r\n']
-    
+
     @abc.abstractmethod
     def getRemoteHangupNotification(self, callId, callType):
         return ['NO CARRIER\r\n', '+WIND: 6,1\r\n']
@@ -79,7 +79,7 @@ class FakeModem(object):
     def getRemoteRejectCallNotification(self, callId, callType):
         # For a lot of modems, this is the same as a hangup notification - override this if necessary!
         return self.getRemoteHangupNotification(callId, callType)
-    
+
     @abc.abstractmethod
     def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
         return ['RING\r\n']
@@ -87,7 +87,7 @@ class FakeModem(object):
 
 class GenericTestModem(FakeModem):
     """ Not based on a real modem - simply used for general tests. Uses polling for call status updates """
-    
+
     def __init__(self):
         super(GenericTestModem, self).__init__()
         self._callState = 2
@@ -100,7 +100,8 @@ class GenericTestModem(FakeModem):
                           'AT+WIND=50\r': ['ERROR\r\n'],
                           'AT+ZPAS?\r': ['ERROR\r\n'],
                           'AT+CSCS=?\r': ['+CSCS: ("GSM",UCS2")\r\n', 'OK\r\n'],
-                          'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
+                          'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n'],
+                          'AT\r': ['OK\r\n']}
 
     def getResponse(self, cmd):
         if not self._pinLock and cmd == 'AT+CLCC\r':
@@ -142,7 +143,7 @@ class GenericTestModem(FakeModem):
 
 class WavecomMultiband900E1800(FakeModem):
     """ Family of old Wavecom serial modems
-    
+
     User franciumlin also submitted the following improvements to this profile:
       +CPIN replies are not ended with "OK"
     """
@@ -153,25 +154,25 @@ class WavecomMultiband900E1800(FakeModem):
                  'AT+CGMM\r': [' MULTIBAND  900E  1800\r\n', 'OK\r\n'],
                  'AT+CGMR\r': ['ERROR\r\n'],
                  'AT+CIMI\r': ['111111111111111\r\n', 'OK\r\n'],
-                 'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],                 
+                 'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],
                  'AT+CLAC\r': ['ERROR\r\n'],
                  'AT+WIND?\r': ['+WIND: 0\r\n', 'OK\r\n'],
                  'AT+WIND=50\r': ['OK\r\n'],
                  'AT+ZPAS?\r': ['ERROR\r\n'],
-                 'AT+CPMS="SM","SM","SR"\r': ['ERROR\r\n'],                 
+                 'AT+CPMS="SM","SM","SR"\r': ['ERROR\r\n'],
                  'AT+CPMS=?\r': ['+CPMS: (("SM","BM","SR"),("SM"))\r\n', 'OK\r\n'],
                  'AT+CPMS="SM","SM"\r': ['+CPMS: 14,50,14,50\r\n', 'OK\r\n'],
                  'AT+CNMI=2,1,0,2\r': ['OK\r\n'],
                  'AT+CVHU=0\r': ['ERROR\r\n'],
                  'AT+CPIN?\r': ['+CPIN: READY\r\n']} # <---- note: missing 'OK\r\n'
         self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
-    
+
     def getResponse(self, cmd):
         if cmd == 'AT+CFUN=1\r':
             self.deviceBusyErrorCounter = 2 # This modem takes quite a while to recover from this
             return ['OK\r\n']
         return super(WavecomMultiband900E1800, self).getResponse(cmd)
-    
+
     @property
     def pinLock(self):
         return self._pinLock
@@ -182,29 +183,29 @@ class WavecomMultiband900E1800(FakeModem):
             self.responses['AT+CPIN?\r'] = ['+CPIN: SIM PIN\r\n']  # missing OK
         else:
             self.responses['AT+CPIN?\r'] = ['+CPIN: READY\r\n'] # missing OK
-    
+
     def getAtdResponse(self, number):
         return []
-    
+
     def getPreCallInitWaitSequence(self):
         return [0.1]
-        
+
     def getCallInitNotification(self, callId, callType):
         # +WIND: 5 == indication of call
         # +WIND: 2 == remote party is ringing
         return ['+WIND: 5,1\r\n', '+WIND: 2\r\n']
-        
+
     def getRemoteAnsweredNotification(self, callId, callType):
         return ['OK\r\n']
-        
+
     def getRemoteHangupNotification(self, callId, callType):
         return ['NO CARRIER\r\n', '+WIND: 6,1\r\n']
-    
+
     def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
         return ['+CRING: {0}\r\n'.format(callType), '+CLIP: "{1}",{2}\r\n'.format(callType, callerNumber, ton)]
-    
+
     def __str__(self):
-        return 'WAVECOM MODEM MULTIBAND 900E 1800'    
+        return 'WAVECOM MODEM MULTIBAND 900E 1800'
 
 
 class HuaweiK3715(FakeModem):
@@ -216,7 +217,7 @@ class HuaweiK3715(FakeModem):
                  'AT+CGMM\r': ['K3715\r\n', 'OK\r\n'],
                  'AT+CGMR\r': ['11.104.05.00.00\r\n', 'OK\r\n'],
                  'AT+CIMI\r': ['111111111111111\r\n', 'OK\r\n'],
-                 'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],                 
+                 'AT+CGSN\r': ['111111111111111\r\n', 'OK\r\n'],
                  'AT+CPMS=?\r': ['+CPMS: ("ME","MT","SM","SR"),("ME","MT","SM","SR"),("ME","MT","SM","SR")\r\n', 'OK\r\n'],
                  'AT+WIND?\r': ['ERROR\r\n'],
                  'AT+WIND=50\r': ['ERROR\r\n'],
@@ -239,25 +240,25 @@ $QCPDPLT,$QCPWRDN,$QCDGEN,$BREW,$QCSYSMODE,^CVOICE,^DDSETEX,^pcmrecord,^SYSINFO,
                  'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
         self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
         self.dtmfCommandBase = '^DTMF={cid},'
-    
+
     def getAtdResponse(self, number):
         return ['OK\r\n']
-    
+
     def getPreCallInitWaitSequence(self):
         return [0.1]
-    
+
     def getCallInitNotification(self, callId, callType):
         return ['^ORIG:{0},{1}\r\n'.format(callId, callType), 0.2, '^CONF:{0}\r\n'.format(callId)]
-    
+
     def getRemoteAnsweredNotification(self, callId, callType):
         return ['^CONN:{0},{1}\r\n'.format(callId, callType)]
-    
+
     def getRemoteHangupNotification(self, callId, callType):
             return ['^CEND:{0},5,29,16\r\n'.format(callId)]
-        
+
     def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
         return ['+CRING: {0}\r\n'.format(callType), '+CLIP: "{1}",{2},,,,0\r\n'.format(callType, callerNumber, ton)]
-        
+
     def __str__(self):
         return 'Huawei K3715'
 
@@ -332,10 +333,10 @@ class HuaweiE1752(FakeModem):
                  'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
         self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
         self.dtmfCommandBase = '^DTMF={cid},'
-        
+
     def getResponse(self, cmd):
         # Device defaults to ^USSDMODE == 1
-        if cmd.startswith('AT+CUSD=1') and self._ussdMode == 1: 
+        if cmd.startswith('AT+CUSD=1') and self._ussdMode == 1:
             return ['ERROR\r\n']
         elif cmd.startswith('AT^USSDMODE='):
             self._ussdMode = int(cmd[12])
@@ -409,16 +410,16 @@ class QualcommM6280(FakeModem):
         self._callNumber = number
         self._callState = 0
         return []
-    
+
     def getPreCallInitWaitSequence(self):
         return [0.1]
-    
+
     def getCallInitNotification(self, callId, callType):
         return []
-    
+
     def getRemoteAnsweredNotification(self, callId, callType):
         return ['CONNECT\r\n']
-    
+
     def getRemoteHangupNotification(self, callId, callType):
         self._callState = 2
         self._callNumber = None
@@ -426,7 +427,7 @@ class QualcommM6280(FakeModem):
 
     def getIncomingCallNotification(self, callerNumber, callType='VOICE', ton=145):
         return ['+CRING: {0}\r\n'.format(callType), '+CLIP: "{1}",{2},,,,0\r\n'.format(callType, callerNumber, ton)]
-    
+
     def __str__(self):
         return 'QUALCOMM M6280 (ZTE modem)'
 
@@ -530,7 +531,7 @@ class ZteK3565Z(FakeModem):
 class NokiaN79(GenericTestModem):
     """ Nokia Symbian S60-based modem (details taken from a Nokia N79) and
     also from issue 15: https://github.com/faucamp/python-gsmmodem/issues/15 (Nokia N95)
-    
+
     SMS reading is not supported on these devices via AT commands; thus
     commands like AT+CNMI are not supported.
     """
@@ -547,7 +548,7 @@ class NokiaN79(GenericTestModem):
                  'AT+WIND?\r': ['ERROR\r\n'],
                  'AT+WIND=50\r': ['ERROR\r\n'],
                  'AT+ZPAS?\r': ['ERROR\r\n'],
-                 'AT+CPMS="SM","SM","SR"\r': ['ERROR\r\n'],                 
+                 'AT+CPMS="SM","SM","SR"\r': ['ERROR\r\n'],
                  'AT+CPMS=?\r': ['+CPMS: (),(),()\r\n', 'OK\r\n'], # not supported
                  'AT+CPMS?\r': ['+CPMS: ,,,,,,,,\r\n', 'OK\r\n'], # not supported
                  'AT+CPMS=,,\r': ['ERROR\r\n'],
@@ -557,10 +558,10 @@ class NokiaN79(GenericTestModem):
                  'AT+CNMI=2,1,0,2\r': ['ERROR\r\n'], # not supported
                  'AT+CVHU=0\r': ['OK\r\n'],
                  'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
-        self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']    
-    
+        self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
+
     def __str__(self):
-        return 'Nokia N79'  
+        return 'Nokia N79'
 
 
 modemClasses = [HuaweiK3715, HuaweiE1752, WavecomMultiband900E1800, QualcommM6280, ZteK3565Z, NokiaN79]

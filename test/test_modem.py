@@ -195,6 +195,8 @@ class TestGsmModemGeneralApi(unittest.TestCase):
 
     def test_supportedCommands(self):
         def writeCallbackFunc(data):
+            if data == 'AT\r': # Handle keep-alive AT command
+                return
             self.assertEqual('AT+CLAC\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CLAC\r', data))
         self.modem.serial.writeCallbackFunc = writeCallbackFunc
         tests = ((['+CLAC:&C,D,E,\S,+CGMM,^DTMF\r\n', 'OK\r\n'], ['&C', 'D', 'E', '\S', '+CGMM', '^DTMF']),

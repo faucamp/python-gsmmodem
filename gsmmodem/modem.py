@@ -581,7 +581,10 @@ class GsmModem(SerialComms):
                     continue
 
             # Return found commands
-            return commands
+            if len(commands) == 0:
+                return None
+            else:
+                return commands
 
     @property
     def smsTextMode(self):
@@ -605,6 +608,10 @@ class GsmModem(SerialComms):
         # Check if command is available
         if self._commands == None:
             self._commands = self.supportedCommands
+
+        if self._commands == None:
+            self._smsSupportedEncodingNames = []
+            return self._smsSupportedEncodingNames
 
         if not '+CSCS' in self._commands:
             self._smsSupportedEncodingNames = []
@@ -640,6 +647,9 @@ class GsmModem(SerialComms):
         if self._commands == None:
             self._commands = self.supportedCommands
 
+        if self._commands == None:
+            return self._smsEncoding
+
         if '+CSCS' in self._commands:
             response = self.write('AT+CSCS?')
 
@@ -664,6 +674,9 @@ class GsmModem(SerialComms):
         # Check if command is available
         if self._commands == None:
             self._commands = self.supportedCommands
+
+        if self._commands == None:
+            return False
 
         if not '+CSCS' in self._commands:
             return False
