@@ -85,8 +85,8 @@ Testing the package
 .. |Build Status| image::  https://travis-ci.org/babca/python-gsmmodem.svg?branch=master
 .. _Build Status: https://travis-ci.org/babca/python-gsmmodem
 
-.. |Coverage Status| image:: https://coveralls.io/repos/github/faucamp/python-gsmmodem/badge.svg?branch=master
-.. _Coverage Status: https://coveralls.io/github/faucamp/python-gsmmodem?branch=master
+.. |Coverage Status| image:: https://coveralls.io/repos/github/babca/python-gsmmodem/badge.svg?branch=master
+.. _Coverage Status: https://coveralls.io/github/babca/python-gsmmodem?branch=master
 
 |Build Status|_ |Coverage Status|_
 
