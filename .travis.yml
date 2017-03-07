@@ -6,9 +6,9 @@ python:
   - "2.7"
 install:
   # Install unittest2 on Python 2.6
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then pip install --use-mirrors unittest2; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then pip install unittest2; fi
   # Install coveralls (for coveralls.io integration)
   - pip install coveralls
-  - pip install -r requirements.txt --use-mirrors
+  - pip install -r requirements.txt
 script: python setup.py coverage
 after_success: coveralls
