@@ -77,7 +77,7 @@ class SmsPduTzInfo(tzinfo):
             tzOffsetMinutes = int('{0:0>2X}'.format(tzHexVal & 0x7F)) * 15
         except:
             # Possible fix for #15
-            tzHexVal = (tzHexVal & 0x0F)*0x10 + (tzHexVal & 0x0F) / 0x10
+            tzHexVal = int((tzHexVal & 0x0F) * 0x10) + int((tzHexVal & 0x0F) / 0x10)
             tzOffsetMinutes = int('{0:0>2X}'.format(tzHexVal & 0x7F)) * 15
 
         if tzHexVal & 0x80 == 0: # positive
@@ -781,7 +781,7 @@ def divideTextGsm7(plainText):
     chunkByteSize = 0
 
     if PYTHON_VERSION >= 3:
-        plaintext = str(plaintext)
+        plainText = str(plainText)
     while plainStopPtr < len(plainText):
         char = plainText[plainStopPtr]
         idx = GSM7_BASIC.find(char)
