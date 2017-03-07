@@ -82,12 +82,11 @@ http://pyserial.sourceforge.net
 Testing the package
 -------------------
 
-.. |Build Status| image::  https://travis-ci.org/babca/python-gsmmodem.png?branch=master
+.. |Build Status| image::  https://travis-ci.org/babca/python-gsmmodem.svg?branch=master
 .. _Build Status: https://travis-ci.org/babca/python-gsmmodem
 
-
-.. |Coverage Status| image::  https://coveralls.io/repos/babca/python-gsmmodem/badge.png?branch=master
-.. _Coverage Status: https://coveralls.io/r/faucamp/python-gsmmodem
+.. |Coverage Status| image:: https://coveralls.io/repos/github/faucamp/python-gsmmodem/badge.svg?branch=master
+.. _Coverage Status: https://coveralls.io/github/faucamp/python-gsmmodem?branch=master
 
 |Build Status|_ |Coverage Status|_
 
