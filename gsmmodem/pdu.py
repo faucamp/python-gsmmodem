@@ -73,7 +73,12 @@ class SmsPduTzInfo(tzinfo):
         #  - Read HEX value as decimal
         #  - Multiply by 15
         # See: https://en.wikipedia.org/wiki/GSM_03.40#Time_Format
-        tzOffsetMinutes = int('{0:0>2X}'.format(tzHexVal & 0x7F)) * 15
+        try:
+            tzOffsetMinutes = int('{0:0>2X}'.format(tzHexVal & 0x7F)) * 15
+        except:
+            # Possible fix for #15
+            tzHexVal = (tzHexVal & 0x0F)*0x10 + (tzHexVal & 0x0F) / 0x10
+            tzOffsetMinutes = int('{0:0>2X}'.format(tzHexVal & 0x7F)) * 15
 
         if tzHexVal & 0x80 == 0: # positive
             self._offset = timedelta(minutes=(tzOffsetMinutes))

@@ -2070,6 +2070,32 @@ class TestSmsStatusReports(unittest.TestCase):
                 time.sleep(0.1)
         self.modem.close()
 
+    def test_receiveSmsPduMode_zeroLengthSmscAndHugeTimeZoneValue(self):
+        """ Test receiving PDU-mode SMS using data captured from failed operations/bug reports """
+        modemResponse = ['+CMGR: 1,,26\r\n', '0006230E9126983575169498610103409544C26101034095448200\r\n', 'OK\r\n']
+
+        callbackInfo = [False, '', '', -1, None, '', None]
+        def smsCallbackFunc1(sms):
+            try:
+                self.assertIsInstance(sms, gsmmodem.modem.StatusReport)
+                self.assertEqual(sms.status, gsmmodem.modem.Sms.STATUS_RECEIVED_READ)
+            finally:
+                callbackInfo[0] = True
+
+        def writeCallback1(data):
+            if data.startswith('AT+CMGR'):
+                self.modem.serial.flushResponseSequence = True
+                self.modem.serial.responseSequence = modemResponse
+
+        self.initModem(smsStatusReportCallback=smsCallbackFunc1)
+        # Fake a "new message" notification
+        self.modem.serial.writeCallbackFunc = writeCallback1
+        self.modem.serial.flushResponseSequence = True
+        self.modem.serial.responseSequence = ['+CDSI: "SM",1\r\n']
+        # Wait for the handler function to finish
+        while callbackInfo[0] == False:
+            time.sleep(0.1)
+
 
 
 
