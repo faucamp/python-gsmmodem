@@ -21,6 +21,9 @@ class FakeModem(object):
         self.dtmfCommandBase = '+VTS='
 
     def getResponse(self, cmd):
+        if type(cmd) == bytes:
+            cmd = cmd.decode()
+
         if self.deviceBusyErrorCounter > 0:
             self.deviceBusyErrorCounter -= 1
             return ['+CME ERROR: 515\r\n']
@@ -107,6 +110,9 @@ class GenericTestModem(FakeModem):
                           'AT\r': ['OK\r\n']}
 
     def getResponse(self, cmd):
+        if type(cmd) == bytes:
+            cmd = cmd.decode()
+
         if not self._pinLock and cmd == 'AT+CLCC\r':
             if self._callNumber:
                 if self._callState == 0:
@@ -171,6 +177,9 @@ class WavecomMultiband900E1800(FakeModem):
         self.commandsNoPinRequired = ['ATZ\r', 'ATE0\r', 'AT+CFUN?\r', 'AT+CFUN=1\r', 'AT+CMEE=1\r']
 
     def getResponse(self, cmd):
+        if type(cmd) == bytes:
+            cmd = cmd.decode()
+
         if cmd == 'AT+CFUN=1\r':
             self.deviceBusyErrorCounter = 2 # This modem takes quite a while to recover from this
             return ['OK\r\n']
@@ -338,6 +347,9 @@ class HuaweiE1752(FakeModem):
         self.dtmfCommandBase = '^DTMF={cid},'
 
     def getResponse(self, cmd):
+        if type(cmd) == bytes:
+            cmd = cmd.decode()
+
         # Device defaults to ^USSDMODE == 1
         if cmd.startswith('AT+CUSD=1') and self._ussdMode == 1:
             return ['ERROR\r\n']
@@ -395,6 +407,9 @@ class QualcommM6280(FakeModem):
                  'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
 
     def getResponse(self, cmd):
+        if type(cmd) == bytes:
+            cmd = cmd.decode()
+
         if not self._pinLock:
             if cmd.startswith('AT+CSMP='):
                 # Clear the SMSC number (this behaviour was reported in issue #8 on github)
@@ -486,6 +501,9 @@ class ZteK3565Z(FakeModem):
                  'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n']}
 
     def getResponse(self, cmd):
+        if type(cmd) == bytes:
+            cmd = cmd.decode()
+
         if not self._pinLock:
             if cmd.startswith('AT+CSMP='):
                 # Clear the SMSC number (this behaviour was reported in issue #8 on github)

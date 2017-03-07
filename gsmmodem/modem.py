@@ -1243,7 +1243,7 @@ class GsmModem(SerialComms):
                     # Re-enable extended format of incoming indication (optional)
                     self.write('AT+CRC=1')
                 except CommandError:
-                    self.log.warn('Extended incoming call indication format changed externally; unable to re-enable')
+                    self.log.warning('Extended incoming call indication format changed externally; unable to re-enable')
                     self._extendedIncomingCallIndication = False
         else:
             callType = None
