@@ -68,10 +68,22 @@ class SmsPduTzInfo(tzinfo):
     def _setPduOffsetStr(self, pduOffsetStr):
         # See if the timezone difference is positive/negative by checking MSB of first semi-octet
         tzHexVal = int(pduOffsetStr, 16)
+        # In order to read time zone 'minute' shift:
+        #  - Remove MSB (sign)
+        #  - Read HEX value as decimal
+        #  - Multiply by 15
+        # See: https://en.wikipedia.org/wiki/GSM_03.40#Time_Format
+        try:
+            tzOffsetMinutes = int('{0:0>2X}'.format(tzHexVal & 0x7F)) * 15
+        except:
+            # Possible fix for #15
+            tzHexVal = int((tzHexVal & 0x0F) * 0x10) + int((tzHexVal & 0x0F) / 0x10)
+            tzOffsetMinutes = int('{0:0>2X}'.format(tzHexVal & 0x7F)) * 15
+
         if tzHexVal & 0x80 == 0: # positive
-            self._offset = timedelta(minutes=(int(pduOffsetStr, 16) * 15))
+            self._offset = timedelta(minutes=(tzOffsetMinutes))
         else: # negative
-            self._offset = timedelta(minutes=(int('{0:0>2X}'.format(tzHexVal & 0x7F)) * -15))
+            self._offset = timedelta(minutes=(-tzOffsetMinutes))
 
     def utcoffset(self, dt):
         return self._offset
@@ -769,7 +781,7 @@ def divideTextGsm7(plainText):
     chunkByteSize = 0
 
     if PYTHON_VERSION >= 3:
-        plaintext = str(plaintext)
+        plainText = str(plainText)
     while plainStopPtr < len(plainText):
         char = plainText[plainStopPtr]
         idx = GSM7_BASIC.find(char)
