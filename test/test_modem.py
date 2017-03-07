@@ -101,6 +101,8 @@ class MockSerialPackage(object):
                 
         def write(self, data):            
             if self.writeCallbackFunc != None:
+                if type(data) == bytes:
+                    data = data.decode()
                 self.writeCallbackFunc(data)
             self.writeQueue.append(data)
             
