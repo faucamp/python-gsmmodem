@@ -671,23 +671,24 @@ class GsmModem(SerialComms):
     def smsEncoding(self, encoding):
         """ Set encoding for SMS inside PDU mode.
 
-        :return: True if encoding successfully set, otherwise False. """
-
+        :raise CommandError: if unable to set encoding
+        :raise ValueError: if encoding is not supported by modem
+        """
         # Check if command is available
         if self._commands == None:
             self._commands = self.supportedCommands
 
         if self._commands == None:
             if encoding != self._encoding:
-                raise ValueError('Unable to set SMS encoding (no supported commands)')
+                raise CommandError('Unable to set SMS encoding (no supported commands)')
             else:
-                return True
+                return
 
         if not '+CSCS' in self._commands:
             if encoding != self._encoding:
-                raise ValueError('Unable to set SMS encoding (+CSCS command not supported)')
+                raise CommandError('Unable to set SMS encoding (+CSCS command not supported)')
             else:
-                return True
+                return
 
         # Check if command is available
         if self._smsSupportedEncodingNames == None:
@@ -700,12 +701,12 @@ class GsmModem(SerialComms):
             if len(response) == 1:
                 if response[0].lower() == 'ok':
                     self._smsEncoding = encoding
-                    return True
+                    return
 
         if encoding != self._encoding:
             raise ValueError('Unable to set SMS encoding (enocoding {0} not supported)'.format(encoding))
         else:
-            return True
+            return
 
     def _setSmsMemory(self, readDelete=None, write=None):
         """ Set the current SMS memory to use for read/delete/write operations """
