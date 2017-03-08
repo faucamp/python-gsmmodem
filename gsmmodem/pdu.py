@@ -712,7 +712,7 @@ def encodeTextMode(plaintext):
             raise ValueError('Cannot encode char "{0}" inside text mode'.format(char))
 
     if len(plaintext) > MAX_MESSAGE_LENGTH[0x00]:
-        raise ValueError('Massage is too long for inside text mode (maximum {0} characters)'.format(MAX_MESSAGE_LENGTH[0x00]))
+        raise ValueError('Message is too long for text mode (maximum {0} characters)'.format(MAX_MESSAGE_LENGTH[0x00]))
 
     return plaintext
 
@@ -799,7 +799,7 @@ def divideTextGsm7(plainText):
             chunkByteSize = chunkByteSize + 1;
         elif char in GSM7_EXTENDED:
             chunkByteSize = chunkByteSize + 2;
-        elif not discardInvalid:
+        else:
             raise ValueError('Cannot encode char "{0}" using GSM-7 encoding'.format(char))
 
         plainStopPtr = plainStopPtr + 1
