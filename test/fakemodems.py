@@ -105,7 +105,7 @@ class GenericTestModem(FakeModem):
                           'AT+WIND=50\r': ['ERROR\r\n'],
                           'AT+ZPAS=?\r': ['ERROR\r\n'],
                           'AT+ZPAS?\r': ['ERROR\r\n'],
-                          'AT+CSCS=?\r': ['+CSCS: ("GSM",UCS2")\r\n', 'OK\r\n'],
+                          'AT+CSCS=?\r': ['+CSCS: ("GSM","UCS2")\r\n', 'OK\r\n'],
                           'AT+CPIN?\r': ['+CPIN: READY\r\n', 'OK\r\n'],
                           'AT\r': ['OK\r\n']}
 
