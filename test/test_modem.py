@@ -1315,15 +1315,30 @@ class TestSms(unittest.TestCase):
                   1,
                   datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
                   '+2782913593',
-                  [('00218E0A91103254769800081800480065006C006C00F300200077006F0072014200640021', 36, 142)],
+                  [('00218D0A91103254769800081800480065006C006C00F300200077006F0072014200640021', 36, 141)],
                   'SM',
                   'UCS2'),
+                 ('+0123456789', 'Hellò wor£d!',
+                  2,
+                  datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
+                  '82913593',
+                  [('00218E0A91103254769800000CC8329B8D00DDDFF2003904', 23, 142)],
+                  'SM',
+                  'GSM'),
+                 ('+0123456789', '12345-010 12345-020 12345-030 12345-040 12345-050 12345-060 12345-070 12345-080 12345-090 12345-100 12345-110 12345-120 12345-130 12345-140 12345-150 12345-160-Hellò wor£d!',
+                  3,
+                  datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
+                  '82913593',
+                  [('00618F0A9110325476980000A00500038F020162B219ADD682C560A0986C46ABB560321828269BD16A2DD80C068AC966B45A0B46838162B219ADD682D560A0986C46ABB560361828269BD16A2DD80D068AC966B45A0B86838162B219ADD682E560A0986C46ABB562301828269BD16AAD580C068AC966B45A2B26838162B219ADD68ACD60A0986C46ABB562341828269BD16AAD580D068AC966', 152, 143),
+('00618F0A91103254769800001A0500038F020268B556CC066B21CB6C3602747FCB03E410', 35, 143)],
+                  'SM',
+                  'GSM'),
                  ('+0123456789', 'Hello world!\n Hello world!\n Hello world!\n Hello world!\n-> Helló worłd! ',
-                  1,
+                  4,
                   datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
                   '+2782913593',
-                  [('00618F0A91103254769800088C0500038F020100480065006C006C006F00200077006F0072006C00640021000A002000480065006C006C006F00200077006F0072006C00640021000A002000480065006C006C006F00200077006F0072006C00640021000A002000480065006C006C006F00200077006F0072006C00640021000A002D003E002000480065006C006C00F300200077006F0072', 152, 143),
-                   ('00618F0A91103254769800080E0500038F02020142006400210020', 26, 143)],
+                  [('0061900A91103254769800088C05000390020100480065006C006C006F00200077006F0072006C00640021000A002000480065006C006C006F00200077006F0072006C00640021000A002000480065006C006C006F00200077006F0072006C00640021000A002000480065006C006C006F00200077006F0072006C00640021000A002D003E002000480065006C006C00F300200077006F0072', 152, 144),
+                   ('0061900A91103254769800080E0500039002020142006400210020', 26, 144)],
                   'SM',
                   'UCS2'),)
 
@@ -1348,6 +1363,9 @@ class TestSms(unittest.TestCase):
                     self.modem.serial.flushResponseSequence = False
                     self.modem.serial.responseSequence = ['> \r\n', '+CMGS: {0}\r\n'.format(ref), 'OK\r\n']
 
+                def writeCallbackFuncRaiseError(data):
+                    self.assertEqual(self.currentPdu, len(pdus) - 1, 'Invalid data written to modem; expected {0} PDUs, got {1} PDU'.format(len(pdus), self.currentPdu + 1))
+
                 def writeCallbackFunc5(data):
                     # Fifth step - send SMS PDU
                     pdu = pdus[self.currentPdu][0]
@@ -1356,6 +1374,8 @@ class TestSms(unittest.TestCase):
                     self.currentPdu += 1
                     if len(pdus) > self.currentPdu:
                         self.modem.serial.writeCallbackFunc = writeCallbackFunc4
+                    else:
+                        self.modem.serial.writeCallbackFunc = writeCallbackFuncRaiseError
 
                 # First step - change to PDU mode
                 self.assertEqual('AT+CMGF=0\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGF=0', data))

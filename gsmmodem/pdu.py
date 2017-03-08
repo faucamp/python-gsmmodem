@@ -701,6 +701,9 @@ def encodeTextMode(plaintext):
     """
     if PYTHON_VERSION >= 3:
         plaintext = str(plaintext)
+    elif type(plaintext) == str:
+        plaintext = plaintext.decode('UTF-8')
+
     for char in plaintext:
         idx = TEXT_MODE.find(char)
         if idx != -1:
@@ -730,6 +733,9 @@ def encodeGsm7(plaintext, discardInvalid=False):
     result = bytearray()
     if PYTHON_VERSION >= 3:
         plaintext = str(plaintext)
+    elif type(plaintext) == str:
+        plaintext = plaintext.decode('UTF-8')
+
     for char in plaintext:
         idx = GSM7_BASIC.find(char)
         if idx != -1:
