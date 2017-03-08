@@ -623,6 +623,7 @@ class GsmModem(SerialComms):
         # Check response length (should be 2 - list of options and command status)
         if len(response) != 2:
             self.log.debug('Unhandled +CSCS response: {0}'.format(response))
+            self._smsSupportedEncodingNames = []
             raise NotImplementedError
 
         # Extract encoding names list
@@ -636,6 +637,7 @@ class GsmModem(SerialComms):
             enc_list = [x.split('"')[1] for x in enc_list]
         except:
             self.log.debug('Unhandled +CSCS response: {0}'.format(response))
+            self._smsSupportedEncodingNames = []
             raise NotImplementedError
 
         self._smsSupportedEncodingNames = enc_list
@@ -678,10 +680,14 @@ class GsmModem(SerialComms):
         if self._commands == None:
             if encoding != self._encoding:
                 raise ValueError('Unable to set SMS encoding (no supported commands)')
+            else:
+                return True
 
         if not '+CSCS' in self._commands:
             if encoding != self._encoding:
                 raise ValueError('Unable to set SMS encoding (+CSCS command not supported)')
+            else:
+                return True
 
         # Check if command is available
         if self._smsSupportedEncodingNames == None:
@@ -696,7 +702,10 @@ class GsmModem(SerialComms):
                     self._smsEncoding = encoding
                     return True
 
-        raise ValueError('Unable to set SMS encoding (enocoding {0} not supported)'.format(encoding))
+        if encoding != self._encoding:
+            raise ValueError('Unable to set SMS encoding (enocoding {0} not supported)'.format(encoding))
+        else:
+            return True
 
     def _setSmsMemory(self, readDelete=None, write=None):
         """ Set the current SMS memory to use for read/delete/write operations """
