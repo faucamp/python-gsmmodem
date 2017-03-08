@@ -361,6 +361,39 @@ class TestGsmModemGeneralApi(unittest.TestCase):
             self.assertEqual(e.type, 'CMS')
             self.assertEqual(e.code, 310)
 
+    def test_smsEncoding(self):
+        def writeCallbackFunc(data):
+            if type(data) == bytes:
+                data = data.decode()
+            self.assertEqual('AT+CSCS?\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSCS?', data))
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc
+        tests = [('UNKNOWN', '+CSCSERROR'),
+                 ('UCS2', '+CSCS: "UCS2"'),
+                 ('ISO', '+CSCS:"ISO"'),
+                 ('IRA', '+CSCS: "IRA"'),
+                 ('UNKNOWN', '+CSCS: ("GSM", "UCS2")'),
+                 ('UNKNOWN', 'OK'),]
+        for name, toWrite in tests:
+            self.modem._smsEncoding = 'UNKNOWN'
+            self.modem.serial.responseSequence = ['{0}\r\n'.format(toWrite), 'OK\r\n']
+            self.assertEqual(name, self.modem.smsEncoding)
+
+    def test_smsSupportedEncoding(self):
+        def writeCallbackFunc(data):
+            if type(data) == bytes:
+                data = data.decode()
+            self.assertEqual('AT+CSCS=?\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSCS?', data))
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc
+        tests = [(['GSM'], '+CSCS: ("GSM")'),
+                 (['GSM', 'UCS2'], '+CSCS: ("GSM", "UCS2")'),
+                 (['GSM', 'UCS2'], '+CSCS:("GSM","UCS2")'),
+                 (['GSM', 'UCS2'], '+CSCS:   (  "GSM"  ,   "UCS2"  )'),
+                 (['GSM'], '+CSCS: ("GSM" "UCS2")'),]
+        for name, toWrite in tests:
+            self.modem._smsSupportedEncodingNames = None
+            self.modem.serial.responseSequence = ['{0}\r\n'.format(toWrite), 'OK\r\n']
+            self.assertEqual(name, self.modem.smsSupportedEncoding)
+
 
 class TestUssd(unittest.TestCase):
     """ Tests USSD session handling """
