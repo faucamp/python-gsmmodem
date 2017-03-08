@@ -623,6 +623,7 @@ class GsmModem(SerialComms):
         # Check response length (should be 2 - list of options and command status)
         if len(response) != 2:
             self.log.debug('Unhandled +CSCS response: {0}'.format(response))
+            self._smsSupportedEncodingNames = []
             raise NotImplementedError
 
         # Extract encoding names list
@@ -636,6 +637,7 @@ class GsmModem(SerialComms):
             enc_list = [x.split('"')[1] for x in enc_list]
         except:
             self.log.debug('Unhandled +CSCS response: {0}'.format(response))
+            self._smsSupportedEncodingNames = []
             raise NotImplementedError
 
         self._smsSupportedEncodingNames = enc_list
@@ -669,17 +671,24 @@ class GsmModem(SerialComms):
     def smsEncoding(self, encoding):
         """ Set encoding for SMS inside PDU mode.
 
-        :return: True if encoding successfully set, otherwise False. """
-
+        :raise CommandError: if unable to set encoding
+        :raise ValueError: if encoding is not supported by modem
+        """
         # Check if command is available
         if self._commands == None:
             self._commands = self.supportedCommands
 
         if self._commands == None:
-            return False
+            if encoding != self._encoding:
+                raise CommandError('Unable to set SMS encoding (no supported commands)')
+            else:
+                return
 
         if not '+CSCS' in self._commands:
-            return False
+            if encoding != self._encoding:
+                raise CommandError('Unable to set SMS encoding (+CSCS command not supported)')
+            else:
+                return
 
         # Check if command is available
         if self._smsSupportedEncodingNames == None:
@@ -692,9 +701,12 @@ class GsmModem(SerialComms):
             if len(response) == 1:
                 if response[0].lower() == 'ok':
                     self._smsEncoding = encoding
-                    return True
+                    return
 
-        return False
+        if encoding != self._encoding:
+            raise ValueError('Unable to set SMS encoding (enocoding {0} not supported)'.format(encoding))
+        else:
+            return
 
     def _setSmsMemory(self, readDelete=None, write=None):
         """ Set the current SMS memory to use for read/delete/write operations """
