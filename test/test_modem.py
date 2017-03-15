@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf8 -*-
 
 """ Test suite for gsmmodem.modem """
 
@@ -359,6 +360,39 @@ class TestGsmModemGeneralApi(unittest.TestCase):
             self.assertEqual(e.command, 'AT+XYZ')
             self.assertEqual(e.type, 'CMS')
             self.assertEqual(e.code, 310)
+
+    def test_smsEncoding(self):
+        def writeCallbackFunc(data):
+            if type(data) == bytes:
+                data = data.decode()
+            self.assertEqual('AT+CSCS?\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSCS?', data))
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc
+        tests = [('UNKNOWN', '+CSCSERROR'),
+                 ('UCS2', '+CSCS: "UCS2"'),
+                 ('ISO', '+CSCS:"ISO"'),
+                 ('IRA', '+CSCS: "IRA"'),
+                 ('UNKNOWN', '+CSCS: ("GSM", "UCS2")'),
+                 ('UNKNOWN', 'OK'),]
+        for name, toWrite in tests:
+            self.modem._smsEncoding = 'UNKNOWN'
+            self.modem.serial.responseSequence = ['{0}\r\n'.format(toWrite), 'OK\r\n']
+            self.assertEqual(name, self.modem.smsEncoding)
+
+    def test_smsSupportedEncoding(self):
+        def writeCallbackFunc(data):
+            if type(data) == bytes:
+                data = data.decode()
+            self.assertEqual('AT+CSCS=?\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSCS?', data))
+        self.modem.serial.writeCallbackFunc = writeCallbackFunc
+        tests = [(['GSM'], '+CSCS: ("GSM")'),
+                 (['GSM', 'UCS2'], '+CSCS: ("GSM", "UCS2")'),
+                 (['GSM', 'UCS2'], '+CSCS:("GSM","UCS2")'),
+                 (['GSM', 'UCS2'], '+CSCS:   (  "GSM"  ,   "UCS2"  )'),
+                 (['GSM'], '+CSCS: ("GSM" "UCS2")'),]
+        for name, toWrite in tests:
+            self.modem._smsSupportedEncodingNames = None
+            self.modem.serial.responseSequence = ['{0}\r\n'.format(toWrite), 'OK\r\n']
+            self.assertEqual(name, self.modem.smsSupportedEncoding)
 
 
 class TestUssd(unittest.TestCase):
@@ -1303,6 +1337,110 @@ class TestSms(unittest.TestCase):
         gsmmodem.serial_comms.serial = self.mockSerial
         self.modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --', smsReceivedCallbackFunc=smsReceivedCallbackFunc)        
         self.modem.connect()
+
+    def test_sendSmsLeaveTextModeOnInvalidCharacter(self):
+        """ Tests sending SMS messages in text mode """
+        self.initModem(None)
+        self.modem.smsTextMode = True # Set modem to text mode
+        self.assertTrue(self.modem.smsTextMode)
+        # PDUs checked on https://www.diafaan.com/sms-tutorials/gsm-modem-tutorial/online-sms-pdu-decoder/
+        tests = (('+0123456789', 'Helló worłd!',
+                  1,
+                  datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
+                  '+2782913593',
+                  [('00218D0A91103254769800081800480065006C006C00F300200077006F0072014200640021', 36, 141)],
+                  'SM',
+                  'UCS2'),
+                 ('+0123456789', 'Hellò wor£d!',
+                  2,
+                  datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
+                  '82913593',
+                  [('00218E0A91103254769800000CC8329B8D00DDDFF2003904', 23, 142)],
+                  'SM',
+                  'GSM'),
+                 ('+0123456789', '12345-010 12345-020 12345-030 12345-040 12345-050 12345-060 12345-070 12345-080 12345-090 12345-100 12345-110 12345-120 12345-130 12345-140 12345-150 12345-160-Hellò wor£d!',
+                  3,
+                  datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
+                  '82913593',
+                  [('00618F0A9110325476980000A00500038F020162B219ADD682C560A0986C46ABB560321828269BD16A2DD80C068AC966B45A0B46838162B219ADD682D560A0986C46ABB560361828269BD16A2DD80D068AC966B45A0B86838162B219ADD682E560A0986C46ABB562301828269BD16AAD580C068AC966B45A2B26838162B219ADD68ACD60A0986C46ABB562341828269BD16AAD580D068AC966', 152, 143),
+('00618F0A91103254769800001A0500038F020268B556CC066B21CB6C3602747FCB03E410', 35, 143)],
+                  'SM',
+                  'GSM'),
+                 ('+0123456789', 'Hello world!\n Hello world!\n Hello world!\n Hello world!\n-> Helló worłd! ',
+                  4,
+                  datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
+                  '+2782913593',
+                  [('0061900A91103254769800088C05000390020100480065006C006C006F00200077006F0072006C00640021000A002000480065006C006C006F00200077006F0072006C00640021000A002000480065006C006C006F00200077006F0072006C00640021000A002000480065006C006C006F00200077006F0072006C00640021000A002D003E002000480065006C006C00F300200077006F0072', 152, 144),
+                   ('0061900A91103254769800080E0500039002020142006400210020', 26, 144)],
+                  'SM',
+                  'UCS2'),
+('+0123456789', '12345-010 12345-020 12345-030 12345-040 12345-050 12345-060 12345-070 12345-080 12345-090 12345-100 12345-110 12345-120 12345-130 12345-140 12345-150 12345-160-Hello word!',
+                  5,
+                  datetime(2013, 3, 8, 15, 2, 16, tzinfo=SimpleOffsetTzInfo(2)),
+                  '82913593',
+                  [('0061910A9110325476980000A005000391020162B219ADD682C560A0986C46ABB560321828269BD16A2DD80C068AC966B45A0B46838162B219ADD682D560A0986C46ABB560361828269BD16A2DD80D068AC966B45A0B86838162B219ADD682E560A0986C46ABB562301828269BD16AAD580C068AC966B45A2B26838162B219ADD68ACD60A0986C46ABB562341828269BD16AAD580D068AC966', 152, 145),
+('0061910A91103254769800001905000391020268B556CC066B21CB6CF61B747FCBC921', 34, 145)],
+                  'SM',
+                  'GSM'),)
+
+        for number, message, index, smsTime, smsc, pdus, mem, encoding in tests:
+            def writeCallbackFunc(data):
+                def writeCallbackFunc2(data):
+                    # Second step - get available encoding schemes
+                    self.assertEqual('AT+CSCS=?\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSCS=?', data))
+                    self.modem.serial.writeCallbackFunc = writeCallbackFunc3
+
+                def writeCallbackFunc3(data):
+                    # Third step - set encoding
+                    self.assertEqual('AT+CSCS="{0}"\r'.format(encoding), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CSCS="{0}"\r'.format(encoding), data))
+                    self.modem.serial.writeCallbackFunc = writeCallbackFunc4
+
+                def writeCallbackFunc4(data):
+                    # Fourth step - send PDU length
+                    tpdu_length = pdus[self.currentPdu][1]
+                    ref = pdus[self.currentPdu][2]
+                    self.assertEqual('AT+CMGS={0}\r'.format(tpdu_length), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS={0}'.format(tpdu_length), data))
+                    self.modem.serial.writeCallbackFunc = writeCallbackFunc5
+                    self.modem.serial.flushResponseSequence = False
+                    self.modem.serial.responseSequence = ['> \r\n', '+CMGS: {0}\r\n'.format(ref), 'OK\r\n']
+
+                def writeCallbackFuncRaiseError(data):
+                    self.assertEqual(self.currentPdu, len(pdus) - 1, 'Invalid data written to modem; expected {0} PDUs, got {1} PDU'.format(len(pdus), self.currentPdu + 1))
+
+                def writeCallbackFunc5(data):
+                    # Fifth step - send SMS PDU
+                    pdu = pdus[self.currentPdu][0]
+                    self.assertEqual('{0}{1}'.format(pdu, chr(26)), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('{0}{1}'.format(pdu, chr(26)), data))
+                    self.modem.serial.flushResponseSequence = True
+                    self.currentPdu += 1
+                    if len(pdus) > self.currentPdu:
+                        self.modem.serial.writeCallbackFunc = writeCallbackFunc4
+                    else:
+                        self.modem.serial.writeCallbackFunc = writeCallbackFuncRaiseError
+
+                # First step - change to PDU mode
+                self.assertEqual('AT+CMGF=0\r', data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGF=0', data))
+                self.modem.serial.writeCallbackFunc = writeCallbackFunc2
+                self.currentPdu = 0
+                self.modem._smsRef = pdus[self.currentPdu][2]
+
+            self.modem.serial.writeCallbackFunc = writeCallbackFunc
+            self.modem.serial.flushResponseSequence = True
+            sms = self.modem.sendSms(number, message)
+            self.assertFalse(self.modem.smsTextMode)
+            self.assertEqual(self.modem._smsEncoding, encoding, 'Modem uses invalid encoding. Expected "{0}", got "{1}"'.format(encoding, self.modem._smsEncoding))
+            self.assertIsInstance(sms, gsmmodem.modem.SentSms)
+            self.assertEqual(sms.number, number, 'Sent SMS has invalid number. Expected "{0}", got "{1}"'.format(number, sms.number))
+            self.assertEqual(sms.text, message, 'Sent SMS has invalid text. Expected "{0}", got "{1}"'.format(message, sms.text))
+            self.assertIsInstance(sms.reference, int, 'Sent SMS reference type incorrect. Expected "{0}", got "{1}"'.format(int, type(sms.reference)))
+            ref = pdus[0][2] # All refference numbers should be equal
+            self.assertEqual(sms.reference, ref, 'Sent SMS reference incorrect. Expected "{0}", got "{1}"'.format(ref, sms.reference))
+            self.assertEqual(sms.status, gsmmodem.modem.SentSms.ENROUTE, 'Sent SMS status should have been {0} ("ENROUTE"), but is: {1}'.format(gsmmodem.modem.SentSms.ENROUTE, sms.status))
+            # Reset mode and encoding
+            self.modem._smsTextMode = True # Set modem to text mode
+            self.modem._smsEncoding = "GSM" # Set encoding to GSM-7
+            self.modem._smsSupportedEncodingNames = None # Force modem to ask about possible encoding names
+        self.modem.close()
 
     def test_sendSmsTextMode(self):
         """ Tests sending SMS messages in text mode """

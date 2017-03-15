@@ -272,6 +272,10 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
     :return: A list of one or more tuples containing the SMS PDU (as a bytearray, and the length of the TPDU part
     :rtype: list of tuples
     """
+    if PYTHON_VERSION < 3:
+        if type(text) == str:
+            text = text.decode('UTF-8')
+
     tpduFirstOctet = 0x01 # SMS-SUBMIT PDU
     if validity != None:
         # Validity period format (TP-VPF) is stored in bits 4,3 of the first TPDU octet
@@ -697,6 +701,9 @@ def encodeTextMode(plaintext):
     """
     if PYTHON_VERSION >= 3:
         plaintext = str(plaintext)
+    elif type(plaintext) == str:
+        plaintext = plaintext.decode('UTF-8')
+
     for char in plaintext:
         idx = TEXT_MODE.find(char)
         if idx != -1:
@@ -705,7 +712,7 @@ def encodeTextMode(plaintext):
             raise ValueError('Cannot encode char "{0}" inside text mode'.format(char))
 
     if len(plaintext) > MAX_MESSAGE_LENGTH[0x00]:
-        raise ValueError('Massage is too long for inside text mode (maximum {0} characters)'.format(MAX_MESSAGE_LENGTH[0x00]))
+        raise ValueError('Message is too long for text mode (maximum {0} characters)'.format(MAX_MESSAGE_LENGTH[0x00]))
 
     return plaintext
 
@@ -726,6 +733,9 @@ def encodeGsm7(plaintext, discardInvalid=False):
     result = bytearray()
     if PYTHON_VERSION >= 3:
         plaintext = str(plaintext)
+    elif type(plaintext) == str:
+        plaintext = plaintext.decode('UTF-8')
+
     for char in plaintext:
         idx = GSM7_BASIC.find(char)
         if idx != -1:
@@ -789,7 +799,7 @@ def divideTextGsm7(plainText):
             chunkByteSize = chunkByteSize + 1;
         elif char in GSM7_EXTENDED:
             chunkByteSize = chunkByteSize + 2;
-        elif not discardInvalid:
+        else:
             raise ValueError('Cannot encode char "{0}" using GSM-7 encoding'.format(char))
 
         plainStopPtr = plainStopPtr + 1
