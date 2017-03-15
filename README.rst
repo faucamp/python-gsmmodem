@@ -1,4 +1,4 @@
-python-gsmmodem-new v0.11
+python-gsmmodem-new v0.12
 =========================
 *GSM modem module for Python*
 
