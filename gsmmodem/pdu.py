@@ -4,7 +4,7 @@
 
 from __future__ import unicode_literals
 
-import sys, codecs, math
+import sys, codecs
 from datetime import datetime, timedelta, tzinfo
 from copy import copy
 from .exceptions import EncodingError
@@ -24,6 +24,7 @@ else: #pragma: no cover
     toByteArray = lambda x: bytearray(x.decode('hex')) if type(x) in (str, unicode) else x
     rawStrToByteArray = bytearray
 
+TEXT_MODE = ('\n\r !\"#%&\'()*+,-./0123456789:;<=>?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz') # TODO: Check if all of them are supported inside text mode
 # Tables can be found at: http://en.wikipedia.org/wiki/GSM_03.38#GSM_7_bit_default_alphabet_and_extension_table_of_3GPP_TS_23.038_.2F_GSM_03.38
 GSM7_BASIC = ('@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ`¿abcdefghijklmnopqrstuvwxyzäöñüà')
 GSM7_EXTENDED = {chr(0xFF): 0x0A,
@@ -42,6 +43,11 @@ GSM7_EXTENDED = {chr(0xFF): 0x0A,
 MAX_MESSAGE_LENGTH = {0x00: 160, # GSM-7
                       0x04: 140, # 8-bit
                       0x08: 70}  # UCS2
+
+# Maximum message sizes for each data coding for multipart messages
+MAX_MULTIPART_MESSAGE_LENGTH = {0x00: 153, # GSM-7
+                                0x04: 133, # 8-bit TODO: Check this value!
+                                0x08: 67}  # UCS2
 
 class SmsPduTzInfo(tzinfo):
     """ Simple implementation of datetime.tzinfo for handling timestamp GMT offsets specified in SMS PDUs """
@@ -62,10 +68,22 @@ class SmsPduTzInfo(tzinfo):
     def _setPduOffsetStr(self, pduOffsetStr):
         # See if the timezone difference is positive/negative by checking MSB of first semi-octet
         tzHexVal = int(pduOffsetStr, 16)
+        # In order to read time zone 'minute' shift:
+        #  - Remove MSB (sign)
+        #  - Read HEX value as decimal
+        #  - Multiply by 15
+        # See: https://en.wikipedia.org/wiki/GSM_03.40#Time_Format
+
+        # Possible fix for #15 - convert invalid character to BCD-value
+        if (tzHexVal & 0x0F) > 0x9:
+            tzHexVal +=0x06
+
+        tzOffsetMinutes = int('{0:0>2X}'.format(tzHexVal & 0x7F)) * 15
+
         if tzHexVal & 0x80 == 0: # positive
-            self._offset = timedelta(minutes=(int(pduOffsetStr, 16) * 15))
+            self._offset = timedelta(minutes=(tzOffsetMinutes))
         else: # negative
-            self._offset = timedelta(minutes=(int('{0:0>2X}'.format(tzHexVal & 0x7F)) * -15))
+            self._offset = timedelta(minutes=(-tzOffsetMinutes))
 
     def utcoffset(self, dt):
         return self._offset
@@ -254,6 +272,10 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
     :return: A list of one or more tuples containing the SMS PDU (as a bytearray, and the length of the TPDU part
     :rtype: list of tuples
     """
+    if PYTHON_VERSION < 3:
+        if type(text) == str:
+            text = text.decode('UTF-8')
+
     tpduFirstOctet = 0x01 # SMS-SUBMIT PDU
     if validity != None:
         # Validity period format (TP-VPF) is stored in bits 4,3 of the first TPDU octet
@@ -276,19 +298,29 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
 
     # Encode message text and set data coding scheme based on text contents
     try:
-        encodedText = encodeGsm7(text)
+        encodedTextLength = len(encodeGsm7(text))
     except ValueError:
         # Cannot encode text using GSM-7; use UCS2 instead
+        encodedTextLength = len(text)
         alphabet = 0x08 # UCS2
     else:
         alphabet = 0x00 # GSM-7
 
     # Check if message should be concatenated
-    if len(text) > MAX_MESSAGE_LENGTH[alphabet]:
+    if encodedTextLength > MAX_MESSAGE_LENGTH[alphabet]:
         # Text too long for single PDU - add "concatenation" User Data Header
         concatHeaderPrototype = Concatenation()
         concatHeaderPrototype.reference = reference
-        pduCount = int(len(text) / MAX_MESSAGE_LENGTH[alphabet]) + 1
+
+        # Devide whole text into parts
+        if alphabet == 0x00:
+            pduTextParts = divideTextGsm7(text)
+        elif alphabet == 0x08:
+            pduTextParts = divideTextUcs2(text)
+        else:
+            raise NotImplementedError
+
+        pduCount = len(pduTextParts)
         concatHeaderPrototype.parts  = pduCount
         tpduFirstOctet |= 0x40
     else:
@@ -308,10 +340,8 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
         if concatHeaderPrototype != None:
             concatHeader = copy(concatHeaderPrototype)
             concatHeader.number = i + 1
-            if alphabet == 0x00:
-                pduText = text[i*153:(i+1) * 153]
-            elif alphabet == 0x08:
-                pduText = text[i * 67 : (i + 1) * 67]
+            pduText = pduTextParts[i]
+            pduTextLength = len(pduText)
             udh.extend(concatHeader.encode())
         else:
             pduText = text
@@ -533,6 +563,9 @@ def _decodeDataCoding(octet):
     # We ignore other coding groups
     return 0
 
+def nibble2octet(addressLen):
+    return int((addressLen + 1) / 2)
+
 def _decodeAddressField(byteIter, smscField=False, log=False):
     """ Decodes the address field at the current position of the bytearray iterator
 
@@ -548,7 +581,7 @@ def _decodeAddressField(byteIter, smscField=False, log=False):
         ton = (toa & 0x70) # bits 6,5,4 of type-of-address == type-of-number
         if ton == 0x50:
             # Alphanumberic number
-            addressLen = int(math.ceil(addressLen / 2.0))
+            addressLen = nibble2octet(addressLen)
             septets = unpackSeptets(byteIter, addressLen)
             addressValue = decodeGsm7(septets)
             return (addressValue, (addressLen + 2))
@@ -558,10 +591,7 @@ def _decodeAddressField(byteIter, smscField=False, log=False):
             if smscField:
                 addressValue = decodeSemiOctets(byteIter, addressLen-1)
             else:
-                if addressLen % 2:
-                    addressLen = int(addressLen / 2) + 1
-                else:
-                    addressLen = int(addressLen / 2)
+                addressLen = nibble2octet(addressLen)
                 addressValue = decodeSemiOctets(byteIter, addressLen)
                 addressLen += 1 # for the return value, add the toa byte
             if ton == 0x10: # International number
@@ -657,6 +687,35 @@ def decodeSemiOctets(encodedNumber, numberOfOctets=None):
                 break
     return ''.join(number)
 
+def encodeTextMode(plaintext):
+    """ Text mode checker
+
+    Tests whther SMS could be sent in text mode
+
+    :param text: the text string to encode
+
+    :raise ValueError: if the text string cannot be sent in text mode
+
+    :return: Passed string
+    :rtype: str
+    """
+    if PYTHON_VERSION >= 3:
+        plaintext = str(plaintext)
+    elif type(plaintext) == str:
+        plaintext = plaintext.decode('UTF-8')
+
+    for char in plaintext:
+        idx = TEXT_MODE.find(char)
+        if idx != -1:
+            continue
+        else:
+            raise ValueError('Cannot encode char "{0}" inside text mode'.format(char))
+
+    if len(plaintext) > MAX_MESSAGE_LENGTH[0x00]:
+        raise ValueError('Message is too long for text mode (maximum {0} characters)'.format(MAX_MESSAGE_LENGTH[0x00]))
+
+    return plaintext
+
 def encodeGsm7(plaintext, discardInvalid=False):
     """ GSM-7 text encoding algorithm
 
@@ -674,6 +733,9 @@ def encodeGsm7(plaintext, discardInvalid=False):
     result = bytearray()
     if PYTHON_VERSION >= 3:
         plaintext = str(plaintext)
+    elif type(plaintext) == str:
+        plaintext = plaintext.decode('UTF-8')
+
     for char in plaintext:
         idx = GSM7_BASIC.find(char)
         if idx != -1:
@@ -710,6 +772,49 @@ def decodeGsm7(encodedText):
         else:
             result.append(GSM7_BASIC[b])
     return ''.join(result)
+
+def divideTextGsm7(plainText):
+    """ GSM7 message dividing algorithm
+
+    Divides text into list of chunks that could be stored in a single, GSM7-encoded SMS message.
+
+    :param plainText: the text string to divide
+    :type plainText: str
+
+    :return: A list of strings
+    :rtype: list of str
+    """
+    result = []
+
+    plainStartPtr = 0
+    plainStopPtr  = 0
+    chunkByteSize = 0
+
+    if PYTHON_VERSION >= 3:
+        plainText = str(plainText)
+    while plainStopPtr < len(plainText):
+        char = plainText[plainStopPtr]
+        idx = GSM7_BASIC.find(char)
+        if idx != -1:
+            chunkByteSize = chunkByteSize + 1;
+        elif char in GSM7_EXTENDED:
+            chunkByteSize = chunkByteSize + 2;
+        else:
+            raise ValueError('Cannot encode char "{0}" using GSM-7 encoding'.format(char))
+
+        plainStopPtr = plainStopPtr + 1
+        if chunkByteSize > MAX_MULTIPART_MESSAGE_LENGTH[0x00]:
+            plainStopPtr = plainStopPtr - 1
+
+        if chunkByteSize >= MAX_MULTIPART_MESSAGE_LENGTH[0x00]:
+            result.append(plainText[plainStartPtr:plainStopPtr])
+            plainStartPtr = plainStopPtr
+            chunkByteSize = 0
+
+    if chunkByteSize > 0:
+        result.append(plainText[plainStartPtr:])
+
+    return result
 
 def packSeptets(octets, padBits=0):
     """ Packs the specified octets into septets
@@ -821,8 +926,33 @@ def encodeUcs2(text):
     :rtype: bytearray
     """
     result = bytearray()
-    
+
     for b in map(ord, text):
         result.append(b >> 8)
         result.append(b & 0xFF)
+    return result
+
+def divideTextUcs2(plainText):
+    """ UCS-2 message dividing algorithm
+
+    Divides text into list of chunks that could be stored in a single, UCS-2 -encoded SMS message.
+
+    :param plainText: the text string to divide
+    :type plainText: str
+
+    :return: A list of strings
+    :rtype: list of str
+    """
+    result = []
+    resultLength = 0
+
+    fullChunksCount = int(len(plainText) / MAX_MULTIPART_MESSAGE_LENGTH[0x08])
+    for i in range(fullChunksCount):
+        result.append(plainText[i * MAX_MULTIPART_MESSAGE_LENGTH[0x08] : (i + 1) * MAX_MULTIPART_MESSAGE_LENGTH[0x08]])
+        resultLength  = resultLength + MAX_MULTIPART_MESSAGE_LENGTH[0x08]
+
+    # Add last, not fully filled chunk
+    if resultLength < len(plainText):
+        result.append(plainText[resultLength:])
+
     return result

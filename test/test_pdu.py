@@ -493,6 +493,33 @@ class TestSmsPdu(unittest.TestCase):
         pdu = 'AEFDSDFSDFSDFS'
         self.assertRaises(gsmmodem.exceptions.EncodingError, gsmmodem.pdu.decodeSmsPdu, pdu)
 
+    def test_encode_Gsm7_divideSMS(self):
+        """ Tests whether text will be devided into a correct number of chunks while using GSM-7 alphabet"""
+        text = "12345-010 12345-020 12345-030 12345-040 12345-050 12345-060"
+        self.assertEqual(len(gsmmodem.pdu.divideTextGsm7(text)), 1)
+        text = "12345-010 12345-020 12345-030 12345-040 12345-050 12345-060 12345-070 12345-080 12345-090 12345-100 12345-010 12345-020 12345-030 12345-040 12345-050 123"
+        self.assertEqual(len(gsmmodem.pdu.divideTextGsm7(text)), 1)
+        text = "12345-010 12345-020 12345-030 12345-040 12345-050 12345-060 12345-070 12345-080 12345-090 12345-100 12345-010 12345-020 12345-030 12345-040 12345-050 1234"
+        self.assertEqual(len(gsmmodem.pdu.divideTextGsm7(text)), 2)
+        text = "12345-010 12345-020 12345-030 12345-040 12345-050 12345-060 12345-070 12345-080 12345-090 12345-100 12345-010 12345-020 12345-030 12345-040 12345-050 12]"
+        self.assertEqual(len(gsmmodem.pdu.divideTextGsm7(text)), 2)
+        text = "12345-010,12345-020,12345-030,12345-040,12345-050,12345-060,12345-070,12345-080,12345-090,12345-100,12345-110,12345-120,12345-130,12345-140,12345-150,[[[[[[[["
+        self.assertEqual(len(gsmmodem.pdu.divideTextGsm7(text)), 2)
+
+    def test_encode_Ucs2_divideSMS(self):
+        """ Tests whether text will be devided into a correct number of chunks while using UCS-2 alphabet"""
+        text = "12345-010 12345-020 12345-030 12345-040 12345-050 12345-060"
+        self.assertEqual(len(gsmmodem.pdu.divideTextUcs2(text)), 1)
+        text = "12345-010 12345-020 12345-030 12345-040 12345-050 12345-060 1234567"
+        self.assertEqual(len(gsmmodem.pdu.divideTextUcs2(text)), 1)
+        text = "12345-010 12345-020 12345-030 12345-040 12345-050 12345-060 12345678"
+        self.assertEqual(len(gsmmodem.pdu.divideTextUcs2(text)), 2)
+        text = "12345-010 12345-020 12345-030 12345-040 12345-050 12345-060 123456["
+        self.assertEqual(len(gsmmodem.pdu.divideTextUcs2(text)), 1)
+        text = "12345-010 12345-020 12345-030 12345-040 12345-050 12345-060 1234567["
+        self.assertEqual(len(gsmmodem.pdu.divideTextUcs2(text)), 2)
+        text = "12345-010,12345-020,12345-030,12345-040,12345-050,12345-060,123456 12345-010,12345-020,12345-030,12345-040,12345-050,12345-060,1234567"
+        self.assertEqual(len(gsmmodem.pdu.divideTextUcs2(text)), 2)
 
 if __name__ == "__main__":
     unittest.main()

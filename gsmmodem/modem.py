@@ -8,7 +8,7 @@ from time import sleep
 
 from .serial_comms import SerialComms
 from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException, TimeoutException, PinRequiredError, IncorrectPinError, SmscNumberUnknownError
-from .pdu import encodeSmsSubmitPdu, decodeSmsPdu, encodeGsm7
+from .pdu import encodeSmsSubmitPdu, decodeSmsPdu, encodeGsm7, encodeTextMode
 from .util import SimpleOffsetTzInfo, lineStartingWith, allLinesMatchingPattern, parseTextModeTimeStr
 
 #from . import compat # For Python 2.6 compatibility
@@ -328,7 +328,7 @@ class GsmModem(SerialComms):
         self.write('AT+COPS=3,0', parseError=False) # Use long alphanumeric name format
 
         # SMS setup
-        self.write('AT+CMGF={0}'.format(1 if self._smsTextMode else 0)) # Switch to text or PDU mode for SMS messages
+        self.write('AT+CMGF={0}'.format(1 if self.smsTextMode else 0)) # Switch to text or PDU mode for SMS messages
         self._compileSmsRegexes()
         if self._smscNumber != None:
             self.write('AT+CSCA="{0}"'.format(self._smscNumber)) # Set default SMSC number
@@ -581,7 +581,10 @@ class GsmModem(SerialComms):
                     continue
 
             # Return found commands
-            return commands
+            if len(commands) == 0:
+                return None
+            else:
+                return commands
 
     @property
     def smsTextMode(self):
@@ -606,6 +609,10 @@ class GsmModem(SerialComms):
         if self._commands == None:
             self._commands = self.supportedCommands
 
+        if self._commands == None:
+            self._smsSupportedEncodingNames = []
+            return self._smsSupportedEncodingNames
+
         if not '+CSCS' in self._commands:
             self._smsSupportedEncodingNames = []
             return self._smsSupportedEncodingNames
@@ -616,6 +623,7 @@ class GsmModem(SerialComms):
         # Check response length (should be 2 - list of options and command status)
         if len(response) != 2:
             self.log.debug('Unhandled +CSCS response: {0}'.format(response))
+            self._smsSupportedEncodingNames = []
             raise NotImplementedError
 
         # Extract encoding names list
@@ -629,6 +637,7 @@ class GsmModem(SerialComms):
             enc_list = [x.split('"')[1] for x in enc_list]
         except:
             self.log.debug('Unhandled +CSCS response: {0}'.format(response))
+            self._smsSupportedEncodingNames = []
             raise NotImplementedError
 
         self._smsSupportedEncodingNames = enc_list
@@ -639,6 +648,9 @@ class GsmModem(SerialComms):
         """ :return: Encoding name if encoding command is available, else GSM. """
         if self._commands == None:
             self._commands = self.supportedCommands
+
+        if self._commands == None:
+            return self._smsEncoding
 
         if '+CSCS' in self._commands:
             response = self.write('AT+CSCS?')
@@ -659,14 +671,24 @@ class GsmModem(SerialComms):
     def smsEncoding(self, encoding):
         """ Set encoding for SMS inside PDU mode.
 
-        :return: True if encoding successfully set, otherwise False. """
-
+        :raise CommandError: if unable to set encoding
+        :raise ValueError: if encoding is not supported by modem
+        """
         # Check if command is available
         if self._commands == None:
             self._commands = self.supportedCommands
 
+        if self._commands == None:
+            if encoding != self._encoding:
+                raise CommandError('Unable to set SMS encoding (no supported commands)')
+            else:
+                return
+
         if not '+CSCS' in self._commands:
-            return False
+            if encoding != self._encoding:
+                raise CommandError('Unable to set SMS encoding (+CSCS command not supported)')
+            else:
+                return
 
         # Check if command is available
         if self._smsSupportedEncodingNames == None:
@@ -679,9 +701,12 @@ class GsmModem(SerialComms):
             if len(response) == 1:
                 if response[0].lower() == 'ok':
                     self._smsEncoding = encoding
-                    return True
+                    return
 
-        return False
+        if encoding != self._encoding:
+            raise ValueError('Unable to set SMS encoding (enocoding {0} not supported)'.format(encoding))
+        else:
+            return
 
     def _setSmsMemory(self, readDelete=None, write=None):
         """ Set the current SMS memory to use for read/delete/write operations """
@@ -698,7 +723,7 @@ class GsmModem(SerialComms):
 
     def _compileSmsRegexes(self):
         """ Compiles regular expression used for parsing SMS messages based on current mode """
-        if self._smsTextMode:
+        if self.smsTextMode:
             if self.CMGR_SM_DELIVER_REGEX_TEXT == None:
                 self.CMGR_SM_DELIVER_REGEX_TEXT = re.compile('^\+CMGR: "([^"]+)","([^"]+)",[^,]*,"([^"]+)"$')
                 self.CMGR_SM_REPORT_REGEXT_TEXT = re.compile('^\+CMGR: ([^,]*),\d+,(\d+),"{0,1}([^"]*)"{0,1},\d*,"([^"]+)","([^"]+)",(\d+)$')
@@ -866,22 +891,23 @@ class GsmModem(SerialComms):
         """
 
         # Check input text to select appropriate mode (text or PDU)
-        # Check encoding
-        try:
-            encodedText = encodeGsm7(text)
-        except ValueError:
-            encodedText = None
-            self.smsTextMode = False
+        if self.smsTextMode:
+            try:
+                encodedText = encodeTextMode(text)
+            except ValueError:
+                self.smsTextMode = False
 
-        # Check message length
-        if len(text) > 160:
-            self.smsTextMode = False
-
-        # Send SMS via AT commands
-        if self._smsTextMode:
+        if self.smsTextMode:
+            # Send SMS via AT commands
             self.write('AT+CMGS="{0}"'.format(destination), timeout=5, expectedResponseTermSeq='> ')
             result = lineStartingWith('+CMGS:', self.write(text, timeout=35, writeTerm=CTRLZ))
         else:
+            # Check encoding
+            try:
+                encodedText = encodeGsm7(text)
+            except ValueError:
+                encodedText = None
+
             # Set GSM modem SMS encoding format
             # Encode message text and set data coding scheme based on text contents
             if encodedText == None:
@@ -890,17 +916,26 @@ class GsmModem(SerialComms):
             else:
                 self.smsEncoding = 'GSM'
 
+            # Encode text into PDUs
             pdus = encodeSmsSubmitPdu(destination, text, reference=self._smsRef, sendFlash=sendFlash)
+
+            # Send SMS PDUs via AT commands
             for pdu in pdus:
                 self.write('AT+CMGS={0}'.format(pdu.tpduLength), timeout=5, expectedResponseTermSeq='> ')
                 result = lineStartingWith('+CMGS:', self.write(str(pdu), timeout=35, writeTerm=CTRLZ)) # example: +CMGS: xx
+
         if result == None:
             raise CommandError('Modem did not respond with +CMGS response')
+
+        # Keep SMS reference number in order to pair delivery reports with sent message
         reference = int(result[7:])
         self._smsRef = reference + 1
         if self._smsRef > 255:
             self._smsRef = 0
+
+        # Create sent SMS object for future delivery checks
         sms = SentSms(destination, text, reference)
+
         # Add a weak-referenced entry for this SMS (allows us to update the SMS state if a status report is received)
         self.sentSms[reference] = sms
         if waitForDeliveryReport:
@@ -1062,7 +1097,7 @@ class GsmModem(SerialComms):
         self._setSmsMemory(readDelete=memory)
         messages = []
         delMessages = set()
-        if self._smsTextMode:
+        if self.smsTextMode:
             cmglRegex= re.compile('^\+CMGL: (\d+),"([^"]+)","([^"]+)",[^,]*,"([^"]+)"$')
             for key, val in dictItemsIter(Sms.TEXT_MODE_STATUS_MAP):
                 if status == val:
@@ -1220,7 +1255,7 @@ class GsmModem(SerialComms):
                     # Re-enable extended format of incoming indication (optional)
                     self.write('AT+CRC=1')
                 except CommandError:
-                    self.log.warn('Extended incoming call indication format changed externally; unable to re-enable')
+                    self.log.warning('Extended incoming call indication format changed externally; unable to re-enable')
                     self._extendedIncomingCallIndication = False
         else:
             callType = None
@@ -1387,7 +1422,7 @@ class GsmModem(SerialComms):
         self._setSmsMemory(readDelete=memory)
         msgData = self.write('AT+CMGR={0}'.format(index))
         # Parse meta information
-        if self._smsTextMode:
+        if self.smsTextMode:
             cmgrMatch = self.CMGR_SM_DELIVER_REGEX_TEXT.match(msgData[0])
             if cmgrMatch:
                 msgStatus, number, msgTime = cmgrMatch.groups()
@@ -1646,7 +1681,7 @@ class IncomingCall(Call):
         :param ton: TON (type of number/address) in integer format
         :param callType: Type of the incoming call (VOICE, FAX, DATA, etc)
         """
-        if type(callType) == str:
+        if callType in self.CALL_TYPE_MAP:
             callType = self.CALL_TYPE_MAP[callType]
         super(IncomingCall, self).__init__(gsmModem, callId, callType, number)
         # Type attribute of the incoming call
