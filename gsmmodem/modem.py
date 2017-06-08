@@ -679,13 +679,13 @@ class GsmModem(SerialComms):
             self._commands = self.supportedCommands
 
         if self._commands == None:
-            if encoding != self._encoding:
+            if encoding != self._smsEncoding:
                 raise CommandError('Unable to set SMS encoding (no supported commands)')
             else:
                 return
 
         if not '+CSCS' in self._commands:
-            if encoding != self._encoding:
+            if encoding != self._smsEncoding:
                 raise CommandError('Unable to set SMS encoding (+CSCS command not supported)')
             else:
                 return
@@ -703,7 +703,7 @@ class GsmModem(SerialComms):
                     self._smsEncoding = encoding
                     return
 
-        if encoding != self._encoding:
+        if encoding != self._smsEncoding:
             raise ValueError('Unable to set SMS encoding (enocoding {0} not supported)'.format(encoding))
         else:
             return
