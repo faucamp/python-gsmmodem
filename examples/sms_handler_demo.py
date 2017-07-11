@@ -34,7 +34,7 @@ def main():
     try:
         modem.rxThread.join(2**31) # Specify a (huge) timeout so that it essentially blocks indefinitely, but still receives CTRL+C interrupt signal
     finally:
-        modem.close();
+        modem.close()
 
 if __name__ == '__main__':
     main()
