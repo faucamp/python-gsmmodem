@@ -712,7 +712,6 @@ class GsmModem(SerialComms):
         """ Set the current SMS memory to use for read/delete/write operations """
         # Switch to the correct memory type if required
         if write != None and write != self._smsMemWrite:
-            self.write()
             readDel = readDelete or self._smsMemReadDelete
             self.write('AT+CPMS="{0}","{1}"'.format(readDel, write))
             self._smsMemReadDelete = readDel
