@@ -291,7 +291,7 @@ class GsmModem(SerialComms):
             self.log.info('Loading Huawei call state update table')
             self._callStatusUpdates = ((re.compile('^\^ORIG:(\d),(\d)$'), self._handleCallInitiated),
                                        (re.compile('^\^CONN:(\d),(\d)$'), self._handleCallAnswered),
-                                       (re.compile('^\^CEND:(\d),(\d),(\d)+,(\d)+$'), self._handleCallEnded))
+                                       (re.compile('^\^CEND:(\d),(\d+),(\d)+,(\d)+$'), self._handleCallEnded))
             self._mustPollCallStatus = False
             # Huawei modems use ^DTMF to send DTMF tones; use that instead
             Call.DTMF_COMMAND_BASE = '^DTMF={cid},'
