@@ -18,7 +18,7 @@ class SerialComms(object):
     # End-of-line read terminator
     RX_EOL_SEQ = '\r\n'
     # End-of-response terminator
-    RESPONSE_TERM = re.compile(r'^OK|ERROR|(\+CM[ES] ERROR: \d+)|(COMMAND NOT SUPPORT)$')
+    RESPONSE_TERM = re.compile(r'^OK|ERROR|(\+CM[ES] ERROR: ?\d+)|(COMMAND NOT SUPPORT)$')
     # Default timeout for serial port reads (in seconds)
     timeout = 1
         
