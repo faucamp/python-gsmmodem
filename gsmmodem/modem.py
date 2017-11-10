@@ -1284,7 +1284,7 @@ class GsmModem(SerialComms):
             call = IncomingCall(self, callerNumber, ton, callerName, callId, callType)
             self.activeCalls[callId] = call
 
-        if self.incomingCallCallbackFunc(incomingCallCallback):
+        if self.incomingCallCallbackFunc:
             self.incomingCallCallbackFunc(call)
 
     def _handleCallInitiated(self, regexMatch, callId=None, callType=1):
