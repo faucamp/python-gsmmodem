@@ -1399,7 +1399,10 @@ class GsmModem(SerialComms):
             self._smsStatusReportEvent.set()
         else:
             # Nothing is waiting for this report directly - use callback
-            self.smsStatusReportCallback(report)
+            try:
+                self.smsStatusReportCallback(report)
+            except Exception:
+                self.log.error('error in smsStatusReportCallback', exc_info=True)
 
     def readStoredSms(self, index, memory=None):
         """ Reads and returns the SMS message at the specified index
