@@ -1379,9 +1379,6 @@ class GsmModem(SerialComms):
                 except Exception:
                     self.log.error('error in smsStatusReportCallback', exc_info=True)
 
-
-                self.smsStatusReportCallback(report)
-
     def _handleSmsStatusReportTe(self, length, notificationLine):
         """ Handler for TE SMS status reports """
         self.log.debug('TE SMS status report received')
