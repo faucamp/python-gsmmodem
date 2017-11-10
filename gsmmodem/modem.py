@@ -146,11 +146,11 @@ class GsmModem(SerialComms):
     CDSI_REGEX = re.compile('\+CDSI:\s*"([^"]+)",(\d+)$')
     CDS_REGEX  = re.compile('\+CDS:\s*([0-9]+)"$')
 
-    def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallback=None, requestDelivery=True, AT_CNMI="", *a, **kw):
+    def __init__(self, port, baudrate=115200, incomingCallCallbackFunc=None, smsReceivedCallbackFunc=None, smsStatusReportCallbackFunc=None, requestDelivery=True, AT_CNMI="", *a, **kw):
         super(GsmModem, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification, *a, **kw)
-        self.incomingCallCallback = incomingCallCallbackFunc or self._placeholderCallback
-        self.smsReceivedCallback = smsReceivedCallbackFunc or self._placeholderCallback
-        self.smsStatusReportCallback = smsStatusReportCallback or self._placeholderCallback
+        self.incomingCallCallbackFunc = incomingCallCallbackFunc
+        self.smsReceivedCallbackFunc = smsReceivedCallbackFunc
+        self.smsStatusReportCallbackFunc = smsStatusReportCallbackFunc
         self.requestDelivery = requestDelivery
         self.AT_CNMI = AT_CNMI or "2,1,0,2"
         # Flag indicating whether caller ID for incoming call notification has been set up
@@ -377,7 +377,7 @@ class GsmModem(SerialComms):
             del cpmsSupport
             del cpmsLine
 
-        if self._smsReadSupported and (self.smsReceivedCallback or self.smsStatusReportCallback):
+        if self._smsReadSupported and (self.smsReceivedCallbackFunc or self.smsStatusReportCallbackFunc):
             try:
                 self.write('AT+CNMI=' + self.AT_CNMI)  # Set message notifications
             except CommandError:
@@ -1067,16 +1067,16 @@ class GsmModem(SerialComms):
         :param unreadOnly: If True, only process unread SMS messages
         :type unreadOnly: boolean
         """
-        if self.smsReceivedCallback:
+        if self.smsReceivedCallbackFunc:
             states = [Sms.STATUS_RECEIVED_UNREAD]
             if not unreadOnly:
                 states.insert(0, Sms.STATUS_RECEIVED_READ)
             for msgStatus in states:
                 messages = self.listStoredSms(status=msgStatus, delete=True)
                 for sms in messages:
-                    self.smsReceivedCallback(sms)
+                    self.smsReceivedCallbackFunc(sms)
         else:
-            raise ValueError('GsmModem.smsReceivedCallback not set')
+            raise ValueError('GsmModem.smsReceivedCallbackFunc not set')
 
     def listStoredSms(self, status=Sms.STATUS_ALL, memory=None, delete=False):
         """ Returns SMS messages currently stored on the device/SIM card.
@@ -1283,7 +1283,9 @@ class GsmModem(SerialComms):
             callId = len(self.activeCalls) + 1;
             call = IncomingCall(self, callerNumber, ton, callerName, callId, callType)
             self.activeCalls[callId] = call
-        self.incomingCallCallback(call)
+
+        if self.incomingCallCallbackFunc(incomingCallCallback):
+            self.incomingCallCallbackFunc(call)
 
     def _handleCallInitiated(self, regexMatch, callId=None, callType=1):
         """ Handler for "outgoing call initiated" event notification line """
@@ -1344,16 +1346,16 @@ class GsmModem(SerialComms):
     def _handleSmsReceived(self, notificationLine):
         """ Handler for "new SMS" unsolicited notification line """
         self.log.debug('SMS message received')
-        if self.smsReceivedCallback is not None:
+        if self.smsReceivedCallbackFunc is not None:
             cmtiMatch = self.CMTI_REGEX.match(notificationLine)
             if cmtiMatch:
                 msgMemory = cmtiMatch.group(1)
                 msgIndex = cmtiMatch.group(2)
                 sms = self.readStoredSms(msgIndex, msgMemory)
                 try:
-                    self.smsReceivedCallback(sms)
+                    self.smsReceivedCallbackFunc(sms)
                 except Exception:
-                    self.log.error('error in smsReceivedCallback', exc_info=True)
+                    self.log.error('error in smsReceivedCallbackFunc', exc_info=True)
                 else:
                     self.deleteStoredSms(msgIndex)
 
@@ -1372,12 +1374,12 @@ class GsmModem(SerialComms):
             if self._smsStatusReportEvent:
                 # A sendSms() call is waiting for this response - notify waiting thread
                 self._smsStatusReportEvent.set()
-            elif self.smsStatusReportCallback:
+            elif self.smsStatusReportCallbackFunc:
                 # Nothing is waiting for this report directly - use callback
                 try:
-                    self.smsStatusReportCallback(report)
+                    self.smsStatusReportCallbackFunc(report)
                 except Exception:
-                    self.log.error('error in smsStatusReportCallback', exc_info=True)
+                    self.log.error('error in smsStatusReportCallbackFunc', exc_info=True)
 
     def _handleSmsStatusReportTe(self, length, notificationLine):
         """ Handler for TE SMS status reports """
@@ -1400,9 +1402,10 @@ class GsmModem(SerialComms):
         else:
             # Nothing is waiting for this report directly - use callback
             try:
-                self.smsStatusReportCallback(report)
+                self.smsStatusReportCallbackFunc(report)
             except Exception:
-                self.log.error('error in smsStatusReportCallback', exc_info=True)
+                self.log.error('error in smsStatusReportCallbackFunc', exc_info=True)
+
 
     def readStoredSms(self, index, memory=None):
         """ Reads and returns the SMS message at the specified index
@@ -1539,10 +1542,6 @@ class GsmModem(SerialComms):
             sessionActive = cusdMatches[0].group(1) == '1'
             message = cusdMatches[0].group(2)
         return Ussd(self, sessionActive, message)
-
-    def _placeHolderCallback(self, *args):
-        """ Does nothing """
-        self.log.debug('called with args: {0}'.format(args))
 
     def _pollCallStatus(self, expectedState, callId=None, timeout=None):
         """ Poll the status of outgoing calls.
