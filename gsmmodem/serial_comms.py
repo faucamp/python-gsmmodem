@@ -39,8 +39,8 @@ class SerialComms(object):
         # Reentrant lock for managing concurrent write access to the underlying serial port
         self._txLock = threading.RLock()
 
-        self.notifyCallbackFunc = notifyCallbackFunc
-        self.fatalErrorCallbackFunc = fatalErrorCallbackFunc
+        self.notifyCallback = notifyCallbackFunc or self._placeholderCallback
+        self.fatalErrorCallback = fatalErrorCallbackFunc or self._placeholderCallback
 
         self.com_args = args
         self.com_kwargs = kwargs
@@ -78,9 +78,11 @@ class SerialComms(object):
                 # No more chars on the way for this notification - notify higher-level callback
                 #print 'notification:', self._notification
                 self.log.debug('notification: %s', self._notification)
-                if self.notifyCallbackFunc:
-                    self.notifyCallbackFunc(self._notification)
+                self.notifyCallback(self._notification)
                 self._notification = []
+
+    def _placeholderCallback(self, *args, **kwargs):
+        """ Placeholder callback function (does nothing) """
 
     def _readLoop(self):
         """ Read thread main loop
@@ -117,8 +119,7 @@ class SerialComms(object):
             except Exception: #pragma: no cover
                 pass
             # Notify the fatal error handler
-            if self.fatalErrorCallbackFunc:
-                self.fatalErrorCallbackFunc(e)
+            self.fatalErrorCallback(e)
 
     def write(self, data, waitForResponse=True, timeout=5, expectedResponseTermSeq=None):
         data = data.encode()
