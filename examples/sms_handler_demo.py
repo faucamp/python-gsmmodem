@@ -18,7 +18,9 @@ PIN = None # SIM card PIN (if any)
 from gsmmodem.modem import GsmModem
 
 def handleSms(sms):
-    print(u'== SMS message received ==\nFrom: {0}\nTime: {1}\nMessage:\n{2}\n'.format(sms.number, sms.time, sms.text))
+    # long sms Concatenation support: reference, parts, number
+    concat = sms.concat.__dict__ if sms.concat else {}
+    print(u'== SMS message received ==\nFrom: {0}\nTime: {1}\nconcat: {2}\nMessage:\n{3}\n'.format(sms.number, sms.time, concat, sms.text))
     print('Replying to SMS...')
     sms.reply(u'SMS received: "{0}{1}"'.format(sms.text[:20], '...' if len(sms.text) > 20 else ''))
     print('SMS sent.\n')
