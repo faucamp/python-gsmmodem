@@ -378,7 +378,7 @@ class GsmModem(SerialComms):
             else:
                 # Nothing read (real timeout)
                 raise timeout
-        if cpinResponse != '+CPIN: READY':
+        if cpinResponse != '+CPIN: READY' or cpinResponse != '+CPIN:READY':
             if pin != None:
                 self.write('AT+CPIN="{0}"'.format(pin))
             else:
