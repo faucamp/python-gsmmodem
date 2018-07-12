@@ -9,7 +9,7 @@ from time import sleep
 from .serial_comms import SerialComms
 from .exceptions import CommandError, InvalidStateException, CmeError, CmsError, InterruptedException, TimeoutException, PinRequiredError, IncorrectPinError, SmscNumberUnknownError
 from .pdu import encodeSmsSubmitPdu, decodeSmsPdu, encodeGsm7, encodeTextMode
-from .util import SimpleOffsetTzInfo, lineStartingWith, allLinesMatchingPattern, parseTextModeTimeStr
+from .util import SimpleOffsetTzInfo, lineStartingWith, allLinesMatchingPattern, parseTextModeTimeStr, removeAtPrefix
 
 #from . import compat # For Python 2.6 compatibility
 from gsmmodem.util import lineMatching
@@ -554,7 +554,7 @@ class GsmModem(SerialComms):
                     commands = commands[6:] # remove the +CLAC: prefix before splitting
                 return commands.split(',')
             elif len(response) > 2: # Multi-line response
-                return [cmd.strip() for cmd in response[:-1]]
+                return [removeAtPrefix(cmd.strip()) for cmd in response[:-1]]
             else:
                 self.log.debug('Unhandled +CLAC response: {0}'.format(response))
                 return None

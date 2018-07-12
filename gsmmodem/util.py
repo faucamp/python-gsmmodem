@@ -108,3 +108,17 @@ def allLinesMatchingPattern(pattern, lines):
         if m:
             result.append(m)
     return result
+
+
+def removeAtPrefix(string):
+    """ Remove AT prefix from a specified string.
+
+    :param string: An original string
+    :type string: str
+
+    :return: A string with AT prefix removed
+    :rtype: str
+    """
+    if string.startswith('AT'):
+        return string[2:]
+    return string
