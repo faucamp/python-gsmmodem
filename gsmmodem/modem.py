@@ -54,12 +54,13 @@ class Sms(object):
 class ReceivedSms(Sms):
     """ An SMS message that has been received (MT) """
 
-    def __init__(self, gsmModem, status, number, time, text, smsc=None, udh=[]):
+    def __init__(self, gsmModem, status, number, time, text, smsc=None, udh=[], index=None):
         super(ReceivedSms, self).__init__(number, text, smsc)
         self._gsmModem = weakref.proxy(gsmModem)
         self.status = status
         self.time = time
         self.udh = udh
+        self.index = index
 
     def reply(self, message):
         """ Convenience method that sends a reply SMS to the sender of this message """
@@ -1114,7 +1115,7 @@ class GsmModem(SerialComms):
                     if msgIndex != None and len(msgLines) > 0:
                         msgText = '\n'.join(msgLines)
                         msgLines = []
-                        messages.append(ReceivedSms(self, Sms.TEXT_MODE_STATUS_MAP[msgStatus], number, parseTextModeTimeStr(msgTime), msgText))
+                        messages.append(ReceivedSms(self, Sms.TEXT_MODE_STATUS_MAP[msgStatus], number, parseTextModeTimeStr(msgTime), msgText, None, [], msgIndex))
                         delMessages.add(int(msgIndex))
                     msgIndex, msgStatus, number, msgTime = cmglMatch.groups()
                     msgLines = []
@@ -1124,7 +1125,7 @@ class GsmModem(SerialComms):
             if msgIndex != None and len(msgLines) > 0:
                 msgText = '\n'.join(msgLines)
                 msgLines = []
-                messages.append(ReceivedSms(self, Sms.TEXT_MODE_STATUS_MAP[msgStatus], number, parseTextModeTimeStr(msgTime), msgText))
+                messages.append(ReceivedSms(self, Sms.TEXT_MODE_STATUS_MAP[msgStatus], number, parseTextModeTimeStr(msgTime), msgText, None, [], msgIndex))
                 delMessages.add(int(msgIndex))
         else:
             cmglRegex = re.compile('^\+CMGL:\s*(\d+),\s*(\d+),.*$')
@@ -1148,7 +1149,7 @@ class GsmModem(SerialComms):
                         # todo: make better fix
                     else:
                         if smsDict['type'] == 'SMS-DELIVER':
-                            sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh', []))
+                            sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh', []), msgIndex)
                         elif smsDict['type'] == 'SMS-STATUS-REPORT':
                             sms = StatusReport(self, int(msgStat), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
                         else:
