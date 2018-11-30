@@ -75,6 +75,7 @@ class TestUtil(unittest.TestCase):
             self.assertIsInstance(tz.__repr__(), str)
 
     def test_removeAtPrefix(self):
+        """ Tests function: removeAtPrefix"""
         tests = (('AT+CLAC', '+CLAC'), ('ATZ', 'Z'), ('+CLAC', '+CLAC'), ('Z', 'Z'))
         for src, dst in tests:
             res = removeAtPrefix(src)

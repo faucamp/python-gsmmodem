@@ -207,7 +207,7 @@ class TestGsmModemGeneralApi(unittest.TestCase):
                  (['FGH,RTY,UIO\r\n', 'OK\r\n'], ['FGH', 'RTY', 'UIO']), # nasty, but possible
                  # ZTE-like response: do not start with +CLAC, and use multiple lines
                  (['A\r\n', 'BCD\r\n', 'EFGH\r\n', 'OK\r\n'], ['A', 'BCD', 'EFGH']),
-                 # Siemens response: like ZTE but each command has AT prefix
+                 # Teleofis response: like ZTE but each command has AT prefix
                  (['AT&F\r\n', 'AT&V\r\n', 'AT&W\r\n', 'AT+CACM\r\n', 'OK\r\n'], ['&F', '&V', '&W', '+CACM']),
                  # Some Huawei modems have a ZTE-like response, but add an addition \r character at the end of each listed command
                  (['Q\r\r\n', 'QWERTY\r\r\n', '^DTMF\r\r\n', 'OK\r\n'], ['Q', 'QWERTY', '^DTMF']))
