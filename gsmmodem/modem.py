@@ -274,7 +274,11 @@ class GsmModem(SerialComms):
         if callUpdateTableHint == 0:
             if 'simcom' in self.manufacturer.lower() : #simcom modems support DTMF and don't support AT+CLAC
                 Call.dtmfSupport = True
-                self.write('AT+DDET=1')                # enable detect incoming DTMF
+                try:
+                    self.write('AT+DDET=1')                # enable detect incoming DTMF
+                except CommandError:
+                    # simcom 7000E for example doesn't support the DDET command
+                    Call.dtmfSupport = False
 
             if self.manufacturer.lower() == 'huawei':
                 callUpdateTableHint = 1 # huawei
