@@ -134,3 +134,19 @@ See AUTHORS for all authors and contact information.
 
 License: GNU Lesser General Public License, version 3 or later; see COPYING
          included in this archive for details.
+
+FAQ
+---
+
+List all modem ports
+~~~~~~~~~~~~~~~~~~~~
+
+You can simply list all ttyUSB devices before and after pluging the modem in.
+
+  ls /dev/ttyUSB*
+
+
+Device or resource busy error
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Check running processes. The device could be occupied by another program or another instance of gsmmodem which is still running in the background. Run ``sudo lsof | grep tty``, try to locate the problematic process and ``sudo kill <PID>``.
