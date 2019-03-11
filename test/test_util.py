@@ -9,7 +9,7 @@ from datetime import timedelta
 
 from . import compat # For Python 2.6 compatibility
 
-from gsmmodem.util import allLinesMatchingPattern, lineMatching, lineStartingWith, lineMatchingPattern, SimpleOffsetTzInfo
+from gsmmodem.util import allLinesMatchingPattern, lineMatching, lineStartingWith, lineMatchingPattern, SimpleOffsetTzInfo, removeAtPrefix
 
 class TestUtil(unittest.TestCase):
     """ Tests misc utilities from gsmmodem.util """
@@ -73,6 +73,13 @@ class TestUtil(unittest.TestCase):
             self.assertEqual(tz.utcoffset(None), timedelta(hours=hours))
             self.assertEqual(tz.dst(None), timedelta(0))
             self.assertIsInstance(tz.__repr__(), str)
+
+    def test_removeAtPrefix(self):
+        """ Tests function: removeAtPrefix"""
+        tests = (('AT+CLAC', '+CLAC'), ('ATZ', 'Z'), ('+CLAC', '+CLAC'), ('Z', 'Z'))
+        for src, dst in tests:
+            res = removeAtPrefix(src)
+            self.assertEqual(res, dst)
 
 
 if __name__ == "__main__":
