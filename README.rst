@@ -28,6 +28,12 @@ Bundled utilities:
 - **identify-modem.py**: simple utility to identify attached modem. Can also be
   used to provide debug information used for development of python-gsmmodem. 
 
+How to use this package
+-----------------------
+
+Go to `examples/` directory in this repo.
+
+
 Requirements
 ------------
 
@@ -118,6 +124,7 @@ To manually build or test the documentation locally, do the following::
 For true isolation, you may wish to run the above commands within a
 `virtualenv <http://www.virtualenv.org/>`_, which will help you manage
 this development installation.
+
 
 License information
 -------------------
