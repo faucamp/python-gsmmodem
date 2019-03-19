@@ -71,7 +71,7 @@ Download a ``python-gsmmodem-new`` archive from `PyPI
     python setup.py install
 
 Note that ``python-gsmmodem-new`` package relies on ``pyserial`` for serial communications: 
-http://pyserial.sourceforge.net
+https://github.com/pyserial/pyserial
 
 Installation of the latest commit from GitHub
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -83,7 +83,7 @@ Clone from GitHub::
     python setup.py install
 
 Note that ``python-gsmmodem-new`` package relies on ``pyserial`` for serial communications: 
-http://pyserial.sourceforge.net
+https://github.com/pyserial/pyserial
 
 Testing the package
 -------------------
