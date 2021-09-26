@@ -357,7 +357,7 @@ def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requ
 def decodeSmsPdu(pdu):
     """ Decodes SMS pdu data and returns a tuple in format (number, text)
     
-    :param pdu: PDU data as a hex string, or a bytearray containing PDU octects
+    :param pdu: PDU data as a hex string, or a bytearray containing PDU octets
     :type pdu: str or bytearray
     
     :raise EncodingError: If the specified PDU data cannot be decoded
@@ -527,7 +527,7 @@ def _encodeTimestamp(timestamp):
 
 def _decodeDataCoding(octet):
     if octet & 0xC0 == 0:
-        #compressed = octect & 0x20
+        #compressed = octet & 0x20
         alphabet = (octet & 0x0C) >> 2
         return alphabet # 0x00 == GSM-7, 0x01 == 8-bit data, 0x02 == UCS2
     # We ignore other coding groups

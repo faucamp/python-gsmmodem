@@ -514,7 +514,7 @@ class TestEdgeCases(unittest.TestCase):
                 gsmmodem.serial_comms.serial = mockSerial        
                 modem = gsmmodem.modem.GsmModem('-- PORT IGNORED DURING TESTS --')
                 modem.connect()
-                # Make sure SMSC number was prevented from being deleted (some modems do this when setting text-mode paramters AT+CSMP)
+                # Make sure SMSC number was prevented from being deleted (some modems do this when setting text-mode parameters AT+CSMP)
                 self.assertEqual(test, modem.smsc, 'SMSC number was changed/deleted during connect()')
                 modem.close()
         FAKE_MODEM = None
@@ -1157,7 +1157,7 @@ class TestIncomingCall(unittest.TestCase):
     
     def test_incomingCallCrcChangedExternally(self):
         """ Tests handling incoming call notifications when the +CRC setting \
-        was modfied by some external program (issue #18) """
+        was modified by some external program (issue #18) """
         
         callReceived = [False]
         def callbackFunc(call):
@@ -1353,8 +1353,8 @@ class TestSms(unittest.TestCase):
         self.modem.close()
     
     def test_sendSmsResponseMixedWithUnsolictedMessages(self):
-        """ Tests sending a SMS messages (PDU mode), but with unsolicted messages mixed into the modem responses
-        - the only difference here is that the modem's responseSequence contains unsolicted messages
+        """ Tests sending a SMS messages (PDU mode), but with unsolicited messages mixed into the modem responses
+        - the only difference here is that the modem's responseSequence contains unsolicited messages
         taken from github issue #11
         """
         self.initModem(None)
@@ -1369,14 +1369,14 @@ class TestSms(unittest.TestCase):
             def writeCallbackFunc(data):
                 def writeCallbackFunc2(data):
                     self.assertEqual('{0}{1}'.format(pduHex, chr(26)), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('{0}{1}'.format(pduHex, chr(26)), data))
-                    # Note thee +ZDONR and +ZPASR unsolicted messages in the "response"
+                    # Note thee +ZDONR and +ZPASR unsolicited messages in the "response"
                     self.modem.serial.responseSequence =  ['+ZDONR: "METEOR",272,3,"CS_ONLY","ROAM_OFF"\r\n', '+ZPASR: "UMTS"\r\n', '+ZDONR: "METEOR",272,3,"CS_PS","ROAM_OFF"\r\n', '+ZPASR: "UMTS"\r\n', '+CMGS: {0}\r\n'.format(ref), 'OK\r\n']
                 self.assertEqual('AT+CMGS={0}\r'.format(calcPdu.tpduLength), data, 'Invalid data written to modem; expected "{0}", got: "{1}"'.format('AT+CMGS={0}'.format(calcPdu.tpduLength), data))
                 self.modem.serial.writeCallbackFunc = writeCallbackFunc2
             self.modem.serial.writeCallbackFunc = writeCallbackFunc
             self.modem.serial.flushResponseSequence = True
             
-            # Note thee +ZDONR and +ZPASR unsolicted messages in the "response"
+            # Note thee +ZDONR and +ZPASR unsolicited messages in the "response"
             self.modem.serial.responseSequence = ['+ZDONR: "METEOR",272,3,"CS_ONLY","ROAM_OFF"\r\n', '+ZPASR: "UMTS"\r\n', '> \r\n']
                         
             sms = self.modem.sendSms(number, message)
