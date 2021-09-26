@@ -53,7 +53,7 @@ class TestTrie(unittest.TestCase):
         self.assertRaises(KeyError, self.trie.__delitem__, 'unknown key')
         # Delete zero-length unknown key
         self.assertRaises(KeyError, self.trie.__delitem__, '')
-        # Delete zero-lenght known key
+        # Delete zero-length known key
         self.trie[''] = '123'
         self.assertEqual(len(self.trie), 1)
         del self.trie['']

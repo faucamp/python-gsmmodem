@@ -1089,7 +1089,7 @@ class GsmModem(SerialComms):
         """ Deletes all SMS messages that have the specified read status.
         
         The messages are read from the memory set by the "memory" parameter.
-        The value of the "delFlag" paramater is the same as the "DelFlag" parameter of the +CMGD command:
+        The value of the "delFlag" parameter is the same as the "DelFlag" parameter of the +CMGD command:
         1: Delete All READ messages
         2: Delete All READ and SENT messages
         3: Delete All READ, SENT and UNSENT messages
@@ -1243,7 +1243,7 @@ class Call(object):
         
         Note: this is highly device-dependent, and might not work
         
-        :param digits: A str containining one or more DTMF tones to play, e.g. "3" or "\*123#"
+        :param digits: A str containing one or more DTMF tones to play, e.g. "3" or "\*123#"
 
         :raise CommandError: if the command failed/is not supported        
         :raise InvalidStateException: if the call has not been answered, or is ended while the command is still executing
