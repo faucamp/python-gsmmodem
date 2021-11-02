@@ -16,13 +16,13 @@ from gsmmodem.serial_comms import SerialComms
 from .trie import Trie
 from gsmmodem.exceptions import TimeoutException
 
-# first choose a platform dependant way to read single characters from the console 
+# first choose a platform dependant way to read single characters from the console
 global console
 
 if os.name == 'nt':
     import msvcrt
     class Console(object):
-        
+
         CURSOR_UP = '{0}{1}'.format(chr(0xe0), chr(0x48))
         CURSOR_DOWN = '{0}{1}'.format(chr(0xe0), chr(0x50))
         CURSOR_LEFT = '{0}{1}'.format(chr(0xe0), chr(0x4b))
@@ -31,7 +31,7 @@ if os.name == 'nt':
         DELETE = ''
         HOME = ''
         END = ''
-        
+
         def __init__(self):
             pass
 
@@ -59,7 +59,7 @@ if os.name == 'nt':
 elif os.name == 'posix':
     import termios, tty
     class Console(object):
-        
+
         CURSOR_UP = '{0}{1}{2}'.format(chr(27), chr(91), chr(65))
         CURSOR_DOWN = '{0}{1}{2}'.format(chr(27), chr(91), chr(66))
         CURSOR_LEFT = '{0}{1}{2}'.format(chr(27), chr(91), chr(68))
@@ -67,7 +67,7 @@ elif os.name == 'posix':
         DELETE = '{0}{1}{2}{3}'.format(chr(27), chr(91), chr(51), chr(126))
         HOME = '{0}{1}{2}'.format(chr(27), chr(79), chr(72))
         END = '{0}{1}{2}'.format(chr(27), chr(79), chr(70))
-        
+
         def __init__(self):
             self.fd = sys.stdin.fileno()
 
@@ -80,14 +80,14 @@ elif os.name == 'posix':
             termios.tcsetattr(self.fd, termios.TCSANOW, new)
 
 #        def setup(self):
-#            self.oldSettings = termios.tcgetattr(self.fd)            
-#            tty.setraw(self.fd)            
+#            self.oldSettings = termios.tcgetattr(self.fd)
+#            tty.setraw(self.fd)
 
         def getkey(self):
             c = os.read(self.fd, 4)
             #print (len(c))
             #for a in c:
-            #    print('rx:',ord(a))           
+            #    print('rx:',ord(a))
             return c
 
         def cleanup(self):
@@ -106,24 +106,24 @@ else:
 
 
 class RawTerm(SerialComms):
-    """ "Raw" terminal - basically just copies console input to serial, and prints out anything read """ 
-    
-    EXIT_CHARACTER = '\x1d'   # CTRL+]    
+    """ "Raw" terminal - basically just copies console input to serial, and prints out anything read """
+
+    EXIT_CHARACTER = '\x1d'   # CTRL+]
     WRITE_TERM = '\r' # Write terminator character
-    
+
     def __init__(self, port, baudrate=9600):
         super(RawTerm, self).__init__(port, baudrate, notifyCallbackFunc=self._handleModemNotification)
         self.port = port
         self.baudrate = baudrate
         self.echo = True
-    
+
     def _handleModemNotification(self, lines):
         for line in lines:
             print(line)
-    
+
     def printStartMessage(self):
         print('\nRaw terminal connected to {0} at {1}bps.\nPress CTRL+] to exit.\n'.format(self.port, self.baudrate))
-    
+
     def start(self):
         self.connect()
         # Start input thread
@@ -131,24 +131,24 @@ class RawTerm(SerialComms):
         self.inputThread = threading.Thread(target=self._inputLoop)
         self.inputThread.daemon = True
         self.inputThread.start()
-        self.printStartMessage()   
-        
+        self.printStartMessage()
+
     def stop(self):
         self.alive = False
         if threading.current_thread() != self.inputThread:
             self.inputThread.join()
         self.close()
-    
+
     def _inputLoop(self):
         """ Loop and copy console->serial until EXIT_CHARCTER character is found. """
         try:
             while self.alive:
                 try:
-                    c = console.getkey()                    
+                    c = console.getkey()
                 except KeyboardInterrupt:
                     print('kbint')
                     c = serial.to_bytes([3])
-                if c == self.EXIT_CHARACTER: 
+                if c == self.EXIT_CHARACTER:
                     self.stop()
                 elif c == '\n':
                     # Convert newline input into \r
@@ -169,22 +169,22 @@ class RawTerm(SerialComms):
 
 class GsmTerm(RawTerm):
     """ User-friendly terminal for interacting with a GSM modem.
-    
+
     Some features: tab-completion, help
     """
-    
+
     PROMPT = 'GSM> '
     SMS_PROMPT = '> '
     EXIT_CHARACTER_2 = chr(4) # CTRL+D
-    
+
     BACKSPACE_CHARACTER = chr(127)
     CTRL_Z_CHARACTER = chr(26) # Used when entering SMS messages with AT+CMGS
     ESC_CHARACTER = chr(27) # Used to cancel entering SMS messages with AT+CMGS
-    
+
     RESET_SEQ = '\033[0m'
     COLOR_SEQ = '\033[1;{0}m'
     BOLD_SEQ = '\033[1m'
-    
+
     # ANSI colour escapes
     COLOR_RED = COLOR_SEQ.format(30+1)
     COLOR_GREEN = COLOR_SEQ.format(30+2)
@@ -200,7 +200,7 @@ class GsmTerm(RawTerm):
         self.history = []
         self.historyPos = 0
         self.useColor = useColor
-        self.cursorPos = 0        
+        self.cursorPos = 0
         if self.useColor:
             self.PROMPT = self._color(self.COLOR_GREEN, self.PROMPT)
             self.SMS_PROMPT = self._color(self.COLOR_GREEN, self.SMS_PROMPT)
@@ -218,7 +218,7 @@ class GsmTerm(RawTerm):
         if self.useColor:
             return '{0}{1}{2}'.format(color, msg, self.RESET_SEQ)
         else:
-            return msg    
+            return msg
 
     def _boldFace(self, msg):
         """ Converts a message to be printed to the user's terminal in bold """
@@ -232,32 +232,32 @@ class GsmTerm(RawTerm):
         if lines[-1] == 'ERROR':
             print(self._color(self.COLOR_RED, '\n'.join(lines)))
         else:
-            print(self._color(self.COLOR_CYAN, '\n'.join(lines)))        
+            print(self._color(self.COLOR_CYAN, '\n'.join(lines)))
         self._refreshInputPrompt()
-    
+
     def _addToHistory(self, command):
         self.history.append(command)
         if len(self.history) > 100:
             self.history = self.history[1:]
-    
+
     def _inputLoop(self):
         """ Loop and copy console->serial until EXIT_CHARCTER character is found. """
-        
+
         # Switch statement for handling "special" characters
         actionChars = {self.EXIT_CHARACTER: self._exit,
                        self.EXIT_CHARACTER_2: self._exit,
-                        
+
                        console.CURSOR_LEFT: self._cursorLeft,
                        console.CURSOR_RIGHT: self._cursorRight,
                        console.CURSOR_UP: self._cursorUp,
                        console.CURSOR_DOWN: self._cursorDown,
-                        
+
                        '\n': self._doConfirmInput,
                        '\t': self._doCommandCompletion,
-                       
+
                        self.CTRL_Z_CHARACTER: self._handleCtrlZ,
                        self.ESC_CHARACTER: self._handleEsc,
-                       
+
                        self.BACKSPACE_CHARACTER: self._handleBackspace,
                        console.DELETE: self._handleDelete,
                        console.HOME: self._handleHome,
@@ -270,7 +270,7 @@ class GsmTerm(RawTerm):
                 except KeyboardInterrupt:
                     c = serial.to_bytes([3])
                 if c in actionChars:
-                    # Handle character directly                    
+                    # Handle character directly
                     actionChars[c]()
                 elif len(c) == 1 and self._isPrintable(c):
                     self.inputBuffer.insert(self.cursorPos, c)
@@ -293,7 +293,7 @@ class GsmTerm(RawTerm):
             self.cursorPos = 0
             sys.stdout.write('\n')
             self._refreshInputPrompt()
-            
+
     def _handleEsc(self):
         """ Handler for CTRL+Z keypresses """
         if self._typingSms:
@@ -305,7 +305,7 @@ class GsmTerm(RawTerm):
     def _exit(self):
         """ Shuts down the terminal (and app) """
         self._removeInputPrompt()
-        print(self._color(self.COLOR_YELLOW, 'CLOSING TERMINAL...')) 
+        print(self._color(self.COLOR_YELLOW, 'CLOSING TERMINAL...'))
         self.stop()
 
     def _cursorLeft(self):
@@ -336,7 +336,7 @@ class GsmTerm(RawTerm):
         if self.historyPos < len(self.history)-1:
             clearLen = len(self.inputBuffer)
             self.historyPos += 1
-            self.inputBuffer = list(self.history[self.historyPos])                        
+            self.inputBuffer = list(self.history[self.historyPos])
             self.cursorPos = len(self.inputBuffer)
             self._refreshInputPrompt(clearLen)
 
@@ -346,13 +346,13 @@ class GsmTerm(RawTerm):
             #print( 'cp:',self.cursorPos,'was:', self.inputBuffer)
             self.inputBuffer = self.inputBuffer[0:self.cursorPos-1] + self.inputBuffer[self.cursorPos:]
             self.cursorPos -= 1
-            #print ('cp:', self.cursorPos,'is:', self.inputBuffer)                        
+            #print ('cp:', self.cursorPos,'is:', self.inputBuffer)
             self._refreshInputPrompt(len(self.inputBuffer)+1)
 
     def _handleDelete(self):
         """ Handles "delete" characters """
         if self.cursorPos < len(self.inputBuffer):
-            self.inputBuffer = self.inputBuffer[0:self.cursorPos] + self.inputBuffer[self.cursorPos+1:]                        
+            self.inputBuffer = self.inputBuffer[0:self.cursorPos] + self.inputBuffer[self.cursorPos+1:]
             self._refreshInputPrompt(len(self.inputBuffer)+1)
 
     def _handleHome(self):
@@ -374,24 +374,24 @@ class GsmTerm(RawTerm):
             self.cursorPos = 0
             sys.stdout.write('\n')
             self._refreshInputPrompt()
-            return       
-        # Convert newline input into \r\n        
+            return
+        # Convert newline input into \r\n
         if len(self.inputBuffer) > 0:
             inputStr = ''.join(self.inputBuffer).strip()
             self.inputBuffer = []
             self.cursorPos = 0
-            inputStrLen = len(inputStr)            
+            inputStrLen = len(inputStr)
             if len(inputStr) > 0:
                 self._addToHistory(inputStr)
                 self.historyPos = len(self.history)
             if inputStrLen > 2:
                 if inputStr[0] == '?': # ?COMMAND
-                    # Help requested with function                    
+                    # Help requested with function
                     self._printCommandHelp(inputStr[1:])
                     return
                 elif inputStr[-1] == inputStr[-2] == '?': # COMMAND??
                     # Help requested with function
-                    cmd = inputStr[:-3 if inputStr[-3] == '=' else -2]                
+                    cmd = inputStr[:-3 if inputStr[-3] == '=' else -2]
                     self._printCommandHelp(cmd)
                     return
             inputStrLower = inputStr.lower()
@@ -399,9 +399,9 @@ class GsmTerm(RawTerm):
                 # Alternative help invocation
                 self._printCommandHelp(inputStr[5:])
                 return
-            elif inputStrLower.startswith('ls'):                
+            elif inputStrLower.startswith('ls'):
                 if inputStrLower == 'lscat':
-                    sys.stdout.write('\n')         
+                    sys.stdout.write('\n')
                     for category in self.completion.categories:
                         sys.stdout.write('{0}\n'.format(category))
                     self._refreshInputPrompt(len(self.inputBuffer))
@@ -411,9 +411,9 @@ class GsmTerm(RawTerm):
                     for command in self.completion:
                         sys.stdout.write('{0:<8} - {1}\n'.format(command, self.completion[command][1]))
                     self._refreshInputPrompt(len(self.inputBuffer))
-                    return                
+                    return
                 else:
-                    ls = inputStrLower.split(' ', 1)                    
+                    ls = inputStrLower.split(' ', 1)
                     if len(ls) == 2:
                         category = ls[1].lower()
                         if category in [cat.lower() for cat in self.completion.categories]:
@@ -426,26 +426,26 @@ class GsmTerm(RawTerm):
                             return
             elif inputStrLower.startswith('load'):
                 # Load a file containing AT commands to issue
-                load = inputStr.split(' ', 1)                
-                if len(load) == 2:                    
+                load = inputStr.split(' ', 1)
+                if len(load) == 2:
                     filename = load[1].strip()
                     try:
                         f = open(filename, 'r')
                     except IOError:
                         sys.stdout.write('\n{0}\n'.format(self._color(self.COLOR_RED, 'File not found: "{0}"'.format(filename))))
-                        self._refreshInputPrompt(len(self.inputBuffer))                        
+                        self._refreshInputPrompt(len(self.inputBuffer))
                     else:
                         atCommands = f.readlines()
-                        f.close()                    
+                        f.close()
                         sys.stdout.write('\n')
-                        for atCommand in atCommands: 
+                        for atCommand in atCommands:
                             atCommand = atCommand.strip()
                             if len(atCommand) > 0 and atCommand[0] != '#':
                                 self.inputBuffer = list(atCommand.strip())
                                 self._refreshInputPrompt(len(self.inputBuffer))
                                 self._doConfirmInput()
                                 time.sleep(0.1)
-                    return            
+                    return
             if len(inputStr) > 0:
                 if inputStrLower.startswith('at+cmgs='):
                     # Prepare for SMS input
@@ -455,11 +455,11 @@ class GsmTerm(RawTerm):
                         sys.stdout.flush()
                         response = self.write(inputStr + self.WRITE_TERM, waitForResponse=True, timeout=3, expectedResponseTermSeq='> ')
                     except TimeoutException:
-                        self._typingSms = False                        
+                        self._typingSms = False
                     else:
-                        sys.stdout.write(self._color(self.COLOR_YELLOW, 'Type your SMS message, and press CTRL+Z to send it or press ESC to cancel.\n'))                        
+                        sys.stdout.write(self._color(self.COLOR_YELLOW, 'Type your SMS message, and press CTRL+Z to send it or press ESC to cancel.\n'))
                         self.SMS_PROMPT = self._color(self.COLOR_GREEN, response[0])
-                    self._refreshInputPrompt()                        
+                    self._refreshInputPrompt()
                     return
                 self.serial.write(inputStr)
                 self.serial.write(self.WRITE_TERM)
@@ -468,7 +468,7 @@ class GsmTerm(RawTerm):
         sys.stdout.flush()
 
     def _printGeneralHelp(self):
-        sys.stdout.write(self._color(self.COLOR_WHITE, '\n\n== GSMTerm Help ==\n\n'))        
+        sys.stdout.write(self._color(self.COLOR_WHITE, '\n\n== GSMTerm Help ==\n\n'))
         sys.stdout.write('{0} Press the up & down arrow keys to move backwards or forwards through your command history.\n\n'.format(self._color(self.COLOR_YELLOW, 'Command History:')))
         sys.stdout.write('{0} Press the TAB key to provide command completion suggestions. Press the TAB key after a command is fully typed (with or without a "=" character) to quickly see its syntax.\n\n'.format(self._color(self.COLOR_YELLOW, 'Command Completion:')))
         sys.stdout.write('{0} Type a command, followed with two quesetion marks to access its documentation, e.g. "<COMMAND>??". Alternatively, precede the command with a question mark ("?<COMMAND>"), or type "help <COMMAND>".\n\n'.format(self._color(self.COLOR_YELLOW, 'Command Documentation:')))
@@ -491,7 +491,7 @@ class GsmTerm(RawTerm):
             noHelp = commandHelp == None
         if noHelp:
             sys.stdout.write('\r No help available for: {0}\n'.format(self._color(self.COLOR_WHITE, command)))
-        else:            
+        else:
             sys.stdout.write('\n\n{0} ({1})\n\n'.format(self._color(self.COLOR_WHITE, commandHelp[1]), command))
             sys.stdout.write('{0} {1}\n'.format(self._color(self.COLOR_YELLOW, 'Category:'), commandHelp[0]))
             if len(commandHelp) == 2:
@@ -499,8 +499,8 @@ class GsmTerm(RawTerm):
                 self._refreshInputPrompt(len(self.inputBuffer))
                 return
             sys.stdout.write('{0} {1}\n'.format(self._color(self.COLOR_YELLOW, 'Description:'), commandHelp[4]))
-            
-            valuesIsEnum = len(commandHelp) >= 6            
+
+            valuesIsEnum = len(commandHelp) >= 6
             if valuesIsEnum: # "Values" is an enum of allowed values (not multiple variables); use custom label
                 sys.stdout.write('{0} '.format(self._color(self.COLOR_YELLOW, commandHelp[5])))
             else:
@@ -513,11 +513,11 @@ class GsmTerm(RawTerm):
                 sys.stdout.write('\n')
                 first = True
                 for value, valueDesc in commandValues:
-                    if first:                        
+                    if first:
                         first = False
                     else:
                         syntax.append(',' if not valuesIsEnum else '|')
-                    syntax.append(self._color(self.COLOR_MAGENTA, value))                    
+                    syntax.append(self._color(self.COLOR_MAGENTA, value))
                     sys.stdout.write(' {0} {1}\n'.format(self._color(self.COLOR_MAGENTA, value), valueDesc.replace('\n', '\n' + ' ' * (len(value) + 2)) if valueDesc != None else ''))
             else:
                 sys.stdout.write('No parameters.\n')
@@ -531,18 +531,18 @@ class GsmTerm(RawTerm):
         self._refreshInputPrompt(len(self.inputBuffer))
 
     def _doCommandCompletion(self):
-        """ Command-completion method """        
+        """ Command-completion method """
         prefix =  ''.join(self.inputBuffer).strip().upper()
         matches = self.completion.keys(prefix)
-        matchLen = len(matches)        
+        matchLen = len(matches)
         if matchLen == 0 and prefix[-1] == '=':
-            try:                
+            try:
                 command = prefix[:-1]
             except KeyError:
-                pass                        
+                pass
             else:
                 self.__printCommandSyntax(command)
-        elif matchLen > 0:                        
+        elif matchLen > 0:
             if matchLen == 1:
                 if matches[0] == prefix:
                     # User has already entered command - show command syntax
@@ -584,10 +584,10 @@ class GsmTerm(RawTerm):
             self._refreshInputPrompt(len(self.inputBuffer))
 
     def _isPrintable(self, char):
-        return 33 <= ord(char) <= 126 or char.isspace()  
+        return 33 <= ord(char) <= 126 or char.isspace()
 
     def _refreshInputPrompt(self, clearLen=0):
-        termPrompt = self.SMS_PROMPT if self._typingSms else self.PROMPT        
+        termPrompt = self.SMS_PROMPT if self._typingSms else self.PROMPT
         endPoint = clearLen if clearLen > 0 else len(self.inputBuffer)
         sys.stdout.write('\r{0}{1}{2}{3}'.format(termPrompt, ''.join(self.inputBuffer), (clearLen - len(self.inputBuffer)) * ' ', console.CURSOR_LEFT * (endPoint - self.cursorPos)))
         sys.stdout.flush()

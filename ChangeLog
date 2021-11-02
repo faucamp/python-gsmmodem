@@ -1,3 +1,30 @@
+* Wed Mar 15 2017 babca - 0.12
+– stable release
+- unit tests fixed after rapid merging – credits to: tomchy
+- python3.6 support added
+– message concatenation fixes and more
+
+* Thu Nov 10 2016 babca - 0.11
+- added getter for SIM own number
+- added option for blocking incoming calls (GSMBUSY)
+- various python3 fixes
+
+* Thu Aug 18 2016 babca - 0.10
+– Probably a new code maintainer for 2016
+- All commits published for the last 3 years merged into a one branch
+– Compatibilty for python3 added, needs further testing!
+– experimental GPRS support
+– more:
+    – change AT_CNMI command if needed
+    – waitingForModemToStartInSeconds
+    – timeouts increased
+    – ability to check SMS encodings supported by modem - smsSupportedEncoding()
+    – better modem specific support (incl. simcom)
+    – TE SMS status reports handling support
+    – option to disable requesting delivery reports
+    – incoming DTMF support
+– todo: check AT+CMGD support for 1 or 2 params and use appropriate command format
+
 * Thu Jul 18 2013 Francois Aucamp <francois.aucamp@gmail.com> - 0.9
 - Added UDH support for SMS PDUs
 - Stored messages APIs made public

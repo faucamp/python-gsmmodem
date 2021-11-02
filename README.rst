@@ -1,5 +1,5 @@
-python-gsmmodem 
-===============
+python-gsmmodem-new v0.12
+=========================
 *GSM modem module for Python*
 
 python-gsmmodem is a module that allows easy control of a GSM modem attached
@@ -28,56 +28,71 @@ Bundled utilities:
 - **identify-modem.py**: simple utility to identify attached modem. Can also be
   used to provide debug information used for development of python-gsmmodem. 
 
+How to use this package
+-----------------------
+
+Go to `examples/` directory in this repo.
+
+
 Requirements
 ------------
 
-- Python 2.6 or later
+- Python 2.7 or later
+- Python 3.3 or later
 - pyserial
 
 
 How to install this package
 ---------------------------
 
-There are two ways to install ``python-gsmmodem``:
+There are multiple ways to install ``python-gsmmodem-new`` package:
 
-Automatic installation
-~~~~~~~~~~~~~~~~~~~~~~
+Automatic installation of the latest "stable" release from PyPI
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ::
 
-    pip install python-gsmmodem
+    pip install python-gsmmodem-new
 
 `pip <http://www.pip-installer.org>`_ will automatically download and install
 all dependencies, as required. You can also utilise ``easy_install`` in the
 same manner as using ``pip`` above.  
 
-If you are utilising ``python-gsmmodem`` as part of another project,
+If you are utilising ``python-gsmmodem-new`` as part of another project,
 add it to your ``install_requires`` section of your ``setup.py`` file and
 upon your project's installation, it will be pulled in automatically.
 
-Manual installation
-~~~~~~~~~~~~~~~~~~~
+Manual installation of the latest "stable" release from PyPI
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Download and extract the ``python-gsmmodem`` archive from `PyPI
-<https://pypi.python.org/pypi/python-gsmmodem>`_ for the current release
-version, or clone from `GitHub <https://github.com/faucamp/python-gsmmodem>`_.
-Next, do this::
+Download a ``python-gsmmodem-new`` archive from `PyPI
+<https://pypi.python.org/pypi/python-gsmmodem-new>`_, extract it and install the package with command::
 
     python setup.py install
 
-Note that ``python-gsmmodem`` relies on ``pyserial`` for serial communications: 
-http://pyserial.sourceforge.net
+Note that ``python-gsmmodem-new`` package relies on ``pyserial`` for serial communications: 
+https://github.com/pyserial/pyserial
 
+Installation of the latest commit from GitHub
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Clone from GitHub::
+
+    git clone https://github.com/babca/python-gsmmodem.git
+    cd python-gsmmodem/
+    python setup.py install
+
+Note that ``python-gsmmodem-new`` package relies on ``pyserial`` for serial communications: 
+https://github.com/pyserial/pyserial
 
 Testing the package
 -------------------
 
-.. |Build Status| image::  https://travis-ci.org/faucamp/python-gsmmodem.png?branch=master
-.. _Build Status: https://travis-ci.org/faucamp/python-gsmmodem
+.. |Build Status| image::  https://travis-ci.org/babca/python-gsmmodem.svg?branch=master
+.. _Build Status: https://travis-ci.org/babca/python-gsmmodem
 
-
-.. |Coverage Status| image::  https://coveralls.io/repos/faucamp/python-gsmmodem/badge.png?branch=master
-.. _Coverage Status: https://coveralls.io/r/faucamp/python-gsmmodem
+.. |Coverage Status| image:: https://coveralls.io/repos/github/babca/python-gsmmodem/badge.svg?branch=master
+.. _Coverage Status: https://coveralls.io/github/babca/python-gsmmodem?branch=master
 
 |Build Status|_ |Coverage Status|_
 
@@ -100,7 +115,7 @@ Building documentation
 This package contains `Sphinx <http://sphinx-doc.org>`_-based documentation.
 To manually build or test the documentation locally, do the following::
 
-   git clone https://github.com/faucamp/python-gsmmodem.git
+   git clone https://github.com/babca/python-gsmmodem.git
    cd python-gsmmodem
    pip install .[doc]
    cd doc
@@ -110,6 +125,7 @@ For true isolation, you may wish to run the above commands within a
 `virtualenv <http://www.virtualenv.org/>`_, which will help you manage
 this development installation.
 
+
 License information
 -------------------
 
@@ -118,3 +134,19 @@ See AUTHORS for all authors and contact information.
 
 License: GNU Lesser General Public License, version 3 or later; see COPYING
          included in this archive for details.
+
+FAQ
+---
+
+List all modem ports
+~~~~~~~~~~~~~~~~~~~~
+
+You can simply list all ttyUSB devices before and after pluging the modem in.
+
+  ls /dev/ttyUSB*
+
+
+Device or resource busy error
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Check running processes. The device could be occupied by another program or another instance of gsmmodem which is still running in the background. Run ``sudo lsof | grep tty``, try to locate the problematic process and ``sudo kill <PID>``.
