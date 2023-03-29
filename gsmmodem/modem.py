@@ -283,7 +283,7 @@ class GsmModem(SerialComms):
             # Unknown modem - we do not know what its call updates look like. Use polling instead
             self.log.info('Unknown/generic modem type - will use polling for call state updates')
             self._mustPollCallStatus = True
-            self._pollCallStatusRegex = re.compile('^\+CLCC:\s+(\d+),(\d),(\d),(\d),([^,]),"([^,]*)",(\d+)$')
+            self._pollCallStatusRegex = re.compile('^\+CLCC:\s+(\d+),(\d),(\d),(\d),([^,]),"([^,]*)",(\d+)')
             self._waitForAtdResponse = True # Most modems return OK immediately after issuing ATD
 
         # General meta-information setup
